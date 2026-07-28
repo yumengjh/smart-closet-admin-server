@@ -3,8 +3,16 @@
 .idea
 .mvn/wrapper/maven-wrapper.jar
 .vscode
+.env
+.env.*
+!.env.example
 *.iml
 *.log
+*.jks
+*.key
+*.p12
+*.pem
+*.pfx
 data
 docs
 target

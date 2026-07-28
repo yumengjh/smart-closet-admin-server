@@ -2,6 +2,7 @@
 
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
+ARG APP_VERSION=0.0.1-SNAPSHOT
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends unzip \
@@ -12,7 +13,7 @@ COPY mvnw pom.xml ./
 RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -q -DskipTests dependency:go-offline
 
 COPY src/ src/
-RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -q -DskipTests package \
+RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -q -DskipTests -Drevision="$APP_VERSION" package \
     && test -f target/application.jar \
     && cp target/application.jar /workspace/app.jar
 

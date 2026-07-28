@@ -30,6 +30,7 @@ jobs:
             exit 1
           fi
           echo "version=$TAG" >> "$GITHUB_OUTPUT"
+          echo "maven_version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v4
         with:
@@ -38,7 +39,9 @@ jobs:
           cache: maven
 
       - name: Build and verify JAR
-        run: ./mvnw --batch-mode verify
+        env:
+          MAVEN_VERSION: ${{ steps.release.outputs.maven_version }}
+        run: ./mvnw --batch-mode -Drevision="$MAVEN_VERSION" verify
 
       - name: Prepare release artifact
         id: artifact
