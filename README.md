@@ -4,6 +4,12 @@
 
 这不是完整 SaaS，也不包含前端；目标是以后新项目可以直接从这里开始。
 
+## 适用边界
+
+适合需要账号体系、管理端权限、审计与基础服务治理的中小型 REST API，或者作为 Spring Boot 业务项目的统一工程起点。它优先保持模块化单体和清晰事务边界，不默认引入 Redis、消息队列、Kubernetes、完整链路追踪等只有在特定部署规模下才成立的设施。
+
+如果项目只是几个无状态公开接口，这个模板可能偏重；如果已经确定要独立拆分多个服务，则应复用其中的安全和 API 契约，而不是把整个单体原样复制多份。
+
 ## 环境要求
 
 - JDK 21
@@ -38,6 +44,14 @@ APP_BOOTSTRAP_ADMIN_PASSWORD=请替换为强密码
 本地管理员已被锁定或忘记密码时，可临时设置
 `APP_BOOTSTRAP_ADMIN_RESET_PASSWORD=true` 后重启服务；它会重置 `.env` 中指定账号的密码并解除锁定。恢复成功后应立即改回 `false`。
 
+新建本地数据库默认不允许跨域来源，也不开启 SQL Console。需要连接相邻前端时，在第一次创建数据库前设置：
+
+```bash
+APP_SECURITY_CORS_ALLOWED_ORIGINS=http://localhost:5173
+```
+
+已有数据库通过 `security.cors.allowed-origins` 运行时配置修改，不会被环境变量覆盖。仅在明确需要本地 SQL 调试时设置 `APP_SQL_CONSOLE_ENABLED=true`；该能力还会校验 `local` Profile 和 `system:sql:execute` 权限，关闭时执行接口返回 404。
+
 ## 已实现功能
 
 - 注册、登录、RSA JWT、Refresh Token 轮换、当前设备登出、本人会话列表与退出全部设备
@@ -46,6 +60,35 @@ APP_BOOTSTRAP_ADMIN_PASSWORD=请替换为强密码
 - 运行时服务治理：动态 CORS、接口禁用、通用与接口级限流、CIDR IP 白黑名单、带有效期的 IP 规则、登录防爆破、请求日志开关、注册开关及审计查询
 - 统一错误响应、Trace ID、SQLite/PostgreSQL Liquibase 迁移
 - Docker、Compose、GitHub Actions 基础文件
+
+## 架构设计
+
+业务代码按模块组织，每个模块内部保持三层：
+
+```text
+HTTP request
+  -> api（Controller、DTO、参数与权限校验）
+  -> application（用例、事务、业务规则）
+  -> infrastructure（JPA Repository）
+  -> SQLite / PostgreSQL
+```
+
+`common` 只放跨模块的响应、异常、实体基类和 Web 基础设施，`config` 负责 Spring Security、JWT、Bootstrap 与生产启动校验。Controller 不直接访问其它模块的 Repository，ArchUnit 测试会守住基础边界。
+
+请求在进入 Controller 前依次经过 Spring Security 链中的 Trace ID、接口策略、IP 规则、限流、JWT 认证与请求日志等能力。所有业务接口默认认证；`@PublicApi` 只显式放开身份认证，不绕过其它保护。
+
+运行时配置、IP 规则等高频读取使用不可变内存快照，数据库仍是事实源。写入成功提交后才刷新快照，事务回滚不会把未提交配置暴露给请求线程。GC 等需要保留失败结果的任务将业务事务、运行状态和失败审计拆开，确保资源清理失败时业务写入回滚而失败记录仍可查询。
+
+JPA 默认关闭 Open Session in View。DTO 需要关联集合时由应用服务显式批量加载：管理员用户分页固定按页加载角色，角色目录一次加载权限，避免在序列化阶段产生 N+1。
+
+## Profile 与数据
+
+| 场景 | Profile | 数据库 | JWT | OpenAPI |
+| --- | --- | --- | --- | --- |
+| 本地开发 | `local`（默认） | `./data/app.db` | 可临时生成 RSA 密钥 | 默认启用 |
+| 部署 | `postgres` | PostgreSQL | 必须提供稳定私钥/公钥 | 默认关闭 |
+
+两种数据库共用 Liquibase changeset；不要使用 Hibernate 自动更新 Schema。`local` 适合零依赖启动，PostgreSQL Profile 才是部署目标。测试数据库位于 `target` 或 JUnit 临时目录，与 `data/app.db` 完全隔离。
 
 详细接口与边界见：
 
@@ -61,7 +104,7 @@ APP_BOOTSTRAP_ADMIN_PASSWORD=请替换为强密码
 
 管理后台位于相邻的 `springboot-admin` 项目：它通过 Vite 代理调用本服务，并使用 HttpOnly Refresh Cookie 实现登录、记住我、注册、自动刷新与退出。根目录的 `api-test.html` 用于其它 API 的手动调试；认证验证请使用管理后台，Refresh Token 不再暴露给浏览器 JavaScript。
 
-本地从 HTML 文件发起的跨域预检支持 `GET`、`POST`、`PUT`、`PATCH`、`DELETE` 和 `OPTIONS`；因此用户状态更新、角色分配和角色权限更新都可以直接在测试页执行。生产环境应将通配来源改为明确的受信任来源。
+配置受信任来源后，跨域预检支持 `GET`、`POST`、`PUT`、`PATCH`、`DELETE` 和 `OPTIONS`；因此用户状态更新、角色分配和角色权限更新都可以直接在测试页执行。生产环境必须使用明确来源，`postgres` Profile 会拒绝通配来源和不安全的 Refresh Cookie 配置。
 
 ## 主要路由
 
@@ -101,10 +144,35 @@ APP_BOOTSTRAP_ADMIN_PASSWORD=请替换为强密码
 ./mvnw verify
 ```
 
-本机没有 Docker 时，PostgreSQL/Testcontainers 测试需要交给 GitHub CI；SQLite 测试可直接运行。
+`verify` 会运行单元、SQLite 集成、架构和可用的 Testcontainers 测试，生成 JaCoCo 报告，并阻止行覆盖率低于 70%或分支覆盖率低于 45%的回退。本机没有 Docker 时，PostgreSQL/Testcontainers 测试需要交给 GitHub CI；SQLite 测试可直接运行。
+
+构建正式版本时传入 `revision`，它会进入 Spring Boot BuildProperties 和 `/api/v1/system/info`：
+
+```bash
+./mvnw -Drevision=1.2.3 verify
+```
+
+推送 `v1.2.3` Tag 会同时触发同版本 JAR 和容器镜像工作流。镜像在 GitHub
+Actions 中构建、扫描，通过后推送同一份归档；一般不在开发机本地构建应用镜像。
+完整流程见[部署说明](docs/operations/deployment.md)，每次提交的变更复盘见
+[复盘索引](docs/retrospectives/README.md)。
+
+## 从模板开始新项目
+
+建议在第一次业务提交前完成：
+
+1. 修改 Maven `groupId`、`artifactId`、项目名称和 Java 根包名；
+2. 修改 OpenAPI 标题、Compose 服务名、镜像名及文档中的示例；
+3. 决定保留或删除公告、动态简历等示例模块；
+4. 生成生产 RSA 密钥并放入部署平台的 Secret，不放入仓库；
+5. 设置明确的前端 CORS 来源和可信代理范围；
+6. 用空 SQLite 和空 PostgreSQL 各执行一次迁移与核心烟测。
+
+代码约束、模块扩展步骤和文档同步规则见 [AGENT.md](AGENT.md)。
 
 ## 当前重要限制
 
 - `local` Profile 可临时生成 JWT 密钥方便开发；`postgres` Profile 必须配置一对 RSA 私钥/公钥（`APP_JWT_*_PEM` 或 `APP_JWT_*_PATH`）。用户状态、密码、角色或权限变化会递增 `token_version`，旧 Access Token 会立即被拒绝。
+- Refresh Cookie 在 `postgres` Profile 默认启用 `Secure`；只有健康端点公开，`info`、`metrics` 等其余 Actuator 端点需要 `system:config:read`。
 - IP 白黑名单、限流和防爆破计数仍是单实例能力；多实例部署时应替换为 Redis 等共享实现。仅来自 `APP_SECURITY_TRUSTED_PROXIES` 的代理才会读取 `X-Forwarded-For`。
 - 不包含 MySQL、SQL Server、Redis、邮件验证、OAuth、MFA 和前端。

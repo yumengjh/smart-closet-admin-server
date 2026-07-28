@@ -18,6 +18,9 @@
 - 公告示例：公开已发布列表/内容、管理端草稿读取/创建/修改/发布/撤回/删除、乐观锁版本和公告审计。
 - `@PublicApi`：只跳过认证，仍通过 Trace ID、IP 策略、接口禁用和限流；公告公开接口可按调用者权限返回最简或管理详情。
 - Dockerfile、Compose、GitHub Actions CI、GHCR 镜像扫描/发布基础文件，以及根目录浏览器 API 测试页。
+- 管理员用户 `q/status` 组合筛选在数据库分页层执行，用户角色与角色权限采用批量加载，避免列表 DTO 的 N+1 查询。
+- CI 使用 70% 行/45% 分支覆盖率防回退；Maven Wrapper 校验官方 SHA-512，Dependabot 按周分组维护 Maven、Actions 和基础镜像依赖。
+- 推送语义化版本 Tag 会自动触发 JAR 与镜像发布，并把同一正式版本注入 Maven BuildProperties；产物内部版本、文件名和镜像标签保持一致。
 
 ## 已完成的安全与运维闭环
 
@@ -30,6 +33,8 @@
 7. OpenAPI 已声明 Bearer 认证、公开公告接口和通用错误响应组件，并为认证、用户、RBAC、运行时配置、审计、IP 规则、系统信息和公告模块分组/标记；Springdoc 仅在 `local` Profile 默认启用。
 8. SQLite 启动、匿名/鉴权烟测和完整 Maven 测试在本地验证；PostgreSQL/Testcontainers 仍依赖可用 Docker，由 GitHub CI 验证。
 9. SQL 执行台对写入 CTE/执行计划使用保守危险判定；IP 访问规则采用内存快照；GC 调度暴露最近执行状态并接入 Actuator 健康检查；公告管理列表使用分页。
+10. 测试数据库与本地数据完全隔离；运行时配置/IP 快照仅在事务提交后切换；GC 资源失败会回滚业务写入并持久化失败运行记录；全局限流按客户端 IP 聚合，端点策略作为第二层独立桶。
+11. PostgreSQL 部署默认使用 Secure Refresh Cookie，并拒绝通配 credentialed CORS；SQL Console 默认关闭；非健康 Actuator 端点要求 `system:config:read`。
 
 ## 有意不包含在第一版
 

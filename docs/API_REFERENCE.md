@@ -515,7 +515,7 @@ Authorization: Bearer <accessToken>
 | `security.brute-force.lock-seconds` | 整数 60–86400 | `900` | 自动锁定秒数。 |
 | `security.request-log.enabled` | `true` / `false` | `true` | `/api/**` 结构化请求日志开关。 |
 | `security.audit.enabled` | `true` / `false` | `true` | 审计写入开关。修改此键本身仍会留审计。 |
-| `security.cors.allowed-origins` | 最长 1000 字符 | `*` | 逗号分隔允许来源模式。生产应写明确域名。 |
+| `security.cors.allowed-origins` | 最长 1000 字符 | 空 | 逗号分隔允许来源模式；新数据库可由 `APP_SECURITY_CORS_ALLOWED_ORIGINS` 初始化，生产禁止 `*`。 |
 | `security.cors.allowed-methods` | 最长 1000 字符 | `GET,POST,PUT,PATCH,DELETE,OPTIONS` | 逗号分隔允许方法。不要移除测试/业务需要的方法。 |
 | `security.endpoint.disabled-patterns` | 最长 1000 字符 | 空 | 逗号分隔禁用的 Ant 路径模式。 |
 | `security.ip.allow-list` | 最长 1000 字符 | 空 | 逗号分隔 IP/CIDR 白名单；非空时只允许命中地址。 |
@@ -741,11 +741,11 @@ Authorization: Bearer <accessToken>
 | `GET /actuator/health` | 公开 | 健康汇总，返回 `UP`/`DOWN` 等状态。 |
 | `GET /actuator/health/liveness` | 公开 | 存活探针。 |
 | `GET /actuator/health/readiness` | 公开 | 就绪探针。 |
-| `GET /actuator/info` | Bearer Token | Spring Boot 构建/应用信息。 |
-| `GET /actuator/metrics` | Bearer Token | 可用指标名称列表。 |
-| `GET /actuator/metrics/{name}` | Bearer Token | 指定指标；可使用 Actuator 的 `tag` 查询参数筛选。 |
+| `GET /actuator/info` | `system:config:read` | Spring Boot 构建/应用信息。 |
+| `GET /actuator/metrics` | `system:config:read` | 可用指标名称列表。 |
+| `GET /actuator/metrics/{name}` | `system:config:read` | 指定指标；可使用 Actuator 的 `tag` 查询参数筛选。 |
 
-Actuator 当前使用 Spring Security 的通用认证规则，不要求额外 `system:*` 权限；任何有效、未失效的 Access Token 即可访问被保护的 Actuator 项目。生产环境应按部署策略额外收紧网络边界。
+Actuator health 保持公开以服务容器探针；其余 Actuator 路径统一要求有效 Access Token 和 `system:config:read`，普通 `USER` 无法读取指标及构建信息。生产环境仍应按部署策略收紧网络边界。
 
 ## 9. 内置权限速查
 
@@ -758,7 +758,7 @@ Actuator 当前使用 Spring Security 的通用认证规则，不要求额外 `s
 | `system:role:assign` | 给用户分配/移除角色。 |
 | `system:menu:read` | 读取完整菜单树。 |
 | `system:menu:write` | 创建、修改、删除非内置菜单。 |
-| `system:config:read` | 读取运行时配置与持久化 IP 规则。 |
+| `system:config:read` | 读取运行时配置、持久化 IP 规则与非健康 Actuator 数据。 |
 | `system:config:write` | 修改运行时配置、创建/删除持久化 IP 规则。 |
 | `system:audit:read` | 查询审计日志。 |
 | `example:announcement:read` | 读取公告管理视图，并将公开公告接口升级为详细视图。 |

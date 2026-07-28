@@ -15,8 +15,11 @@
   ready-to-use Compose option, while file paths require an explicit read-only secret volume.
   The `postgres` profile refuses ephemeral JWT keys. Never bake private keys, database
   passwords, tokens, or a populated `.env` into the image.
-- Configure exact CORS origins. Do not use a wildcard with credentialed browser
-  requests.
+- Configure exact CORS origins through `APP_SECURITY_CORS_ALLOWED_ORIGINS` when creating
+  a database, or through the authorized runtime-config API for an existing database.
+  The `postgres` profile refuses to start with wildcard credentialed CORS.
+- Keep `APP_AUTH_REFRESH_COOKIE_SECURE=true`. This is the `postgres` profile and Compose
+  default; the production safety check refuses an explicit insecure override.
 - Keep forwarded-header handling disabled unless trusted proxy CIDRs are explicitly
   configured through `APP_SECURITY_TRUSTED_PROXIES`. The immediate sender must be
   trusted before `X-Forwarded-For` is considered; test the complete load-balancer/proxy chain.
@@ -27,8 +30,9 @@
   container filesystem persistence.
 
 The canonical variable names are documented in `.env.example`; deployment manifests must
-not invent aliases. Runtime CORS policy remains database-backed and is changed through the
-authorized runtime-config API rather than by editing container environment variables.
+not invent aliases. Runtime CORS policy remains database-backed. The environment value only
+seeds a missing setting on a new database; change an existing database through the authorized
+runtime-config API.
 
 ## Health probes
 
@@ -44,6 +48,8 @@ should fail while required dependencies or startup work are unavailable. Set ini
 delays/timeouts for the platform and migration duration; avoid restart loops during a
 legitimate Liquibase rollout. `/api/v1/system/info` exposes non-sensitive build version,
 Git commit, and build time where available (`null`, not fabricated values, otherwise).
+`/actuator/info`, `/actuator/metrics`, and every other non-health Actuator endpoint require
+the `system:config:read` authority in addition to a valid Access Token.
 
 ## PostgreSQL backup and recovery
 
@@ -76,10 +82,30 @@ the reviewed runbook—do not bypass validation.
 
 ## GHCR publishing
 
-The image workflow runs for `main` pushes and `v*` tags, builds with BuildKit, scans
-with Trivy, and publishes ref/semantic tags to GitHub Container Registry. Workflow
-permissions are limited to repository read, package write, and the security-event scope
-needed by scanning. Pull requests do not receive publishing credentials.
+Pushing an exact `vMAJOR.MINOR.PATCH` tag starts both the JAR and image release
+workflows. They strip the leading `v` and pass the same version into Maven/Docker, so
+`/api/v1/system/info`, generated build metadata, the JAR name, and image tags agree.
+Invalid `v*` tags are rejected before a release build.
+
+The image workflow builds once with BuildKit, scans that exact archive with Trivy, then
+publishes semantic, `latest`, and commit-SHA tags to GitHub Container Registry.
+Ordinary branch pushes and pull requests never receive package publishing credentials.
+Workflow permissions are limited to repository read, package write, and the
+security-event scope needed by scanning.
+
+Do not build the application image on developer machines as routine validation. Run
+Maven verification and static Compose parsing locally, then create and push a release
+tag only after review. Observe the remote result with:
+
+```bash
+gh run list --workflow image.yml --limit 5
+gh run list --workflow release-jar.yml --limit 5
+gh run watch <run-id> --compact --exit-status
+gh run view <run-id> --log-failed
+```
+
+Local Maven builds keep the default `0.0.1-SNAPSHOT`; override it with
+`-Drevision=1.2.3` when verifying release metadata without publishing.
 
 For consumers, pin a release by immutable digest rather than a mutable branch tag, then
 promote the same digest across environments. Confirm the repository/package visibility
