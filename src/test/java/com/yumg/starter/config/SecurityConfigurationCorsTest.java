@@ -18,7 +18,9 @@ class SecurityConfigurationCorsTest {
                 (proxy, method, args) -> { throw new UnsupportedOperationException(method.getName()); });
         RuntimeSettingService settings = new RuntimeSettingService(repository) {
             @Override public String string(String key) {
-                return "security.cors.allowed-origins".equals(key) ? "*" : "GET,POST,PUT,PATCH,DELETE,OPTIONS";
+                return "security.cors.allowed-origins".equals(key)
+                        ? "https://admin.example.com"
+                        : "GET,POST,PUT,PATCH,DELETE,OPTIONS";
             }
         };
         var source = new SecurityConfiguration().corsConfigurationSource(settings);
@@ -28,6 +30,8 @@ class SecurityConfigurationCorsTest {
 
         assertThat(configuration.getAllowedMethods())
                 .containsExactlyInAnyOrderElementsOf(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        assertThat(configuration.getAllowedOriginPatterns())
+                .containsExactly("https://admin.example.com");
         assertThat(configuration.getAllowCredentials()).isTrue();
     }
 }

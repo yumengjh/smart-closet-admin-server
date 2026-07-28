@@ -11,5 +11,7 @@ spring:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.yaml
 app:
+  auth:
+    refresh-cookie-secure: ${APP_AUTH_REFRESH_COOKIE_SECURE:true}
   jwt:
     allow-ephemeral-key: false

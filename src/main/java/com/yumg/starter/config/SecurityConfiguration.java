@@ -42,6 +42,7 @@ public class SecurityConfiguration {
                                 "/api/v1/auth/logout", "/actuator/health/**",
                                 "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                         .permitAll()
+                        .requestMatchers("/actuator/**").hasAuthority("system:config:read")
                         .requestMatchers(publicApiRequestMatcher).permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions

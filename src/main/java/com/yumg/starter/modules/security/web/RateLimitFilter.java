@@ -38,12 +38,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-        String key = clientIp.resolve(request) + ':' + request.getRequestURI();
+        String ip = clientIp.resolve(request);
         String path = request.getRequestURI();
         EndpointRateLimitPolicy endpointPolicy = new EndpointRateLimitPolicy(settings.string("security.endpoint.rate-limit.patterns"));
-        boolean allowed = endpointPolicy.matches(path)
-                ? limits.allow("endpoint:" + key, settings.integer("security.endpoint.rate-limit.capacity"), settings.integer("security.endpoint.rate-limit.window-seconds"))
-                : limits.allow(key);
+        boolean allowed = limits.allow("global:" + ip);
+        if (allowed && endpointPolicy.matches(path)) {
+            allowed = limits.allow("endpoint:" + ip + ':' + path,
+                    settings.integer("security.endpoint.rate-limit.capacity"),
+                    settings.integer("security.endpoint.rate-limit.window-seconds"));
+        }
         if (!allowed) {
             errors.write(response, ApiErrorCode.RATE_LIMITED);
             return;

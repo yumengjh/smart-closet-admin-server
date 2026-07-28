@@ -1,20 +1,15 @@
 package com.yumg.starter.modules.maintenance.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.yumg.starter.entities.MaintenanceGcPolicy;
 import com.yumg.starter.entities.MaintenanceGcRun;
-import com.yumg.starter.modules.maintenance.infrastructure.MaintenanceGcLockRepository;
 import com.yumg.starter.modules.maintenance.infrastructure.MaintenanceGcRunRepository;
 import com.yumg.starter.modules.runtimeconfig.application.RuntimeSettingService;
-import com.yumg.starter.modules.security.application.AuditService;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -23,23 +18,21 @@ class GcExecutionServiceTest {
     void dryRunPreviewsSelectedResourceWithoutMutatingIt() {
         GcPolicyService policies = Mockito.mock(GcPolicyService.class);
         MaintenanceGcRunRepository runs = Mockito.mock(MaintenanceGcRunRepository.class);
-        MaintenanceGcLockRepository locks = Mockito.mock(MaintenanceGcLockRepository.class);
         RuntimeSettingService settings = Mockito.mock(RuntimeSettingService.class);
-        AuditService audit = Mockito.mock(AuditService.class);
+        GcRunWorker worker = Mockito.mock(GcRunWorker.class);
         GcResource resource = Mockito.mock(GcResource.class);
-        MaintenanceGcPolicy policy = new MaintenanceGcPolicy("example", true, true, 30, 100);
-        when(resource.descriptor()).thenReturn(new GcResourceDescriptor("example", "示例", "说明", 30, 100, true));
         when(policies.resources()).thenReturn(Map.of("example", resource));
-        when(policies.policy("example")).thenReturn(policy);
         when(settings.enabled("maintenance.gc.enabled")).thenReturn(true);
-        when(settings.integer("maintenance.gc.max-run-seconds")).thenReturn(120);
-        when(locks.tryAcquire(eq("global"), any(), any(), any())).thenReturn(1);
-        when(runs.save(any(MaintenanceGcRun.class))).thenAnswer(call -> call.getArgument(0));
-        when(resource.execute(eq(policy), eq(true), any(Instant.class)))
-                .thenReturn(new GcResourceResult("example", 3, 0, "预览"));
+        MaintenanceGcRun run = Mockito.mock(MaintenanceGcRun.class);
+        when(run.getId()).thenReturn("run-id");
+        when(worker.create("MANUAL", true, "admin", Set.of("example"))).thenReturn(run);
+        GcRunContent expected = new GcRunContent("run-id", "SUCCEEDED", "MANUAL", true,
+                "admin", "example", GcRunSummary.from(List.of(
+                new GcResourceResult("example", 3, 0, "预览"))), null, null, null, null);
+        when(worker.execute("run-id", "MANUAL", true, Set.of("example"))).thenReturn(expected);
 
-        GcExecutionService service = new GcExecutionService(policies, runs, locks, settings, audit,
-                new GcRunSummaryCodec(new tools.jackson.databind.ObjectMapper()));
+        GcExecutionService service = new GcExecutionService(policies, runs, settings,
+                new GcRunSummaryCodec(new tools.jackson.databind.ObjectMapper()), worker);
 
         GcRunContent result = service.run("MANUAL", true, List.of("example"), "admin");
 
@@ -53,7 +46,31 @@ class GcExecutionServiceTest {
             assertThat(item.deleted()).isZero();
             assertThat(item.message()).isEqualTo("预览");
         });
-        verify(resource).execute(eq(policy), eq(true), any(Instant.class));
-        verify(locks).release(eq("global"), any(), any());
+        verify(worker).execute("run-id", "MANUAL", true, Set.of("example"));
+    }
+
+    @Test
+    void marksTheCommittedRunAsFailedAfterTheExecutionTransactionRollsBack() {
+        GcPolicyService policies = Mockito.mock(GcPolicyService.class);
+        MaintenanceGcRunRepository runs = Mockito.mock(MaintenanceGcRunRepository.class);
+        RuntimeSettingService settings = Mockito.mock(RuntimeSettingService.class);
+        GcRunWorker worker = Mockito.mock(GcRunWorker.class);
+        GcResource resource = Mockito.mock(GcResource.class);
+        when(policies.resources()).thenReturn(Map.of("example", resource));
+        when(settings.enabled("maintenance.gc.enabled")).thenReturn(true);
+        MaintenanceGcRun run = Mockito.mock(MaintenanceGcRun.class);
+        when(run.getId()).thenReturn("run-id");
+        when(worker.create("MANUAL", false, "admin", Set.of("example"))).thenReturn(run);
+        IllegalStateException failure = new IllegalStateException("database unavailable");
+        when(worker.execute("run-id", "MANUAL", false, Set.of("example"))).thenThrow(failure);
+        GcExecutionService service = new GcExecutionService(policies, runs, settings,
+                new GcRunSummaryCodec(new tools.jackson.databind.ObjectMapper()), worker);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.run("MANUAL", false, List.of("example"), "admin"))
+                .isSameAs(failure);
+
+        verify(worker).fail("run-id", failure);
+        verify(worker).auditFailure("run-id");
     }
 }

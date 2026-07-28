@@ -5,11 +5,15 @@ import com.yumg.starter.entities.RuntimeSetting;
 import com.yumg.starter.modules.runtimeconfig.api.dto.RuntimeSettingResponse;
 import com.yumg.starter.modules.runtimeconfig.infrastructure.RuntimeSettingRepository;
 import jakarta.annotation.PostConstruct;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.yumg.starter.modules.security.application.AuditService;
 
@@ -28,7 +32,7 @@ public class RuntimeSettingService {
             Map.entry("security.brute-force.lock-seconds", new Definition("INTEGER", "900", 60, 86400, "账号锁定时长", "登录失败保护触发后账号不可登录的时长，单位：秒。")),
             Map.entry("security.request-log.enabled", new Definition("BOOLEAN", "true", 0, 0, "记录请求日志", "记录 API 请求的基础访问日志。")),
             Map.entry("security.audit.enabled", new Definition("BOOLEAN", "true", 0, 0, "启用审计日志", "记录安全与管理操作的审计事件。")),
-            Map.entry("security.cors.allowed-origins", new Definition("STRING", "*", 0, 0, "允许的跨域来源", "允许访问 API 的来源地址，多个来源请用逗号分隔。")),
+            Map.entry("security.cors.allowed-origins", new Definition("STRING", "", 0, 0, "允许的跨域来源", "允许访问 API 的来源地址，多个来源请用逗号分隔。")),
             Map.entry("security.cors.allowed-methods", new Definition("STRING", "GET,POST,PUT,PATCH,DELETE,OPTIONS", 0, 0, "允许的跨域方法", "跨域请求允许使用的 HTTP 方法，多个方法请用逗号分隔。")),
             Map.entry("security.endpoint.disabled-patterns", new Definition("STRING", "", 0, 0, "禁用的端点路径", "临时禁止访问的 API 路径模式，多个模式请用逗号分隔。")),
             Map.entry("security.ip.allow-list", new Definition("STRING", "", 0, 0, "IP 白名单", "仅允许这些 IP 或 CIDR 网段访问；留空表示不限制。")),
@@ -41,16 +45,26 @@ public class RuntimeSettingService {
     private final RuntimeSettingRepository settings;
     private final ConcurrentHashMap<String, String> snapshot = new ConcurrentHashMap<>();
     private final AuditService audit;
+    private final String initialCorsAllowedOrigins;
 
-    public RuntimeSettingService(RuntimeSettingRepository settings) { this(settings, null); }
-    @Autowired public RuntimeSettingService(RuntimeSettingRepository settings, AuditService audit) { this.settings = settings; this.audit = audit; }
+    public RuntimeSettingService(RuntimeSettingRepository settings) { this(settings, null, ""); }
+    @Autowired
+    public RuntimeSettingService(RuntimeSettingRepository settings, AuditService audit,
+                                 @Value("${app.security.cors-allowed-origins:}")
+                                 String initialCorsAllowedOrigins) {
+        this.settings = settings;
+        this.audit = audit;
+        this.initialCorsAllowedOrigins = initialCorsAllowedOrigins;
+    }
 
     @PostConstruct
     @Transactional
     void initialize() {
         DEFINITIONS.forEach((key, definition) -> settings.findByKey(key).ifPresentOrElse(setting ->
                 snapshot.put(key, setting.getValue()), () -> {
-                    RuntimeSetting created = settings.save(new RuntimeSetting(key, definition.type(), definition.defaultValue()));
+                    String initialValue = "security.cors.allowed-origins".equals(key)
+                            ? initialCorsAllowedOrigins : definition.defaultValue();
+                    RuntimeSetting created = settings.save(new RuntimeSetting(key, definition.type(), initialValue));
                     snapshot.put(key, created.getValue());
                 }));
     }
@@ -72,9 +86,34 @@ public class RuntimeSettingService {
         RuntimeSetting setting = settings.findByKey(key).orElseThrow(ApiException::notFound);
         boolean auditWasEnabled = enabled("security.audit.enabled");
         setting.changeValue(value);
-        snapshot.put(key, value);
+        afterCommit(() -> snapshot.put(key, value));
         if (audit != null && (auditWasEnabled || "security.audit.enabled".equals(key))) audit.runtimeSettingChanged(key, value);
         return RuntimeSettingResponse.from(setting, definition.displayName(), definition.description());
+    }
+
+    @Transactional
+    public void updateAll(Map<String, String> updates) {
+        Map<String, Definition> definitions = new LinkedHashMap<>();
+        updates.forEach((key, value) -> {
+            Definition definition = DEFINITIONS.get(key);
+            if (definition == null || !valid(definition, value)) throw ApiException.notFound();
+            definitions.put(key, definition);
+        });
+        Map<String, RuntimeSetting> changed = new LinkedHashMap<>();
+        definitions.forEach((key, definition) -> {
+            RuntimeSetting setting = settings.findByKey(key).orElseThrow(ApiException::notFound);
+            setting.changeValue(updates.get(key));
+            changed.put(key, setting);
+        });
+        boolean auditWasEnabled = enabled("security.audit.enabled");
+        afterCommit(() -> snapshot.putAll(updates));
+        if (audit != null) {
+            changed.forEach((key, setting) -> {
+                if (auditWasEnabled || "security.audit.enabled".equals(key)) {
+                    audit.runtimeSettingChanged(key, setting.getValue());
+                }
+            });
+        }
     }
 
     public boolean enabled(String key) { return Boolean.parseBoolean(snapshot.get(key)); }
@@ -86,6 +125,15 @@ public class RuntimeSettingService {
         if ("BOOLEAN".equals(definition.type())) return "true".equals(value) || "false".equals(value);
         try { int number = Integer.parseInt(value); return number >= definition.min() && number <= definition.max(); }
         catch (NumberFormatException ignored) { return false; }
+    }
+    private void afterCommit(Runnable action) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            action.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override public void afterCommit() { action.run(); }
+        });
     }
     private record Definition(String type, String defaultValue, int min, int max,
                               String displayName, String description) {}

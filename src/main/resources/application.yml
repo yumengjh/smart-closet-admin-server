@@ -29,6 +29,7 @@ app:
     refresh-cookie-secure: ${APP_AUTH_REFRESH_COOKIE_SECURE:false}
   security:
     trusted-proxies: ${APP_SECURITY_TRUSTED_PROXIES:}
+    cors-allowed-origins: ${APP_SECURITY_CORS_ALLOWED_ORIGINS:}
 
 management:
   endpoints:

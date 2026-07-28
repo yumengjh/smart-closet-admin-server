@@ -1,5 +1,6 @@
 package com.yumg.starter.modules.rbac.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,7 +34,7 @@ class RbacServiceTest {
         Role affected = new Role("AFFECTED", "Affected");
         affected.grant(permission);
         when(permissions.findByCode(permission.getCode())).thenReturn(Optional.of(permission));
-        when(roles.findAll()).thenReturn(List.of(unaffected, affected));
+        when(roles.findAllWithPermissions()).thenReturn(List.of(unaffected, affected));
         when(users.findDistinctByRoles_Code("AFFECTED")).thenReturn(List.of());
 
         new RbacService(roles, permissions, users, tokens, audit).deletePermission(permission.getCode());
@@ -41,6 +42,20 @@ class RbacServiceTest {
         verify(users, never()).findDistinctByRoles_Code("UNRELATED");
         verify(users).findDistinctByRoles_Code("AFFECTED");
         verify(permissions).delete(permission);
+    }
+
+    @Test
+    void listingRolesUsesPermissionsFetchPlan() {
+        Permission permission = new Permission("system:config:read", "Read settings");
+        Role role = new Role("OPERATOR", "Operator");
+        role.grant(permission);
+        when(roles.findAllWithPermissions()).thenReturn(List.of(role));
+
+        var result = new RbacService(roles, permissions, users, tokens, audit).listRoles();
+
+        assertThat(result).singleElement().satisfies(item ->
+                assertThat(item.permissions()).containsExactly("system:config:read"));
+        verify(roles).findAllWithPermissions();
     }
 
 }

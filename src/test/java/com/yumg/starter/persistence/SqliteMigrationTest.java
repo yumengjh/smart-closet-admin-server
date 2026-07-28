@@ -10,6 +10,10 @@ import com.yumg.starter.modules.resume.application.ResumeFeedbackService;
 import com.yumg.starter.modules.resume.application.ResumeService;
 import com.yumg.starter.modules.maintenance.application.GcExecutionService;
 import com.yumg.starter.modules.maintenance.application.GcPolicyService;
+import com.yumg.starter.modules.maintenance.application.GcResource;
+import com.yumg.starter.modules.maintenance.application.GcResourceDescriptor;
+import com.yumg.starter.modules.users.application.UserAdministrationService;
+import com.yumg.starter.entities.UserStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,10 +24,14 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 
 @ActiveProfiles("local")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @SpringBootTest
+@Import(SqliteMigrationTest.FailingGcResourceConfiguration.class)
 class SqliteMigrationTest {
 
     private static final Set<String> CORE_TABLES = Set.of("users", "roles", "permissions",
@@ -49,6 +57,9 @@ class SqliteMigrationTest {
 
     @Autowired
     private GcPolicyService gcPolicies;
+
+    @Autowired
+    private UserAdministrationService userAdministration;
 
     @DynamicPropertySource
     static void sqliteProperties(DynamicPropertyRegistry registry) {
@@ -119,6 +130,39 @@ class SqliteMigrationTest {
     }
 
     @Test
+    void combinesUserQueryAndStatusAndLoadsRoles() {
+        String activeId = "00000000-0000-0000-0000-000000000701";
+        String disabledId = "00000000-0000-0000-0000-000000000702";
+        String timestamp = "2026-07-28T00:00:00Z";
+        jdbc.update("""
+                insert into users
+                    (id, username, display_name, password_hash, status, token_version,
+                     version, created_at, updated_at)
+                values (?, ?, ?, 'hash', ?, 0, 0, ?, ?)
+                """, activeId, "p1-filter-active", "P1 Filter Active", "ACTIVE",
+                timestamp, timestamp);
+        jdbc.update("""
+                insert into users
+                    (id, username, display_name, password_hash, status, token_version,
+                     version, created_at, updated_at)
+                values (?, ?, ?, 'hash', ?, 0, 0, ?, ?)
+                """, disabledId, "p1-filter-disabled", "P1 Filter Disabled", "DISABLED",
+                timestamp, timestamp);
+        String userRoleId = jdbc.queryForObject(
+                "select id from roles where code = 'USER'", String.class);
+        jdbc.update("insert into user_roles (user_id, role_id) values (?, ?)",
+                activeId, userRoleId);
+
+        var result = userAdministration.list("p1-filter", UserStatus.ACTIVE, 0, 20);
+
+        assertThat(result.totalElements()).isEqualTo(1);
+        assertThat(result.items()).singleElement().satisfies(user -> {
+            assertThat(user.id()).isEqualTo(activeId);
+            assertThat(user.roles()).containsExactly("USER");
+        });
+    }
+
+    @Test
     void returnsTheIncrementedVersionAfterUpdatingTheResume() {
         var initial = resume.createDefaultIfAbsent();
         var updated = resume.update(initial.content() + " ", initial.schemaVersion(), initial.version());
@@ -140,6 +184,51 @@ class SqliteMigrationTest {
         assertThat(run.status()).isEqualTo("SUCCEEDED");
         assertThat(jdbc.queryForObject("select count(*) from audit_events where id = ?", Integer.class, oldId))
                 .isZero();
+    }
+
+    @Test
+    void gcRollsBackResourceWritesButRetainsTheFailedRunAndAudit() {
+        assertThatThrownBy(() -> gc.run(
+                "MANUAL", false, List.of("failing-test-resource"), "test-user"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("simulated GC failure");
+
+        assertThat(jdbc.queryForObject(
+                "select count(*) from audit_events where action = 'TEST_GC_ROLLBACK'",
+                Integer.class)).isZero();
+        assertThat(jdbc.queryForObject(
+                "select status from maintenance_gc_runs where resource_codes = ?",
+                String.class, "failing-test-resource")).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject(
+                "select count(*) from audit_events where action = 'GC_RUN_FAILED'",
+                Integer.class)).isEqualTo(1);
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class FailingGcResourceConfiguration {
+        @Bean
+        GcResource failingGcResource(JdbcTemplate jdbc) {
+            return new GcResource() {
+                @Override
+                public GcResourceDescriptor descriptor() {
+                    return new GcResourceDescriptor(
+                            "failing-test-resource", "失败事务测试", "仅用于事务回归测试",
+                            1, 10, false);
+                }
+
+                @Override
+                public com.yumg.starter.modules.maintenance.application.GcResourceResult execute(
+                        com.yumg.starter.entities.MaintenanceGcPolicy policy,
+                        boolean dryRun, java.time.Instant now) {
+                    jdbc.update("""
+                            insert into audit_events
+                                (id, action, result, occurred_at, version)
+                            values (?, 'TEST_GC_ROLLBACK', 'SUCCESS', ?, 0)
+                            """, java.util.UUID.randomUUID().toString(), now.toString());
+                    throw new IllegalStateException("simulated GC failure");
+                }
+            };
+        }
     }
 
     private List<String> indexNames(String table) {

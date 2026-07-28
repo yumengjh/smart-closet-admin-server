@@ -8,7 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockHttpServletRequest;
 
-@SpringBootTest(classes = StarterApplication.class)
+@SpringBootTest(classes = StarterApplication.class, properties =
+        "spring.datasource.url=jdbc:sqlite:target/public-api-request-matcher-test.db")
 class PublicApiRequestMatcherTest {
 
     @Autowired
