@@ -10,7 +10,7 @@
 
 - Java 21、Spring Boot 4.1、Maven Wrapper、SQLite `local` 与 PostgreSQL `postgres` Profile。
 - Liquibase 管理用户、RBAC、Refresh Session、运行时配置、审计和公告表；SQLite 外键与 PostgreSQL 迁移测试。
-- 全局 API 响应、稳定错误码、Trace ID、参数校验、未知 JSON 字段拒绝、分页、401/403/500 安全错误处理。
+- 全局 API 响应、稳定错误码、Trace ID、可配置 `Powered-By`/`Server` 响应标识、参数校验、未知 JSON 字段拒绝、分页、401/403/500 安全错误处理。
 - 注册、登录、RSA JWT Access Token、Refresh Token 哈希存储、轮换、复用检测、当前设备登出、本人会话列表、本人退出全部设备、改密后撤销 Refresh Session，以及可动态关闭的自助注册。
 - 当前用户资料读取/修改、改密；管理员分页查询用户、读取详情、状态变更、撤销指定用户会话；最后一个超级管理员保护。
 - 数据库 RBAC：角色/权限目录 CRUD、用户角色分配、角色权限分配，以及角色或权限变动后的 Refresh Session 撤销。
@@ -21,6 +21,9 @@
 - 管理员用户 `q/status` 组合筛选在数据库分页层执行，用户角色与角色权限采用批量加载，避免列表 DTO 的 N+1 查询。
 - CI 使用 70% 行/45% 分支覆盖率防回退；Maven Wrapper 校验官方 SHA-512，Dependabot 按周分组维护 Maven、Actions 和基础镜像依赖。
 - 推送语义化版本 Tag 会自动触发 JAR 与镜像发布，并把同一正式版本注入 Maven BuildProperties；产物内部版本、文件名和镜像标签保持一致。
+- 应用 Ready 后输出字符框启动摘要，集中展示非敏感运行信息；`Powered-By` 与
+  `Server` 默认 `ASP.NET`、`Microsoft-IIS/10.0`，可通过对应环境变量覆盖并
+  拒绝控制字符。
 
 ## 已完成的安全与运维闭环
 

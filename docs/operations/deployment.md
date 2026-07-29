@@ -23,6 +23,12 @@
 - Keep forwarded-header handling disabled unless trusted proxy CIDRs are explicitly
   configured through `APP_SECURITY_TRUSTED_PROXIES`. The immediate sender must be
   trusted before `X-Forwarded-For` is considered; test the complete load-balancer/proxy chain.
+- Set `APP_RESPONSE_POWERED_BY` and `APP_RESPONSE_SERVER` when the deployment should
+  use response identities other than the defaults `ASP.NET` and
+  `Microsoft-IIS/10.0`. The application adds `Powered-By` and `Server` to every Servlet
+  response; values are trimmed, limited to 128 characters, and rejected when they
+  contain control characters. Treat them as presentation metadata, not as a security
+  control or an authoritative declaration of the implementation stack.
 - Decide whether Swagger UI should be exposed. OpenAPI/Swagger exposure is configurable
   in production; protect or disable it according to policy.
 - Ensure the runtime identity is non-root and can write only required paths. SQLite
@@ -146,6 +152,10 @@ docker compose config
 docker compose up --build --wait
 curl --fail http://localhost:8080/actuator/health/readiness
 curl --fail http://localhost:8080/v3/api-docs >/dev/null
+test "$(curl --silent --output /dev/null --write-out '%header{Powered-By}' \
+  http://localhost:8080/actuator/health)" = "${APP_RESPONSE_POWERED_BY:-ASP.NET}"
+test "$(curl --silent --output /dev/null --write-out '%header{Server}' \
+  http://localhost:8080/actuator/health)" = "${APP_RESPONSE_SERVER:-Microsoft-IIS/10.0}"
 ```
 
 Docker/Compose/Testcontainers results are environment-dependent. Report skipped checks

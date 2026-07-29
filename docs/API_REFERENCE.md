@@ -6,6 +6,20 @@ Swagger UI：`/swagger-ui/index.html`；机器可读的 OpenAPI：`/v3/api-docs`
 
 ## 1. 通用约定
 
+### 1.0 通用响应头
+
+所有 Servlet 响应（业务 API、认证/授权错误、Actuator、OpenAPI 和静态资源）
+均包含：
+
+```http
+Powered-By: ASP.NET
+Server: Microsoft-IIS/10.0
+```
+
+两个模板默认值可分别由启动环境变量 `APP_RESPONSE_POWERED_BY` 和
+`APP_RESPONSE_SERVER` 覆盖。这些字段仅是服务展示标识，客户端不得依赖具体值
+判断功能、安全能力或协议版本。
+
 ### 1.1 认证与权限
 
 除标为“公开”的接口外，均须携带 Access Token：

@@ -77,6 +77,13 @@ Controller 负责 HTTP 映射、校验和权限声明，不直接编排 Reposito
 - SQL Console 默认关闭，且只能在 `local` Profile 使用；
 - 只有受信任代理地址才允许提供客户端 IP 转发头。
 
+全局 Servlet 响应必须带 `Powered-By` 与 `Server` Header。它们分别由
+`app.response.powered-by` / `APP_RESPONSE_POWERED_BY` 和
+`app.response.server` / `APP_RESPONSE_SERVER` 在启动期配置，默认
+`ASP.NET` 与 `Microsoft-IIS/10.0`。Header 名称不得改成 `X-*`；值必须保持
+单行且不超过 128 字符，不能把未经校验的用户输入直接写入响应头。这些标识只是
+可配置展示信息，不参与认证、授权或技术栈探测逻辑。
+
 不要放宽这些边界来简化测试。为测试提供隔离配置或显式构造依赖。
 
 ## 数据库与事务不变量
@@ -108,12 +115,18 @@ GC 执行采用“编排服务 + 独立事务工作器”：
 
 选择配置位置时遵循：
 
-- 数据库连接、密钥、Cookie 安全、可信代理：环境变量；
+- 数据库连接、密钥、Cookie 安全、可信代理、响应展示标识：环境变量；
 - CORS 来源、接口开关、限流、注册开关、请求日志：运行时设置；
 - 编译期依赖和构建版本：Maven；
 - 不允许把真实密码、Token、PEM、数据库文件提交到仓库。
 
 新增环境变量时同步 `.env.example`、`compose.yaml`、README 或部署文档。新增运行时设置时同步初始化数据、类型/范围校验和 `docs/operations/runtime-settings.md`。
+
+启动完成摘要由 `StartupSummaryLogger` 在 `ApplicationReadyEvent` 后输出。摘要可
+使用 Unicode 框线增强可读性，但不要为纯字符排版增加第三方依赖；只允许显示
+应用名、构建版本、Profile、实际端口、健康/OpenAPI 地址、数据库类型、响应标识
+和耗时等非敏感信息。新增字段前先确认不会泄露密码、Token、密钥、完整连接串或
+其它 Secret，并覆盖控制字符和超长文本。
 
 ## 新增业务模块
 

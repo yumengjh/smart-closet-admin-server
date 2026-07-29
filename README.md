@@ -32,12 +32,35 @@ cp .env.example .env
 curl http://localhost:8080/actuator/health
 ```
 
+应用完成启动后会打印一个字符框摘要，集中显示应用名、版本、Profile、实际端口、
+健康检查/OpenAPI 地址、数据库类型、响应标识和启动耗时。摘要只展示非敏感运行
+信息，不会输出数据库密码、JWT 密钥或管理员凭据。
+
 `.env` 会被 Spring Boot 直接加载，适合保存启动期配置；密码不会写入源码、示例文件或日志：
 
 ```bash
 APP_BOOTSTRAP_ADMIN_USERNAME=admin
 APP_BOOTSTRAP_ADMIN_PASSWORD=请替换为强密码
 ```
+
+所有 HTTP 响应默认包含以下展示标识：
+
+```http
+Powered-By: ASP.NET
+Server: Microsoft-IIS/10.0
+```
+
+需要替换显示值时修改 `.env`：
+
+```bash
+APP_RESPONSE_POWERED_BY=PHP/8.4
+APP_RESPONSE_SERVER=nginx
+```
+
+这些值在启动时读取，修改后需要重启；空值分别回退为 `ASP.NET` 和
+`Microsoft-IIS/10.0`，控制字符或超过 128 字符的值会使配置校验失败，避免
+响应头注入。它们只是可配置的展示标识，不能作为真实技术栈、安全能力或服务
+版本的判断依据。
 
 若用户名不存在，服务会创建该用户并授予 `SUPER_ADMIN`。该初始化是幂等的。
 
@@ -58,7 +81,7 @@ APP_SECURITY_CORS_ALLOWED_ORIGINS=http://localhost:5173
 - 用户查看本人资料、修改显示名、修改密码
 - 数据库 RBAC：初始角色/权限、角色与权限目录 CRUD、用户角色分配、角色权限分配
 - 运行时服务治理：动态 CORS、接口禁用、通用与接口级限流、CIDR IP 白黑名单、带有效期的 IP 规则、登录防爆破、请求日志开关、注册开关及审计查询
-- 统一错误响应、Trace ID、SQLite/PostgreSQL Liquibase 迁移
+- 统一错误响应、Trace ID、可配置 `Powered-By`/`Server` 响应标识、字符化启动摘要、SQLite/PostgreSQL Liquibase 迁移
 - Docker、Compose、GitHub Actions 基础文件
 
 ## 架构设计
@@ -132,6 +155,10 @@ JPA 默认关闭 Open Session in View。DTO 需要关联集合时由应用服务
 ```
 
 错误响应使用 `code`、`message`、`traceId`、`violations`、`timestamp`。所有对外时间字段使用 Unix 毫秒时间戳，避免 ISO 字符串格式不一致。认证、授权、限流和 Controller 内异常共用这一错误结构；客户端排查时应携带 `traceId`。
+
+所有 Servlet 响应（包括业务 API、认证错误、Actuator 和静态资源）统一带有
+`Powered-By` 与 `Server` 响应头，其值分别由启动环境变量
+`APP_RESPONSE_POWERED_BY`、`APP_RESPONSE_SERVER` 决定。
 
 默认情况下，所有业务接口都需要 Access Token。要开放一个外部接口，在 Controller 方法或类上标记 `@PublicApi`；它只跳过身份认证，仍然会经过 Trace ID、IP 访问控制、接口禁用和限流。公开内容需要最简响应时可使用 `@PublicApi(minimalResponse = true)`，例如公告公开列表；详情见 [公告示例模块](docs/api/announcements.md)。
 

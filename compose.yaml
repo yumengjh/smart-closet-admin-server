@@ -24,6 +24,8 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: postgres
       SERVER_PORT: ${SERVER_PORT:-8080}
+      APP_RESPONSE_POWERED_BY: ${APP_RESPONSE_POWERED_BY:-ASP.NET}
+      APP_RESPONSE_SERVER: ${APP_RESPONSE_SERVER:-Microsoft-IIS/10.0}
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-starter}
       DB_USERNAME: ${POSTGRES_USER:-starter}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-local-only-change-me}

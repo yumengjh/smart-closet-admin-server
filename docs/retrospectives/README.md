@@ -48,3 +48,4 @@ YYYY-MM-DD-NNN-<slug>.md
 | 2026-07-28 | [001 运行时一致性与查询修复](2026-07-28-001-runtime-consistency-and-queries.md) | 测试隔离、生产安全、事务、限流和查询 |
 | 2026-07-28 | [002 构建质量与 Tag 发布](2026-07-28-002-build-quality-and-tag-releases.md) | 覆盖率、依赖维护、Wrapper 校验和发布版本 |
 | 2026-07-28 | [003 工程文档与复盘制度](2026-07-28-003-documentation-and-retrospective-system.md) | README、AGENT、运维说明和提交复盘规范 |
+| 2026-07-29 | [001 启动可观测性与响应标识](2026-07-29-001-startup-observability-and-response-identity.md) | Ready 摘要、Powered-By/Server 与环境变量 |
