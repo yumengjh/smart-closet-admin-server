@@ -22,7 +22,7 @@ class PostgresMigrationTest {
     private static final Set<String> CORE_TABLES = Set.of("users", "roles", "permissions",
             "user_roles", "role_permissions", "refresh_sessions", "system_settings",
             "ip_access_rules", "audit_events", "announcements", "navigation_menus",
-            "resume_documents", "resume_feedbacks", "maintenance_gc_policies",
+            "maintenance_gc_policies",
             "maintenance_gc_runs", "maintenance_gc_locks");
 
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
@@ -74,14 +74,6 @@ class PostgresMigrationTest {
         assertThat(columnType("navigation_menus", "created_at"))
                 .containsExactly("character varying", 64);
         assertThat(columnType("navigation_menus", "updated_at"))
-                .containsExactly("character varying", 64);
-        assertThat(columnType("resume_documents", "created_at"))
-                .containsExactly("character varying", 64);
-        assertThat(columnType("resume_documents", "updated_at"))
-                .containsExactly("character varying", 64);
-        assertThat(columnType("resume_feedbacks", "created_at"))
-                .containsExactly("character varying", 64);
-        assertThat(columnType("resume_feedbacks", "updated_at"))
                 .containsExactly("character varying", 64);
     }
 

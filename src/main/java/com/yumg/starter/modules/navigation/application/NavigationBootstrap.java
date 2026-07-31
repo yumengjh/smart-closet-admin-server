@@ -46,8 +46,6 @@ public class NavigationBootstrap implements ApplicationRunner {
         NavigationMenu content = seedDirectory("content", "内容管理", "/content", "Document", 200);
         seedPage(content, "announcement-management", "公告管理", "/content/announcements",
                 "announcement-management", "Bell", 10, "example:announcement:read");
-        seedPage(content, "resume-management", "简历管理", "/content/resume",
-                "resume-management", "Document", 20, "resume:manage");
 
         NavigationMenu account = seedDirectory("account", "个人中心", "/account", "UserFilled", 300);
         seedPage(account, "account-security", "账户安全", "/account/security", "account-security",

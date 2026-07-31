@@ -8,7 +8,3 @@ databaseChangeLog:
             sql: |
               alter table navigation_menus alter column created_at type varchar(64) using to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"');
               alter table navigation_menus alter column updated_at type varchar(64) using to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"');
-              alter table resume_documents alter column created_at type varchar(64) using to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"');
-              alter table resume_documents alter column updated_at type varchar(64) using to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"');
-              alter table resume_feedbacks alter column created_at type varchar(64) using to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"');
-              alter table resume_feedbacks alter column updated_at type varchar(64) using to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"');

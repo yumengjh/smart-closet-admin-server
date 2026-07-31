@@ -6,8 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
-import com.yumg.starter.modules.resume.application.ResumeFeedbackService;
-import com.yumg.starter.modules.resume.application.ResumeService;
 import com.yumg.starter.modules.maintenance.application.GcExecutionService;
 import com.yumg.starter.modules.maintenance.application.GcPolicyService;
 import com.yumg.starter.modules.maintenance.application.GcResource;
@@ -37,7 +35,7 @@ class SqliteMigrationTest {
     private static final Set<String> CORE_TABLES = Set.of("users", "roles", "permissions",
             "user_roles", "role_permissions", "refresh_sessions", "system_settings",
             "ip_access_rules", "audit_events", "announcements", "navigation_menus",
-            "resume_documents", "resume_feedbacks", "maintenance_gc_policies",
+            "maintenance_gc_policies",
             "maintenance_gc_runs", "maintenance_gc_locks");
 
     @TempDir
@@ -45,12 +43,6 @@ class SqliteMigrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
-
-    @Autowired
-    private ResumeFeedbackService resumeFeedback;
-
-    @Autowired
-    private ResumeService resume;
 
     @Autowired
     private GcExecutionService gc;
@@ -98,15 +90,10 @@ class SqliteMigrationTest {
         assertThat(foreignKeyTargets("refresh_sessions")).contains("users");
         assertThat(foreignKeyTargets("announcements")).contains("users");
         assertThat(foreignKeyTargets("role_permissions")).contains("roles", "permissions");
-        assertThat(tables).doesNotContain("navigation_menu_roles");
+        assertThat(tables).doesNotContain("navigation_menu_roles", "resume_documents", "resume_feedbacks");
         assertThat(columnType("users", "id")).isEqualToIgnoringCase("varchar(36)");
         assertThat(columnType("users", "status")).isEqualToIgnoringCase("varchar(32)");
         assertThat(columnType("audit_events", "version")).isEqualToIgnoringCase("bigint");
-        assertThat(columnType("resume_documents", "content")).isEqualToIgnoringCase("text");
-        assertThat(columnType("resume_documents", "schema_version")).isEqualToIgnoringCase("integer");
-        assertThat(columnType("resume_documents", "version")).isEqualToIgnoringCase("bigint");
-        assertThat(columnType("resume_feedbacks", "type")).isEqualToIgnoringCase("varchar(32)");
-        assertThat(columnType("resume_feedbacks", "status")).isEqualToIgnoringCase("varchar(32)");
     }
 
     @Test
@@ -122,11 +109,6 @@ class SqliteMigrationTest {
                 "00000000-0000-0000-0000-000000000002",
                 "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"))
                 .isInstanceOf(DataAccessException.class);
-    }
-
-    @Test
-    void listsFeedbackWithNoOptionalFilters() {
-        assertThat(resumeFeedback.list(0, 20, null, null, null).items()).isEmpty();
     }
 
     @Test
@@ -160,14 +142,6 @@ class SqliteMigrationTest {
             assertThat(user.id()).isEqualTo(activeId);
             assertThat(user.roles()).containsExactly("USER");
         });
-    }
-
-    @Test
-    void returnsTheIncrementedVersionAfterUpdatingTheResume() {
-        var initial = resume.createDefaultIfAbsent();
-        var updated = resume.update(initial.content() + " ", initial.schemaVersion(), initial.version());
-
-        assertThat(updated.version()).isEqualTo(initial.version() + 1);
     }
 
     @Test

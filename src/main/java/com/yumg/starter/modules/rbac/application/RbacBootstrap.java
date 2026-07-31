@@ -31,8 +31,7 @@ public class RbacBootstrap implements ApplicationRunner {
             new PermissionSeed("system:sql:execute", "在本地开发环境执行 SQL 调试语句"),
             new PermissionSeed("example:announcement:read", "查看公告管理内容"),
             new PermissionSeed("example:announcement:write", "创建、编辑与发布公告"),
-            new PermissionSeed("example:announcement:delete", "删除公告"),
-            new PermissionSeed("resume:manage", "管理公开简历的全部内容"));
+            new PermissionSeed("example:announcement:delete", "删除公告"));
     private final PermissionRepository permissions; private final RoleRepository roles;
     public RbacBootstrap(PermissionRepository permissions, RoleRepository roles) { this.permissions = permissions; this.roles = roles; }
     @Override @Transactional public void run(ApplicationArguments args) {

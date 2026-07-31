@@ -94,19 +94,6 @@ class NavigationServiceTest {
     }
 
     @Test
-    void acceptsResumeManagementComponentKey() {
-        NavigationMenuRequest request = new NavigationMenuRequest(null, "resume-management", "简历管理",
-                "/content/resume", "resume-management", "Document", 20, NavigationMenuType.PAGE,
-                "resume:manage", true, true, false);
-        when(menus.findByCode(request.code())).thenReturn(Optional.empty());
-        when(permissions.findByCode("resume:manage")).thenReturn(Optional.of(
-                new com.yumg.starter.entities.Permission("resume:manage", "Manage resume")));
-        when(menus.save(any(NavigationMenu.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        assertThat(service().create(request).componentKey()).isEqualTo("resume-management");
-    }
-
-    @Test
     void rejectsMissingParent() {
         NavigationMenuRequest request = new NavigationMenuRequest("missing-parent", "child", "Child",
                 "/child", "welcome", null, 0, NavigationMenuType.PAGE, null, true, true, false);
