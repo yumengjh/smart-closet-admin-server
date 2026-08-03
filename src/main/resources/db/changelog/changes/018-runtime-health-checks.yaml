@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 018-runtime-health-checks
+      author: starter
+      changes:
+        - update:
+            tableName: system_settings
+            columns:
+              - column: { name: setting_key, value: runtime.health-check.enabled }
+            where: setting_key = 'runtime.dependency-health.enabled'
+        - update:
+            tableName: system_settings
+            columns:
+              - column: { name: setting_key, value: runtime.health-check.interval-seconds }
+            where: setting_key = 'runtime.dependency-health.interval-seconds'

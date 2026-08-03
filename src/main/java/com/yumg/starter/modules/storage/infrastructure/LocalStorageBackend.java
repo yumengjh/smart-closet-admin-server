@@ -100,11 +100,11 @@ public class LocalStorageBackend {
             }
             Files.delete(probe);
             var store = Files.getFileStore(root);
-            return new StorageHealthResult(true, "local storage is writable",
+            return new StorageHealthResult(true, "目录创建、临时文件读写删除和磁盘容量检查正常",
                     store.getUsableSpace(), store.getTotalSpace());
         } catch (IOException exception) {
             if (probe != null) deleteQuietly(probe);
-            return new StorageHealthResult(false, "local storage probe failed", 0, 0);
+            return new StorageHealthResult(false, "本地文件存储读写检查失败", 0, 0);
         }
     }
 

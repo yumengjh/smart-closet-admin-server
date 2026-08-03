@@ -9,10 +9,12 @@
 - `GET /api/v1/system/runtime-caches`：读取全部配置缓存的 revision、同步状态和最近加载结果。
 - `POST /api/v1/system/runtime-caches/refresh`：从数据库强制重新加载全部配置缓存。
 - `POST /api/v1/system/runtime-caches/{code}/refresh`：强制重新加载指定配置缓存。
-- `GET /api/v1/system/dependencies`：读取后端服务依赖健康快照。
-- `POST /api/v1/system/dependencies/refresh`：探测全部服务依赖。
-- `POST /api/v1/system/dependencies/{code}/refresh`：重新探测单个服务依赖。
+- `GET /api/v1/system/runtime-checks`：读取服务依赖和本地资源的运行状态快照。
+- `POST /api/v1/system/runtime-checks/refresh`：执行全部运行状态检查。
+- `POST /api/v1/system/runtime-checks/{code}/refresh`：重新执行单项运行状态检查。
 - `GET /api/v1/system/audit-events?page=0&size=20`：分页读取系统审计事件。
+
+旧 `/api/v1/system/dependencies/**` 路径仅作为已废弃的兼容别名保留，新接入统一使用 `/api/v1/system/runtime-checks/**`。
 
 读取接口需要 `system:config:read`，更新接口需要 `system:config:write`；审计查询需要 `system:audit:read`。运行时配置更新会立即记入审计事件。
 
@@ -38,8 +40,8 @@
 - `identity.registration.enabled`
 - `runtime.config-refresh.enabled`
 - `runtime.config-refresh.interval-seconds`
-- `runtime.dependency-health.enabled`
-- `runtime.dependency-health.interval-seconds`
+- `runtime.health-check.enabled`
+- `runtime.health-check.interval-seconds`
 - `avatar.generator.enabled`
 - `maintenance.gc.enabled`
 - `maintenance.gc.schedule.enabled`
@@ -56,13 +58,15 @@
 
 为避免唯一管理入口被误锁，`SUPER_ADMIN` 不会被自动防爆破策略锁定；普通管理员和用户仍受该策略约束。
 
-## 服务依赖与头像生成
+## 运行状态检查与头像生成
 
-第一版注册两个服务依赖：`AVATAR_GENERATOR`（自托管 DiceBear）和 `LOCAL_STORAGE`（本地通用存储）。状态为 `UNKNOWN`、`UP`、`ERROR` 或 `DISABLED`，同时记录上次探测/成功时间、耗时、连续失败数和脱敏消息。状态写入 `runtime_component_statuses`，请求路径读取统一的不可变内存快照；刷新成功后整体替换，避免一次请求混用新旧状态。该状态模型与配置缓存刷新相互独立。
+第一版注册两项运行状态检查：`AVATAR_GENERATOR`（自托管 DiceBear）属于 `SERVICE_DEPENDENCY`，`LOCAL_STORAGE`（应用进程直接使用的本地通用存储）属于 `LOCAL_RESOURCE`。后者不是外部服务，其检查会真实执行目录创建、临时文件写入/读回/删除及磁盘容量读取。状态为 `UNKNOWN`、`UP`、`ERROR` 或 `DISABLED`，同时记录分类、上次检查/成功时间、耗时、连续失败数和脱敏消息。状态写入 `runtime_component_statuses`，请求路径读取统一的不可变内存快照；刷新成功后整体替换，避免一次请求混用新旧状态。该状态模型与配置缓存刷新相互独立。
 
-`runtime.dependency-health.enabled` 控制定时探测，`runtime.dependency-health.interval-seconds` 可设为 10–3600 秒。关闭定时探测不删除已有状态，管理员仍可手动探测。`avatar.generator.enabled=false` 时头像生成依赖显示为 `DISABLED`，禁止新建系统头像候选；已有缓存头像、用户上传头像和内置最终回退仍可读取。
+`runtime.health-check.enabled` 控制定时检查，`runtime.health-check.interval-seconds` 可设为 10–3600 秒。关闭定时检查不删除已有状态，管理员仍可手动执行。`avatar.generator.enabled=false` 时头像生成依赖显示为 `DISABLED`，禁止新建系统头像候选；已有缓存头像、用户上传头像和内置最终回退仍可读取。
 
-应用 Ready 后会探测服务依赖，并在启动摘要中各显示一次状态。生成头像前以后端内存中的最新依赖状态为准；DiceBear 不可用时不调用公共互联网服务。默认读取会优先使用本地缓存，无法生成或存储时返回 classpath 内置 Lorelei SVG，因此登录和用户资料读取不会被可选生成器拖垮。
+应用 Ready 后会执行全部运行状态检查，并在启动摘要中各显示一次状态。生成头像前以后端内存中的最新 DiceBear 状态为准；DiceBear 不可用时不调用公共互联网服务。默认读取会优先使用本地缓存，无法生成或存储时返回 classpath 内置 Lorelei SVG，因此登录和用户资料读取不会被可选生成器拖垮。
+
+管理后台在 `/system/config` 以表格管理配置缓存；Actuator 应用健康、DiceBear 服务依赖和本地存储资源检查统一显示在 `/welcome` 的“服务健康”列表，避免在配置页重复展示运行状态。
 
 启动期配置来自环境变量，修改后需重启：
 

@@ -153,7 +153,7 @@ JPA 默认关闭 Open Session in View。DTO 需要关联集合时由应用服务
 | RBAC | `/api/v1/rbac/**` |
 | 运行时配置 | `/api/v1/system/runtime-config` |
 | 配置缓存 | `/api/v1/system/runtime-caches` |
-| 服务依赖 | `/api/v1/system/dependencies` |
+| 运行状态检查 | `/api/v1/system/runtime-checks` |
 | 系统审计 | `/api/v1/system/audit-events` |
 | 公告示例 | `/api/v1/announcements` |
 | 健康检查 | `/actuator/health` |

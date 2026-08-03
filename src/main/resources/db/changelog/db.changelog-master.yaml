@@ -29,3 +29,5 @@ databaseChangeLog:
       file: db/changelog/changes/016-user-avatar-storage.yaml
   - include:
       file: db/changelog/changes/017-runtime-cache-revisions.yaml
+  - include:
+      file: db/changelog/changes/018-runtime-health-checks.yaml

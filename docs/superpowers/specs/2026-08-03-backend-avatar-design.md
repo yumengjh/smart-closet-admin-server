@@ -15,7 +15,7 @@
 3. 第一版上传只接受静态 JPEG、PNG、WebP；后端统一处理并保存为 256×256 PNG。拒绝 SVG、GIF、HEIC、AVIF、BMP 和动画 WebP。
 4. 新用户使用基于内部用户 ID 单向派生的初始 Lorelei；用户可以预览随机系统头像、确认后切换，也可以上传自定义头像。
 5. 数据库保留 `avatarType`；普通用户响应不返回该字段，管理员响应可以返回。
-6. DiceBear 和本地存储纳入独立的服务依赖健康管理：启动探测、一次性启动摘要、数据库状态、内存快照、自动探测、全量手动探测、单依赖重试及后台展示；配置缓存使用另一套 revision 刷新协议。
+6. DiceBear 和本地存储纳入统一运行状态检查：DiceBear 标记为服务依赖，本地文件系统标记为应用直接使用的本地资源；支持启动检查、一次性启动摘要、数据库状态、内存快照、自动检查、全量手动检查、单项重试及后台分组展示。配置缓存使用另一套 revision 刷新协议。
 7. 文件存储抽象成独立通用模块；第一版只实现本地文件系统，头像模块在其上封装业务规则。
 8. 头像临时文件、孤儿对象、引用利用率和空间占用纳入现有 GC 管理中心。
 9. 随机系统头像采用“生成一张候选并预览，用户确认后才写入当前头像”的两阶段操作。
@@ -54,7 +54,7 @@ springboot-admin / 其它 C 端
                 |                      |
                 v                      v
 ┌────────────────────────┐   ┌────────────────────────────┐
-│ storage 通用存储模块    │   │ runtime 服务依赖健康管理   │
+│ storage 通用存储模块    │   │ runtime 运行状态检查       │
 │ 对象元数据、读写删除、  │   │ 配置快照、状态快照、探测、 │
 │ 原子落盘、统计          │   │ 定时刷新、手动重试         │
 └────────────┬───────────┘   └─────────────┬──────────────┘
@@ -411,9 +411,9 @@ DiceBear 不可用时不把最终回退写成用户的 Lorelei 缓存，否则�
 | `GET` | `/api/v1/system/runtime-caches` | `system:config:read` | 当前配置缓存 revision、同步状态和加载结果 |
 | `POST` | `/api/v1/system/runtime-caches/refresh` | `system:config:write` | 从数据库重载全部配置缓存 |
 | `POST` | `/api/v1/system/runtime-caches/{code}/refresh` | `system:config:write` | 从数据库重载单个配置缓存 |
-| `GET` | `/api/v1/system/dependencies` | `system:config:read` | 当前服务依赖健康状态 |
-| `POST` | `/api/v1/system/dependencies/refresh` | `system:config:write` | 手动探测全部服务依赖 |
-| `POST` | `/api/v1/system/dependencies/{code}/refresh` | `system:config:write` | 手动重试一个服务依赖 |
+| `GET` | `/api/v1/system/runtime-checks` | `system:config:read` | 当前服务依赖和本地资源状态 |
+| `POST` | `/api/v1/system/runtime-checks/refresh` | `system:config:write` | 手动执行全部运行状态检查 |
+| `POST` | `/api/v1/system/runtime-checks/{code}/refresh` | `system:config:write` | 手动重试一项运行状态检查 |
 | `GET` | `/api/v1/system/runtime-config` | `system:config:read` | 保留现有配置列表接口 |
 | `PUT` | `/api/v1/system/runtime-config/{key}` | `system:config:write` | 保留现有配置修改接口 |
 
@@ -429,8 +429,8 @@ DiceBear 不可用时不把最终回退写成用户的 Lorelei 缓存，否则�
 | --- | --- | --- | --- |
 | `runtime.config-refresh.enabled` | `true` | boolean | 启用配置缓存 revision 自动对账 |
 | `runtime.config-refresh.interval-seconds` | `60` | 10–3600 | 配置缓存检查周期 |
-| `runtime.dependency-health.enabled` | `true` | boolean | 启用服务依赖自动探测 |
-| `runtime.dependency-health.interval-seconds` | `60` | 10–3600 | 服务依赖探测周期 |
+| `runtime.health-check.enabled` | `true` | boolean | 启用运行状态自动检查 |
+| `runtime.health-check.interval-seconds` | `60` | 10–3600 | 服务依赖与本地资源检查周期 |
 | `avatar.generator.enabled` | `true` | boolean | 是否允许生成新 Lorelei |
 
 存储第一版不提供可关闭开关，因为它是上传和缓存的唯一持久化后端；可以查看和刷新状态，但不能通过误操作关闭。将来存在多个 backend 后再增加路由/启停配置。
@@ -586,13 +586,13 @@ GET /api/v1/system/storage/report
 
 ### 17.4 运行时管理
 
-现有运行时配置页增加两个区域：
+运行配置和运行状态按职责放在两个页面：
 
-- “自动刷新配置”：组件探测总开关和刷新秒数。
-- “配置缓存”：运行时设置、IP 访问规则的 revision、同步状态、条目数和手动加载入口。
-- “服务依赖”：DiceBear、本地存储状态卡，展示状态、最近检查、最近成功、耗时、连续失败和脱敏说明。
+- `/system/config` 的“运行时管理”负责配置缓存自动对账、运行状态自动检查和头像生成开关。
+- `/system/config` 的“配置缓存”使用紧凑表格展示运行时设置、IP 访问规则的 revision、同步状态、条目数和手动加载入口。
+- `/welcome` 的“服务健康”统一展示 Actuator 应用健康、DiceBear 服务依赖和本地存储资源状态，并提供全量刷新与单项重试。
 
-页面提供“刷新全部”和每张卡片的“重新尝试”。`ERROR` 使用红色，`CHECKING` 使用加载态，`DISABLED` 使用灰色；失败不弹出不可恢复的全页错误。
+健康列表把内部状态翻译为中文；`ERROR` 使用红色，`CHECKING` 使用加载态，`DISABLED` 使用灰色。没有配置读取权限的用户只看到公开的应用健康，不请求内部检查接口；失败不弹出不可恢复的全页错误。
 
 ### 17.5 GC 页面
 
@@ -641,7 +641,7 @@ Compose：
 
 - API 类型和头像弹窗契约脚本。
 - Store 用服务端头像覆盖本地值并在登出时清理。
-- 用户列表头像首列、管理员重置权限、配置缓存/服务依赖独立刷新和 GC 报告。
+- 用户列表头像首列、管理员重置权限、配置缓存/运行状态检查独立刷新和 GC 报告。
 - `pnpm typecheck`、`pnpm build` 和现有全部 Node 契约测试。
 
 ### 19.3 运行验收
@@ -658,11 +658,11 @@ Compose：
 ## 20. 实施顺序
 
 1. 数据库和通用存储模块。
-2. 服务依赖状态、探测和启动摘要；配置缓存 revision 独立管理。
+2. 服务依赖与本地资源状态、检查和启动摘要；配置缓存 revision 独立管理。
 3. DiceBear 生成、内置回退和公开读取。
 4. 上传处理、随机候选、用户/管理员操作与审计。
 5. GC 资源和存储利用率报告。
-6. `springboot-admin` 当前用户、头像弹窗、用户管理、配置缓存、服务依赖和 GC 页面。
+6. `springboot-admin` 当前用户、头像弹窗、用户管理、配置缓存、运行状态检查和 GC 页面。
 7. 正式 API/运维文档、Compose、回归和宿主机故障演练。
 
 ## 21. 最终不变量

@@ -42,6 +42,7 @@ class RuntimeComponentRegistryTest {
     void initializesAndPublishesSuccessfulAndFailedChecks() {
         assertThat(registry.list()).singleElement().satisfies(status ->
                 assertThat(status.status()).isEqualTo("UNKNOWN"));
+        assertThat(registry.list().getFirst().kind()).isEqualTo("SERVICE_DEPENDENCY");
 
         component.result = ComponentCheckResult.up("ready");
         assertThat(registry.refresh(component.code()).status()).isEqualTo("UP");
@@ -84,6 +85,7 @@ class RuntimeComponentRegistryTest {
 
         @Override public String code() { return "test-component"; }
         @Override public String displayName() { return "Test Component"; }
+        @Override public RuntimeCheckKind kind() { return RuntimeCheckKind.SERVICE_DEPENDENCY; }
         @Override public ComponentCheckResult check() {
             if (throwFailure) throw new IllegalStateException();
             return result;

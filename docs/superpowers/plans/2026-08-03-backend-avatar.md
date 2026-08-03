@@ -1,6 +1,6 @@
 # 用户头像、通用存储与运行时管理实施计划
 
-**目标：** 实现后端托管的 Lorelei 系统头像、随机候选、用户上传、匿名读取、通用本地存储、服务依赖健康状态和头像 GC，并同步 `springboot-admin`。
+**目标：** 实现后端托管的 Lorelei 系统头像、随机候选、用户上传、匿名读取、通用本地存储、运行状态检查和头像 GC，并同步 `springboot-admin`。
 
 **设计依据：** `docs/superpowers/specs/2026-08-03-backend-avatar-design.md`
 
@@ -21,24 +21,24 @@
 - 测试路径穿越、绝对路径、符号链接逃逸、原子移动失败、文件缺失和测试目录隔离。
 - 所有测试只使用 JUnit 临时目录，不读取或写入开发者 `data`。
 
-## 3. 统一运行时设置与组件状态
+## 3. 统一运行时设置与运行状态
 
 - 扩展 `RuntimeSettingService.reload()`：完整校验后一次性替换不可变配置快照。
-- 新增 `runtime.dependency-health.enabled`、`runtime.dependency-health.interval-seconds`、`avatar.generator.enabled` 定义和初始化；配置缓存刷新另由 `runtime.config-refresh.*` 管理。
+- 新增 `runtime.health-check.enabled`、`runtime.health-check.interval-seconds`、`avatar.generator.enabled` 定义和初始化；配置缓存刷新另由 `runtime.config-refresh.*` 管理。
 - 新建 `RuntimeComponent`、状态实体、Registry、不可变内存快照和状态提交后更新规则。
 - 实现全量刷新、单组件刷新和动态间隔调度器；并发刷新同一组件时合并或拒绝重复执行。
-- 新增 `/api/v1/system/dependencies`、全量探测和单依赖探测 API，复用 `system:config:read/write`；配置缓存使用 `/api/v1/system/runtime-caches`。
+- 新增 `/api/v1/system/runtime-checks`、全量检查和单项检查 API，复用 `system:config:read/write`；配置缓存使用 `/api/v1/system/runtime-caches`。
 - 更新启动监听顺序：组件有界探测先完成，`StartupSummaryLogger` 后输出一次状态摘要。
 - 测试配置事务回滚、reload 非法值、状态持久化、内存一致性、失败脱敏和应用非阻断启动。
 
-## 4. 本地存储服务依赖
+## 4. 本地存储资源检查
 
 - 实现 `LOCAL_STORAGE` 探针：目录创建、探针文件写/读/移动/删和空间统计。
 - 底层真实读写失败时向 Registry 报告 `ERROR`。
 - 存储不可用时写接口返回 `STORAGE_UNAVAILABLE`，头像读取转最终回退。
 - Actuator details 可展示脱敏状态，但不得让头像存储故障导致容器 liveness 失败。
 
-## 5. DiceBear 生成服务依赖
+## 5. DiceBear 生成服务依赖检查
 
 - 从 `APP_AVATAR_GENERATOR_BASE_URL` 绑定生成器配置，默认 `http://localhost:3100`。
 - 使用 Spring `RestClient` 实现固定 Lorelei SVG 请求，限制超时、重定向、类型和响应大小。
@@ -113,7 +113,7 @@
 
 - 用户列表第一列加入 40px 头像，详情头部加入 80px 头像和头像类型。
 - `system:user:write` 用户可二次确认重置；不提供代上传和代随机。
-- 运行时配置页增加探测总开关、刷新周期、组件状态卡、全量刷新和单组件重试。
+- 运行时配置页提供探测总开关、刷新周期和表格式配置缓存管理；组件运行状态、全量刷新和单项重试合并到 welcome 页“服务健康”。
 - GC 页增加两个资源策略和存储利用率报告。
 - 同步前端硬编码设置分组、中文展示映射、API 类型和 Node 契约脚本。
 

@@ -3,6 +3,8 @@ package com.yumg.starter.modules.storage.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.yumg.starter.modules.runtimeconfig.application.RuntimeCheckKind;
+import com.yumg.starter.modules.storage.application.LocalStorageRuntimeComponent;
 import com.yumg.starter.modules.storage.application.StorageNamespace;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -44,7 +46,9 @@ class LocalStorageBackendTest {
         var result = storage.checkHealth();
 
         assertThat(result.up()).isTrue();
-        assertThat(result.message()).contains("writable");
+        assertThat(result.message()).contains("读写删除").contains("磁盘容量");
+        assertThat(new LocalStorageRuntimeComponent(storage).kind())
+                .isEqualTo(RuntimeCheckKind.LOCAL_RESOURCE);
         assertThat(storage.temporaryFileCount()).isZero();
     }
 }

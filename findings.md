@@ -68,11 +68,16 @@
 
 - `RuntimeSettingService.enabled/integer/string` 读取 `volatile` 不可变 Map，业务热点不查数据库；`list()` 管理接口仍直接查表。
 - 单项和批量修改会先持久化，事务提交后原子替换本机快照，回滚不会发布未提交配置。
-- 当前唯一的定时全量 `reload()` 位于 `RuntimeComponentRegistry.refreshAll()`；因此关闭组件健康探测会同时失去数据库配置自动对账，配置刷新时间也与 DiceBear/本地存储探测时间混为一谈。
-- IP 持久化规则已有独立内存快照和提交后刷新，但没有统一缓存状态、手动全量刷新或跨实例对账协议。
+- 配置缓存自动对账由 `RuntimeCacheScheduler` 独立管理；`RuntimeComponentRegistry.refreshAll()` 只执行运行状态检查，不加载配置表。
+- IP 持久化规则已接入统一缓存状态、手动全量/单项刷新和按 revision 的跨实例自动对账协议。
 - 请求路径仍会重复进行字符串转整数、CSV 拆分和端点规则构造；本阶段先建立统一 revision/刷新协议和职责拆分，随后在不改变接口语义的前提下评估类型化派生快照。
 - 第一版统一缓存注册两个 provider：`RUNTIME_SETTINGS` 和 `IP_ACCESS_RULES`。二者共用 `runtime_cache_revisions` 的单调 revision，写事务内递增、提交后发布本机快照；自动任务先比较单行 revision，变化时才全量加载对应配置。
-- 配置缓存调度使用独立的 `runtime.config-refresh.enabled` 与 `runtime.config-refresh.interval-seconds`；依赖探测改用 `runtime.dependency-health.*`，不再通过 `RuntimeComponentRegistry.refreshAll()` 顺带重载配置。
-- 管理 API 将分为 `/system/runtime-caches`（缓存状态、全量/单项刷新）和 `/system/dependencies`（DiceBear/本地存储状态与探测）；旧 `/system/runtime` 不再作为混合入口。
+- 配置缓存调度使用独立的 `runtime.config-refresh.enabled` 与 `runtime.config-refresh.interval-seconds`；运行检查使用 `runtime.health-check.*`，不再通过 `RuntimeComponentRegistry.refreshAll()` 顺带重载配置。
+- 管理 API 分为 `/system/runtime-caches`（缓存状态、全量/单项刷新）和 `/system/runtime-checks`（DiceBear 服务依赖与本地存储资源的状态检查）；旧 `/system/runtime` 不再作为混合入口。
 - 017 迁移已将旧 `runtime.component-health.*` 数据键原位改名，并建立跨 SQLite/PostgreSQL 的唯一 revision 索引；缓存 revision 行由 provider 启动时幂等确保，不依赖静态 UUID 种子。
-- 管理后台已明确拆成“配置缓存”和“服务依赖”两块：前者展示内存/数据库 revision、条目数和加载错误，后者只展示外部/基础设施探测结果；任一依赖探测都不会触发配置表加载。
+- 管理后台已明确拆成“配置缓存”和“运行状态检查”两块：前者展示内存/数据库 revision、条目数和加载错误，后者按“服务依赖”“本地资源”展示检查结果；任一运行检查都不会触发配置表加载。
+- `LOCAL_STORAGE` 的探针会真实执行目录创建、临时文件写入、读回校验、删除和磁盘容量读取；这些检查有运行价值，但它属于 `LOCAL_RESOURCE`，不应与 DiceBear 这样的 `SERVICE_DEPENDENCY` 混称为服务依赖。
+- 第 14 阶段采用统一“运行状态检查”注册表，响应增加 `kind` 分类；后台按“服务依赖”和“本地资源”分组，并把内部状态翻译为中文检查结果。
+- 当前本地运行状态为：`LOCAL_STORAGE=UP`，检查说明为“目录创建、临时文件读写删除和磁盘容量检查正常”；`AVATAR_GENERATOR=DISABLED` 是因为数据库中的头像生成运行时开关关闭，并非 3100 端口故障。
+- 第 15 阶段目标边界：`/system/config` 只保留运行策略和配置缓存管理，缓存使用列表/表格表达；运行检查属于运维概览，应并入 `/welcome` 的既有服务健康区域，避免同一状态在配置页重复出现。
+- welcome 原“服务健康”只显示 Actuator 的单个 `UP` 标签；重构后以同一表格合并应用服务、`SERVICE_DEPENDENCY` 和 `LOCAL_RESOURCE`，既消除配置页重复，又保留分类、说明、最近检查、耗时和重试能力。

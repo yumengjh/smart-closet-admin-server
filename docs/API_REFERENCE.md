@@ -585,8 +585,8 @@ Authorization: Bearer <accessToken>
 | `identity.registration.enabled` | `true` / `false` | `true` | 是否允许 `POST /api/v1/auth/register`。 |
 | `runtime.config-refresh.enabled` | `true` / `false` | `true` | 是否定时比较 revision 并刷新变化的配置缓存。 |
 | `runtime.config-refresh.interval-seconds` | 整数 10–3600 | `60` | 配置缓存自动检查间隔。 |
-| `runtime.dependency-health.enabled` | `true` / `false` | `true` | 是否定时探测 DiceBear 与本地存储。 |
-| `runtime.dependency-health.interval-seconds` | 整数 10–3600 | `60` | 服务依赖自动探测间隔。 |
+| `runtime.health-check.enabled` | `true` / `false` | `true` | 是否定时检查 DiceBear 服务依赖与本地存储资源。 |
+| `runtime.health-check.interval-seconds` | 整数 10–3600 | `60` | 运行状态自动检查间隔。 |
 | `avatar.generator.enabled` | `true` / `false` | `true` | 是否允许创建新的系统头像；已有头像读取不受影响。 |
 
 数据库连接、JWT 密钥、可信代理和初始管理员不属于运行时配置，必须通过 `.env` 或启动环境变量设置并重启。
@@ -601,15 +601,17 @@ Authorization: Bearer <accessToken>
 
 缓存状态包括 `snapshotRevision`、`databaseRevision`、`synchronizedState`、加载/检查/失败时间、脱敏失败消息和条目数。业务请求只读取不可变内存快照；写入在同一事务递增数据库 revision，并在提交后发布本机快照。自动刷新只比较 revision，变化时才全量加载对应缓存。
 
-### 服务依赖状态
+### 运行状态检查
 
 | 接口 | 权限 | 说明 |
 | --- | --- | --- |
-| `GET /api/v1/system/dependencies` | `system:config:read` | 返回 DiceBear 与本地存储健康快照 |
-| `POST /api/v1/system/dependencies/refresh` | `system:config:write` | 探测全部服务依赖，不刷新配置缓存 |
-| `POST /api/v1/system/dependencies/{code}/refresh` | `system:config:write` | 只探测一个依赖，如 `AVATAR_GENERATOR` 或 `LOCAL_STORAGE` |
+| `GET /api/v1/system/runtime-checks` | `system:config:read` | 返回 DiceBear 服务依赖与本地存储资源的状态快照 |
+| `POST /api/v1/system/runtime-checks/refresh` | `system:config:write` | 执行全部运行状态检查，不刷新配置缓存 |
+| `POST /api/v1/system/runtime-checks/{code}/refresh` | `system:config:write` | 只检查一项，如 `AVATAR_GENERATOR` 或 `LOCAL_STORAGE` |
 
-依赖状态包括 `code`、`displayName`、`status`（`UNKNOWN`/`UP`/`ERROR`/`DISABLED`）、`lastCheckedAt`、`lastSucceededAt`、`latencyMs`、`consecutiveFailures` 和脱敏 `message`。状态持久化并作为不可变内存快照发布。服务启动完成时会在格式化摘要中输出一次依赖状态。
+检查结果包括 `code`、`displayName`、`kind`（`SERVICE_DEPENDENCY`/`LOCAL_RESOURCE`）、`status`（`UNKNOWN`/`UP`/`ERROR`/`DISABLED`）、`lastCheckedAt`、`lastSucceededAt`、`latencyMs`、`consecutiveFailures` 和脱敏 `message`。状态持久化并作为不可变内存快照发布。服务启动完成时会在格式化摘要中输出一次检查结果。管理后台按类别分组，并把状态显示为“正常”“异常”“已停用”“检查中”或“未检查”。
+
+旧的 `/api/v1/system/dependencies`、`/refresh` 和 `/{code}/refresh` 路径暂时作为已废弃的兼容别名保留，权限与响应结构相同；新客户端统一使用 `/api/v1/system/runtime-checks`。
 
 ### `GET /api/v1/system/storage/report`
 

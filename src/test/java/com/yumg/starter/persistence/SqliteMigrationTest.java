@@ -69,6 +69,12 @@ class SqliteMigrationTest {
         assertThat(tables).containsAll(CORE_TABLES);
         assertThat(jdbc.queryForObject("select count(*) from databasechangelog", Integer.class))
                 .isGreaterThanOrEqualTo(3);
+        assertThat(jdbc.queryForList(
+                "select setting_key from system_settings where setting_key like 'runtime.%health%'",
+                String.class))
+                .contains("runtime.health-check.enabled", "runtime.health-check.interval-seconds")
+                .doesNotContain("runtime.dependency-health.enabled",
+                        "runtime.dependency-health.interval-seconds");
 
         assertThat(indexColumns("users", true)).contains(List.of("username"));
         assertThat(indexColumns("refresh_sessions", true)).contains(List.of("token_hash"));

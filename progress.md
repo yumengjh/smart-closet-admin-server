@@ -110,3 +110,17 @@
 - 本地后端已迁移现有 SQLite 并重启于 8081，前端继续运行于 8849，用户自管 DiceBear 保持在 3100；健康检查直连和前端代理均为 `UP`，OpenAPI 已暴露六个独立缓存/依赖路径，数据库确认两个 provider revision 行和四个新运行时键。
 - 按用户反馈重新整理 `/system/config`：运行时管理配置提升到页面首位并使用响应式网格，配置缓存与服务依赖紧随其后并排展示，其余安全治理配置后置；管理端契约测试、类型检查、生产构建和 diff 检查通过。
 - 新增独立运维文档 `docs/operations/ip-access-rule-cache.md`，说明持久化 IP 规则独立缓存的边界、请求期性能原因、revision/提交后发布/多实例对账、手动重载、失效时间语义，以及它与运行时字符串 IP 策略的组合关系。
+- 用户要求后台显示全部运行状态检查，并指出本地文件存储不是外部服务。第 14 阶段开始：将 DiceBear 分类为服务依赖、本地文件存储分类为本地资源，后台逐项显示中文状态。
+- 第 14 阶段失败契约符合预期：后端 `RuntimeComponentResponse` 尚无 `kind()` 导致测试编译失败，管理端仍调用 `/system/dependencies` 而未提供运行检查分类；两项失败分别锁定 API 分类字段和新 `/system/runtime-checks` 客户端契约。
+- 管理端实现后的首次契约复跑只因测试仍要求静态标签 `>服务依赖<` 失败，而页面采用数据驱动的 `checkGroups.title` 渲染；契约已改为验证分组模型中的两个中文标题，类型检查本身已通过。
+- 第 14 阶段完成：管理 API 改为 `/system/runtime-checks`，响应新增 `kind`；DiceBear 归类为 `SERVICE_DEPENDENCY`，本地文件存储归类为 `LOCAL_RESOURCE`，后台按中文类别分组并逐项显示“正常/异常/已停用/检查中/未检查”。运行检查配置键迁移为 `runtime.health-check.*`。
+- 完整验证通过：后端 `./mvnw clean verify` 为 132 个测试、0 失败、0 错误、1 个 PostgreSQL/Testcontainers 条件跳过并通过 JaCoCo 门禁；管理端全部 Node 契约、`pnpm typecheck`、`pnpm build`、Compose 和两个仓库 diff 检查通过。
+- 运行态迁移和重启完成：8081 健康状态为 `UP`，OpenAPI 只暴露新的三条 `/runtime-checks` 路径；数据库已保存 `runtime.health-check.enabled/interval-seconds`。本地存储检查为 `UP`，DiceBear 因现有 `avatar.generator.enabled=false` 显示 `DISABLED`；3100 服务未被操作。
+- 受保护接口实测时，首次登录请求遗漏 `rememberMe` 得到 400，按 DTO 补齐后现有管理员密码校验得到 401；未修改账号或密码。随后使用 OpenAPI 契约、迁移日志和数据库状态表完成只读运行态验证。
+- 首次查询 `system_settings` 误用了不存在的 `setting_value` 列而失败；读取表结构后改用实际的 `value_json`，确认新配置键和值正确。
+- 用户指出配置页状态上下重复、配置缓存卡片化过重，并要求把运行状态检查合并到 welcome 页现有“服务健康”。第 15 阶段开始：先核对 welcome 健康实现和页面契约，再进行跨页面信息架构重构。
+- 第 15 阶段失败契约符合预期：配置页尚未使用 `el-table` 展示缓存且仍包含运行检查请求/区域，welcome 页也尚未接入运行检查 API；失败锁定“配置页只配置、welcome 统一健康”的页面边界。
+- 第 15 阶段页面实现完成：配置页移除运行检查 API、摘要和详情，配置缓存改为 revision/条目/异常/操作表格，其余服务配置合并为单卡片标签页；welcome 将 Actuator、DiceBear 和本地存储合并到同一个“服务健康”表格，并按权限提供全量刷新与单项重试。
+- 新页面契约和 `pnpm typecheck` 已通过；普通用户仅请求公开 Actuator 健康，拥有 `system:config:read/write` 的管理员才读取或重试内部运行检查。
+- 第 15 阶段验证完成：全部 10 个 Node 契约、`pnpm typecheck`、`pnpm build` 和两个仓库 `git diff --check` 通过；8849 的 welcome/config 源模块均由 Vite 成功编译返回 200，8081 Actuator 仍为 `UP`。对应规格、实施计划、运维说明和项目状态已同步。
+- 第 16 阶段提交前收口：`RuntimeComponent` 的检查类别改为实现方强制声明，DiceBear 明确标记为服务依赖；旧 `/system/dependencies/**` 暂作已废弃兼容入口；welcome 在检查均无异常但存在停用项时汇总为“部分停用”，避免误报“正常”。

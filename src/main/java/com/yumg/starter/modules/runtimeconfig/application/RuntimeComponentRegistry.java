@@ -40,7 +40,7 @@ public class RuntimeComponentRegistry {
         components.values().forEach(component -> {
             RuntimeComponentStatus status = statuses.findByComponentCode(component.code())
                     .orElseGet(() -> statuses.save(new RuntimeComponentStatus(component.code())));
-            initial.put(component.code(), RuntimeComponentResponse.from(status, component.displayName()));
+            initial.put(component.code(), RuntimeComponentResponse.from(status, component));
         });
         snapshot = Map.copyOf(initial);
     }
@@ -71,7 +71,7 @@ public class RuntimeComponentRegistry {
             else status.error(checkedAt, latency, sanitize(result.message()));
         }
         RuntimeComponentStatus saved = statuses.save(status);
-        RuntimeComponentResponse response = RuntimeComponentResponse.from(saved, component.displayName());
+        RuntimeComponentResponse response = RuntimeComponentResponse.from(saved, component);
         publishAfterCommit(response);
         return response;
     }
@@ -88,8 +88,7 @@ public class RuntimeComponentRegistry {
         RuntimeComponentStatus status = statuses.findByComponentCode(code)
                 .orElseGet(() -> new RuntimeComponentStatus(code));
         status.error(Instant.now(), 0, sanitize(message));
-        RuntimeComponentResponse response = RuntimeComponentResponse.from(statuses.save(status),
-                component.displayName());
+        RuntimeComponentResponse response = RuntimeComponentResponse.from(statuses.save(status), component);
         publishAfterCommit(response);
     }
 

@@ -2,6 +2,7 @@ package com.yumg.starter.modules.users.application;
 
 import com.yumg.starter.modules.runtimeconfig.application.ComponentCheckResult;
 import com.yumg.starter.modules.runtimeconfig.application.RuntimeComponent;
+import com.yumg.starter.modules.runtimeconfig.application.RuntimeCheckKind;
 import com.yumg.starter.modules.runtimeconfig.application.RuntimeSettingService;
 import java.io.IOException;
 import java.net.URI;
@@ -79,9 +80,10 @@ public class DiceBearAvatarGenerator implements RuntimeComponent {
 
     @Override public String code() { return CODE; }
     @Override public String displayName() { return "DiceBear 头像生成器"; }
+    @Override public RuntimeCheckKind kind() { return RuntimeCheckKind.SERVICE_DEPENDENCY; }
     @Override public ComponentCheckResult check() {
         generate("springboot-start-health-check", 64);
-        return ComponentCheckResult.up("Lorelei endpoint is available");
+        return ComponentCheckResult.up("Lorelei 接口响应和 SVG 安全校验正常");
     }
     @Override public boolean enabled(RuntimeSettingService settings) {
         return settings.enabled("avatar.generator.enabled");
