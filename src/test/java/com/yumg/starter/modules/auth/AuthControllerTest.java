@@ -24,7 +24,8 @@ class AuthControllerTest {
 
     @BeforeEach
     void setUp() {
-        registrationService = request -> new UserResponse("user-1", "alice", "Alice", "ACTIVE");
+        registrationService = request -> new UserResponse("user-1", "alice", "Alice", "ACTIVE",
+                "/api/v1/avatars/public-avatar?v=0");
         authenticationService = new AuthenticationUseCase() {
             @Override
             public com.yumg.starter.modules.auth.api.dto.TokenResponse login(
@@ -58,6 +59,7 @@ class AuthControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value("user-1"))
                 .andExpect(jsonPath("$.username").value("alice"))
+                .andExpect(jsonPath("$.avatarUrl").value("/api/v1/avatars/public-avatar?v=0"))
                 .andExpect(jsonPath("$.password").doesNotExist())
                 .andExpect(jsonPath("$.passwordHash").doesNotExist());
     }

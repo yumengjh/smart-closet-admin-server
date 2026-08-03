@@ -19,9 +19,14 @@ public abstract class BaseUuidEntity {
 
     @PrePersist
     void assignId() {
+        ensureId();
+    }
+
+    protected final String ensureId() {
         if (id == null) {
             id = UUID.randomUUID().toString();
         }
+        return id;
     }
 
     public String getId() {

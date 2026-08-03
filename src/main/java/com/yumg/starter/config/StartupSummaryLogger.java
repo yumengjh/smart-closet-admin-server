@@ -11,6 +11,10 @@ import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+import org.springframework.core.annotation.Order;
+import com.yumg.starter.modules.runtimeconfig.application.RuntimeComponentRegistry;
+import com.yumg.starter.modules.runtimeconfig.api.dto.RuntimeComponentResponse;
+import java.util.List;
 
 @Component
 public class StartupSummaryLogger {
@@ -21,16 +25,20 @@ public class StartupSummaryLogger {
     private final Environment environment;
     private final BuildProperties buildProperties;
     private final ResponseIdentityProperties responseIdentity;
+    private final RuntimeComponentRegistry runtimeComponents;
 
     public StartupSummaryLogger(Environment environment,
                                 Optional<BuildProperties> buildProperties,
-                                ResponseIdentityProperties responseIdentity) {
+                                ResponseIdentityProperties responseIdentity,
+                                RuntimeComponentRegistry runtimeComponents) {
         this.environment = environment;
         this.buildProperties = buildProperties.orElse(null);
         this.responseIdentity = responseIdentity;
+        this.runtimeComponents = runtimeComponents;
     }
 
     @EventListener
+    @Order(100)
     void logReady(ApplicationReadyEvent event) {
         int port = event.getApplicationContext() instanceof WebServerApplicationContext context
                 ? context.getWebServer().getPort()
@@ -48,18 +56,26 @@ public class StartupSummaryLogger {
 
         log.info("\n{}", renderSummary(applicationName, version, profiles, port, database,
                 openApiEnabled, responseIdentity.poweredBy(), responseIdentity.server(),
-                event.getTimeTaken()));
+                event.getTimeTaken(), runtimeComponents.list()));
     }
 
     static String renderSummary(String applicationName, String version, String profiles, int port,
                                 String database, boolean openApiEnabled, String poweredBy,
                                 String server, Duration timeTaken) {
+        return renderSummary(applicationName, version, profiles, port, database, openApiEnabled,
+                poweredBy, server, timeTaken, List.of());
+    }
+
+    static String renderSummary(String applicationName, String version, String profiles, int port,
+                                String database, boolean openApiEnabled, String poweredBy,
+                                String server, Duration timeTaken,
+                                List<RuntimeComponentResponse> components) {
         String baseUrl = "http://localhost:" + port;
         String openApi = openApiEnabled ? baseUrl + "/v3/api-docs" : "disabled";
         Duration duration = timeTaken == null ? Duration.ZERO : timeTaken;
         String elapsed = String.format(Locale.ROOT, "%.3fs", duration.toMillis() / 1000.0);
 
-        return String.join(System.lineSeparator(),
+        java.util.ArrayList<String> lines = new java.util.ArrayList<>(List.of(
                 "┌" + HORIZONTAL + "┐",
                 line("✓ " + applicationName + " is ready"),
                 "├" + HORIZONTAL + "┤",
@@ -71,8 +87,19 @@ public class StartupSummaryLogger {
                 line("Database    : " + value(database)),
                 line("Powered-By  : " + value(poweredBy)),
                 line("Server      : " + value(server)),
-                line("Started in  : " + elapsed),
-                "└" + HORIZONTAL + "┘");
+                line("Started in  : " + elapsed)));
+        components.forEach(component -> lines.add(line(componentLabel(component.code())
+                + " : " + component.status())));
+        lines.add("└" + HORIZONTAL + "┘");
+        return String.join(System.lineSeparator(), lines);
+    }
+
+    private static String componentLabel(String code) {
+        return switch (code) {
+            case "AVATAR_GENERATOR" -> "Avatar Gen ";
+            case "LOCAL_STORAGE" -> "Local Store";
+            default -> code.length() <= 11 ? code : code.substring(0, 11);
+        };
     }
 
     private static String line(String content) {

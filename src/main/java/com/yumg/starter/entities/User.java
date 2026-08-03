@@ -14,6 +14,12 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
+import java.util.UUID;
+import jakarta.persistence.PrePersist;
 
 @Entity
 @Table(name = "users")
@@ -34,6 +40,22 @@ public class User extends AuditedEntity {
 
     @Column(name = "token_version", nullable = false)
     private long tokenVersion;
+
+    @Column(name = "avatar_public_id", length = 36, unique = true)
+    private String avatarPublicId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "avatar_type", nullable = false, length = 32)
+    private AvatarType avatarType;
+
+    @Column(name = "avatar_seed", length = 64)
+    private String avatarSeed;
+
+    @Column(name = "avatar_object_id", length = 36)
+    private String avatarObjectId;
+
+    @Column(name = "avatar_revision", nullable = false)
+    private long avatarRevision;
     @Column(name = "locked_until")
     @Convert(converter = InstantStringConverter.class)
     private Instant lockedUntil;
@@ -49,6 +71,7 @@ public class User extends AuditedEntity {
         this.displayName = displayName;
         this.passwordHash = passwordHash;
         this.status = UserStatus.ACTIVE;
+        initializeAvatarIdentity(ensureId());
     }
 
     public String getUsername() {
@@ -69,6 +92,59 @@ public class User extends AuditedEntity {
 
     public long getTokenVersion() {
         return tokenVersion;
+    }
+
+    public String getAvatarPublicId() { return avatarPublicId; }
+    public AvatarType getAvatarType() { return avatarType; }
+    public String getAvatarSeed() { return avatarSeed; }
+    public String getAvatarObjectId() { return avatarObjectId; }
+    public long getAvatarRevision() { return avatarRevision; }
+
+    @PrePersist
+    void ensureAvatarIdentity() {
+        initializeAvatarIdentity(ensureId());
+    }
+
+    public void initializeAvatarIdentity(String internalId) {
+        if (avatarPublicId == null) avatarPublicId = UUID.randomUUID().toString();
+        if (avatarType == null) avatarType = AvatarType.SYSTEM_INITIAL;
+        if (avatarSeed == null || avatarType == AvatarType.SYSTEM_INITIAL) {
+            avatarSeed = initialAvatarSeed(internalId);
+        }
+    }
+
+    public void cacheGeneratedAvatar(String objectId) {
+        if (avatarType != AvatarType.UPLOADED) avatarObjectId = objectId;
+    }
+
+    public void useUploadedAvatar(String objectId) {
+        avatarType = AvatarType.UPLOADED;
+        avatarObjectId = objectId;
+        avatarRevision++;
+    }
+
+    public void useRandomAvatar(String seed, String objectId) {
+        avatarType = AvatarType.SYSTEM_RANDOM;
+        avatarSeed = seed;
+        avatarObjectId = objectId;
+        avatarRevision++;
+    }
+
+    public void resetAvatar() {
+        avatarType = AvatarType.SYSTEM_INITIAL;
+        avatarSeed = initialAvatarSeed(ensureId());
+        avatarObjectId = null;
+        avatarRevision++;
+    }
+
+    private static String initialAvatarSeed(String internalId) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(
+                    ("avatar:lorelei:v1:" + internalId).getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
+        }
     }
 
     public void changeDisplayName(String displayName) {

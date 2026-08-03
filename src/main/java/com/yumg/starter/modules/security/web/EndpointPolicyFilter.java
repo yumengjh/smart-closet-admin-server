@@ -22,7 +22,7 @@ public class EndpointPolicyFilter extends OncePerRequestFilter {
     @Override protected boolean shouldNotFilter(HttpServletRequest request) { return !request.getRequestURI().startsWith("/api/") || HttpMethod.OPTIONS.matches(request.getMethod()); }
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
         String path = request.getRequestURI();
-        if (path.startsWith("/api/v1/system/runtime-config")) { chain.doFilter(request, response); return; }
+        if (path.startsWith("/api/v1/system/runtime-config") || path.startsWith("/api/v1/system/runtime-caches")) { chain.doFilter(request, response); return; }
         boolean disabled = Arrays.stream(settings.string("security.endpoint.disabled-patterns").split(",")).map(String::trim).filter(pattern -> !pattern.isEmpty()).anyMatch(pattern -> matcher.match(pattern, path));
         if (disabled) { errors.write(response, ApiErrorCode.ENDPOINT_DISABLED); return; }
         chain.doFilter(request, response);

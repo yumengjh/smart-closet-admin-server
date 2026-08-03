@@ -22,6 +22,14 @@ public class ApiException extends RuntimeException {
         return new ApiException(ApiErrorCode.RATE_LIMITED);
     }
     public static ApiException registrationDisabled() { return new ApiException(ApiErrorCode.REGISTRATION_DISABLED); }
+    public static ApiException avatarFileTooLarge() { return new ApiException(ApiErrorCode.AVATAR_FILE_TOO_LARGE); }
+    public static ApiException avatarFormatUnsupported() { return new ApiException(ApiErrorCode.AVATAR_FORMAT_UNSUPPORTED); }
+    public static ApiException avatarImageInvalid() { return new ApiException(ApiErrorCode.AVATAR_IMAGE_INVALID); }
+    public static ApiException avatarProcessingBusy() { return new ApiException(ApiErrorCode.AVATAR_PROCESSING_BUSY); }
+    public static ApiException avatarCandidateExpired() { return new ApiException(ApiErrorCode.AVATAR_CANDIDATE_EXPIRED); }
+    public static ApiException avatarCandidateInvalid() { return new ApiException(ApiErrorCode.AVATAR_CANDIDATE_INVALID); }
+    public static ApiException avatarGeneratorUnavailable() { return new ApiException(ApiErrorCode.AVATAR_GENERATOR_UNAVAILABLE); }
+    public static ApiException storageUnavailable() { return new ApiException(ApiErrorCode.STORAGE_UNAVAILABLE); }
 
     public static ApiException unauthorized() {
         return new ApiException(ApiErrorCode.AUTHENTICATION_REQUIRED);

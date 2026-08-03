@@ -83,6 +83,12 @@ Authorization: Bearer <accessToken>
 | 409 | `OPTIMISTIC_LOCK_CONFLICT` | 并发写入发生乐观锁冲突。 |
 | 423 | `ACCOUNT_LOCKED` | 账号临时锁定。 |
 | 429 | `RATE_LIMITED` | 触发全局或接口级限流。 |
+| 413 | `AVATAR_FILE_TOO_LARGE` | 头像文件超过 5 MiB。 |
+| 415 | `AVATAR_FORMAT_UNSUPPORTED` | 头像不是受支持的静态 JPEG、PNG 或 WebP。 |
+| 422 | `AVATAR_IMAGE_INVALID` | 图片损坏、超出尺寸/像素限制或无法安全解码。 |
+| 410 | `AVATAR_CANDIDATE_EXPIRED` | 系统头像候选已过期。 |
+| 429 | `AVATAR_PROCESSING_BUSY` | 服务端图片处理并发已满，请稍后重试。 |
+| 503 | `AVATAR_GENERATOR_UNAVAILABLE` / `STORAGE_UNAVAILABLE` | 头像生成器或通用存储当前不可用。 |
 | 404 | `NOT_FOUND` | 路由、资源或允许的运行时配置键不存在。 |
 | 503 | `ENDPOINT_DISABLED` / `REGISTRATION_DISABLED` | 被运行时策略临时禁用，或身份注册开关关闭。 |
 | 500 | `INTERNAL_ERROR` | 未预期错误；不会泄露内部异常信息。 |
@@ -186,7 +192,7 @@ Authorization: Bearer <accessToken>
 读取当前 Access Token 对应账号。
 
 | 成功 | `200 OK` |
-| `data` | `id`、`username`、`displayName`、`status`、`roles`、`permissions` |
+| `data` | `id`、`username`、`displayName`、`status`、`avatarUrl`、`roles`、`permissions` |
 
 ### `PATCH /api/v1/users/me`
 
@@ -231,6 +237,40 @@ Authorization: Bearer <accessToken>
 | 成功 | `204 No Content` |
 | 客户端动作 | 收到成功响应后立即清除本地 Access/Refresh Token 并重新登录。 |
 
+### 当前用户头像
+
+前端只保存和展示后端返回的 `avatarUrl`，不拼接用户 ID、seed、存储对象 ID 或文件路径。上传和重置成功后均返回完整的当前用户结构。
+
+| 接口 | 请求 | 成功 |
+| --- | --- | --- |
+| `PUT /api/v1/users/me/avatar` | `multipart/form-data`，字段名 `file`；静态 JPEG/PNG/WebP，最大 5 MiB | `200 OK`；后端校正 EXIF、中心裁剪并保存为 256×256 PNG |
+| `DELETE /api/v1/users/me/avatar` | 无 | `200 OK`；恢复基于用户身份稳定派生的系统头像 |
+| `POST /api/v1/users/me/avatar/system-candidates` | 无 | `200 OK`；创建一个 30 分钟有效的 Lorelei 候选 |
+| `POST /api/v1/users/me/avatar/system-candidates/{candidateId}/apply` | `candidateId` 为候选公开 UUID | `200 OK`；仅允许候选所有者确认未过期、未消费的候选 |
+
+候选创建结果：
+
+```json
+{
+  "candidateId": "opaque-uuid",
+  "previewUrl": "/api/v1/avatar-candidates/opaque-uuid",
+  "expiresAt": 1785753000000
+}
+```
+
+每个用户最多保留 5 个有效候选；候选 seed 不返回客户端。
+
+### 公开头像媒体
+
+以下两个读取接口公开且直接返回图片二进制，不使用 JSON 信封，但仍经过 Trace ID、IP 策略、接口禁用和限流：
+
+| 接口 | 缓存与行为 |
+| --- | --- |
+| `GET /api/v1/avatars/{publicId}` | 当前头像；正常对象使用一年不可变缓存，最终回退头像使用 60 秒缓存 |
+| `GET /api/v1/avatar-candidates/{candidateId}` | 候选预览；公共缓存 5 分钟，过期或无效返回稳定业务错误 |
+
+响应包含 `ETag`、`Content-Length`、`X-Content-Type-Options: nosniff`；SVG 另带限制性 CSP。公开标识是独立随机 UUID，不携带内部用户 ID、对象 ID、seed 或真实路径。DiceBear 或存储故障不会阻断资料读取：未命中缓存时返回应用内置 Lorelei SVG。
+
 ## 4. 管理员用户管理
 
 ### `GET /api/v1/admin/users`
@@ -247,7 +287,7 @@ Authorization: Bearer <accessToken>
 
 ```json
 {
-  "items": [{ "id": "uuid", "username": "alice", "displayName": "Alice", "status": "ACTIVE", "roles": ["USER"] }],
+  "items": [{ "id": "uuid", "username": "alice", "displayName": "Alice", "status": "ACTIVE", "avatarUrl": "/api/v1/avatars/opaque-uuid?v=1", "avatarType": "SYSTEM_INITIAL", "roles": ["USER"] }],
   "page": 0,
   "size": 20,
   "totalElements": 1,
@@ -288,6 +328,14 @@ Authorization: Bearer <accessToken>
 | 权限 | `system:user:write` |
 | 成功 | `204 No Content` |
 | 效果 | 撤销目标用户全部 Refresh Session，并立即使其旧 Access Token 失效。 |
+| 特有错误 | `404 NOT_FOUND` |
+
+### `POST /api/v1/admin/users/{id}/avatar/reset`
+
+管理员将指定用户恢复为其稳定系统默认头像。`avatarType` 仅出现在受保护的管理员用户响应中，值为 `SYSTEM_INITIAL`、`SYSTEM_RANDOM` 或 `UPLOADED`，普通当前用户响应不暴露该内部状态。
+
+| 权限 | `system:user:write` |
+| 成功 | `200 OK`，返回更新后的管理员用户视图 |
 | 特有错误 | `404 NOT_FOUND` |
 
 ## 5. RBAC：角色、权限与分配
@@ -535,8 +583,37 @@ Authorization: Bearer <accessToken>
 | `security.ip.allow-list` | 最长 1000 字符 | 空 | 逗号分隔 IP/CIDR 白名单；非空时只允许命中地址。 |
 | `security.ip.deny-list` | 最长 1000 字符 | 空 | 逗号分隔 IP/CIDR 黑名单，优先级高于白名单。 |
 | `identity.registration.enabled` | `true` / `false` | `true` | 是否允许 `POST /api/v1/auth/register`。 |
+| `runtime.config-refresh.enabled` | `true` / `false` | `true` | 是否定时比较 revision 并刷新变化的配置缓存。 |
+| `runtime.config-refresh.interval-seconds` | 整数 10–3600 | `60` | 配置缓存自动检查间隔。 |
+| `runtime.dependency-health.enabled` | `true` / `false` | `true` | 是否定时探测 DiceBear 与本地存储。 |
+| `runtime.dependency-health.interval-seconds` | 整数 10–3600 | `60` | 服务依赖自动探测间隔。 |
+| `avatar.generator.enabled` | `true` / `false` | `true` | 是否允许创建新的系统头像；已有头像读取不受影响。 |
 
 数据库连接、JWT 密钥、可信代理和初始管理员不属于运行时配置，必须通过 `.env` 或启动环境变量设置并重启。
+
+### 配置缓存状态
+
+| 接口 | 权限 | 说明 |
+| --- | --- | --- |
+| `GET /api/v1/system/runtime-caches` | `system:config:read` | 返回全部配置缓存状态 |
+| `POST /api/v1/system/runtime-caches/refresh` | `system:config:write` | 从数据库强制重载全部配置缓存 |
+| `POST /api/v1/system/runtime-caches/{code}/refresh` | `system:config:write` | 重载单个缓存，如 `RUNTIME_SETTINGS` 或 `IP_ACCESS_RULES` |
+
+缓存状态包括 `snapshotRevision`、`databaseRevision`、`synchronizedState`、加载/检查/失败时间、脱敏失败消息和条目数。业务请求只读取不可变内存快照；写入在同一事务递增数据库 revision，并在提交后发布本机快照。自动刷新只比较 revision，变化时才全量加载对应缓存。
+
+### 服务依赖状态
+
+| 接口 | 权限 | 说明 |
+| --- | --- | --- |
+| `GET /api/v1/system/dependencies` | `system:config:read` | 返回 DiceBear 与本地存储健康快照 |
+| `POST /api/v1/system/dependencies/refresh` | `system:config:write` | 探测全部服务依赖，不刷新配置缓存 |
+| `POST /api/v1/system/dependencies/{code}/refresh` | `system:config:write` | 只探测一个依赖，如 `AVATAR_GENERATOR` 或 `LOCAL_STORAGE` |
+
+依赖状态包括 `code`、`displayName`、`status`（`UNKNOWN`/`UP`/`ERROR`/`DISABLED`）、`lastCheckedAt`、`lastSucceededAt`、`latencyMs`、`consecutiveFailures` 和脱敏 `message`。状态持久化并作为不可变内存快照发布。服务启动完成时会在格式化摘要中输出一次依赖状态。
+
+### `GET /api/v1/system/storage/report`
+
+读取通用本地存储的利用率与一致性报告，需要 `system:gc:read`。结果包含扫描时间、对象数/字节数、用户引用数、候选引用数、孤儿对象、缺失文件、未登记文件、临时文件和磁盘可用/总容量。`avatar-candidates` 与 `avatar-storage-orphans` 同时注册为 GC 资源，可复用 `/api/v1/system/gc/**` 进行预览和清理。
 
 ### `GET /api/v1/system/ip-access-rules`
 
@@ -766,14 +843,16 @@ Actuator health 保持公开以服务容器探针；其余 Actuator 路径统一
 | 权限 | 可操作范围 |
 | --- | --- |
 | `system:user:read` | 查询管理员用户列表和详情。 |
-| `system:user:write` | 更新用户状态、强制撤销用户会话。 |
+| `system:user:write` | 更新用户状态、强制撤销用户会话、重置用户头像。 |
 | `system:role:read` | 查询角色和权限目录。 |
 | `system:role:write` | 角色/权限 CRUD、角色权限授予/撤销。 |
 | `system:role:assign` | 给用户分配/移除角色。 |
 | `system:menu:read` | 读取完整菜单树。 |
 | `system:menu:write` | 创建、修改、删除非内置菜单。 |
-| `system:config:read` | 读取运行时配置、持久化 IP 规则与非健康 Actuator 数据。 |
-| `system:config:write` | 修改运行时配置、创建/删除持久化 IP 规则。 |
+| `system:config:read` | 读取运行时配置、组件状态、持久化 IP 规则与非健康 Actuator 数据。 |
+| `system:config:write` | 修改/刷新运行时配置与组件状态、创建/删除持久化 IP 规则。 |
+| `system:gc:read` | 读取 GC 策略、运行记录和存储利用率报告。 |
+| `system:gc:write` | 修改 GC 策略并执行预览或清理。 |
 | `system:audit:read` | 查询审计日志。 |
 | `example:announcement:read` | 读取公告管理视图，并将公开公告接口升级为详细视图。 |
 | `example:announcement:write` | 创建、更新、发布、撤回公告。 |

@@ -56,3 +56,57 @@
 - GC 结果协议已改为结构化 JSON：每次任务会返回总候选数、总删除数和各资源的候选/删除/说明，管理端不再显示 `resource:a/b` 压缩字符串。GC 页面重构为运行概览、资源策略、运行记录三个视图，支持单资源预览/真实清理、按预览/真实/来源/状态筛选以及任务详情抽屉。
 - 为结构化结果先补充了失败测试，再实现编码/解码；最新验证为后端 `./mvnw test` 87 通过、0 失败、1 跳过，管理端 `pnpm typecheck && pnpm build` 成功。已重启后端，`http://localhost:8080/actuator/health` 与经 8848 代理的健康检查均为 `UP`。
 - 修复 GC 策略“编辑后立即预览被旧值覆盖”：前端策略改为显式未保存状态，预览/真实清理前会等待保存目标策略完成后才调用执行接口。新增独立的 `maintenance.gc.schedule.enabled`，GC 页可管理全局自动清理开关和 1–1440 分钟执行间隔；关闭自动计划不会影响手动运行。新增调度开关回归测试先失败后通过；全量后端测试为 88 通过、0 失败、1 跳过，前端类型检查和构建通过。重启后已确认新设置初始化至 SQLite。
+
+## 2026-08-03
+
+- 用户确定默认头像采用 DiceBear Lorelei，并选择由后端统一服务，前端只处理 `avatarUrl`。
+- 用户已在宿主机 3100 端口启动自托管 DiceBear；规划采用本地 HTTP 生成服务，不依赖 DiceBear 公共 API。
+- 完成第一轮头像架构核查：确认数据库、实体、DTO、接口和 Compose 持久卷均需补齐；原始用户上传 SVG 将禁止，默认 SVG 只允许固定 UUID seed 的可信生成链路。
+- 本地连通性探测记录：首次请求受 shell 代理影响而访问 `127.0.0.1:7890`；使用 `--noproxy '*'` 后当前受限环境仍无法访问宿主机 3100。后续实施验证应由宿主机执行或使用 Compose 服务名，不重复以同一路径探测。
+- 用户从宿主机验证 3100 的 Lorelei SVG 响应成功；随后授权访问 Docker daemon，确认运行容器和端口映射。
+- 通过容器内部请求固定 seed 生成 `src/main/resources/avatars/default-lorelei.svg`，作为 DiceBear 不可达且用户无缓存时的最终 classpath 回退；XML、文件类型和危险 SVG 片段检查通过。
+- 生成脚本在文件写入完成后的字节统计阶段因执行环境没有全局 `TextEncoder` 报错；复核确认文件已完整创建，因此改用 `wc/file/xmllint/shasum` 验证，不重复原失败路径。
+- 用户要求将头像草案升级为覆盖整个用户模块的完整设计文档，并要求在定稿前询问未决细节。当前暂停扩写，等待确认管理员能力、读取隐私、上传规范、默认头像刷新和生成服务可观测性等产品决策。
+- 用户确认匿名读取、敏感 ID 不进头像 URL、常见位图含 WebP 输入、系统头像可随机更换、管理员可重置、头像类型仅管理员可见，并要求统一运行时组件刷新、本地存储抽象和头像 GC 报告。
+- 已对照现有 `RuntimeSettingService`、启动摘要、GC 资源框架和 `springboot-admin` 用户/配置/GC 页面确定扩展位置；运行时配置与探测状态将分表分责，后台现有 Store/页面结构可增量接入。
+- 已核对 Java WebP 方案：优先评估活跃的 `com.github.usefulness:webp-imageio` ImageIO 插件，上传统一输出继续采用 PNG；待用户确认预览/提交交互与第一版精确输入格式范围后扩写完整设计。
+- 用户确认候选预览后提交、静态 JPEG/PNG/WebP 和第一版后端自动裁剪；未来 C 端裁剪作为策略扩展，不改变存储与头像状态模型。
+- 已将头像规格扩展为完整设计：覆盖用户状态、公开匿名 URL、数据库、通用存储、WebP/裁剪、DiceBear、降级、随机候选、运行时组件刷新、启动摘要、GC/利用率、后台管理、配置部署和验收，共 670 行。
+- 已同步重写 145 行实施计划，按迁移/存储、运行时组件、生成与读取、上传/候选、GC、`springboot-admin` 和验收拆分；`git diff --check` 通过。
+- 用户已授权开始实施。已重新读取文件化计划并建立七阶段执行清单，当前从数据库迁移和通用存储底座开始。
+- 首轮结构检查误读了不存在的 `BaseEntity.java` 一次；已确认实际基类为 `BaseUuidEntity`，不重复尝试该路径。
+- 头像迁移失败测试首次正确报告三个新表缺失；加入初版迁移后，SQLite 暴露 Liquibase 重建 `users` 会把 `user_roles` 外键改指 `users_temporary`。已改为 SQLite 原生逐列追加、PostgreSQL 保留 `avatar_object_id` 外键，并在 SQLite 交由应用/GC 校验引用。
+- 修正迁移后，`SqliteMigrationTest#liquibaseCreatesCoreTables` 已通过：新表、用户头像字段、唯一索引、候选外键均已验证，且现有用户角色关系未被破坏。
+- 用户头像状态测试先编译失败后通过，已实现不透明公开 ID、基于内部 ID 的稳定初始 seed、三种头像类型和独立 revision；头像变化不会递增认证 token version。
+- 本地存储后端测试先失败后通过，已覆盖受控随机键、同卷临时写入/原子移动、SHA-256、读取、幂等删除、路径逃逸拒绝和无残留健康探针。
+- 存储服务组合测试首次运行遇到本机 JDK 21 的 Mockito self-attach 初始化失败；该测试将改用 JDK 动态代理的内存 Repository，不为此引入 JVM Agent 配置。
+- 新存储组合测试改为内存 Repository 后，存储服务、本地后端和用户头像状态共 6 个测试通过。
+- 运行时配置已从可变 ConcurrentHashMap 重构为原子不可变快照，新增组件自动探测开关、间隔和头像生成开关，以及数据库全量 reload；实现了本地存储运行时组件、状态持久化/内存快照、自动刷新和管理 API。
+- `RuntimeSettingServiceTest` 连续两次受同一 Mockito self-attach 环境错误影响，未出现业务断言失败；后续不再重复该运行路径，先以无 Mockito 测试和完整集成测试验证。
+- DiceBear 客户端测试在受限沙箱内因禁止绑定本地端口失败；获准在沙箱外运行后通过，固定 Lorelei 路由、查询参数、Content-Type/大小和危险 SVG 拒绝均已验证。
+- 首次编译公开头像 Controller 时发现当前 Spring `HttpHeaders` 没有 `CONTENT_SECURITY_POLICY` 常量；已改用标准字符串 Header 名称，不重复依赖该常量。
+- WebP 与 EXIF 依赖首次解析因沙箱禁止写入用户 Maven 仓库失败；按权限流程在沙箱外执行后依赖下载和主代码编译成功，未改动 Maven 仓库位置或绕过权限边界。
+- 头像图片处理器测试先因目标类型不存在而编译失败，符合 TDD 预期；开始实现 JPEG/PNG/WebP 静态图校验、EXIF 方向修正、可替换居中裁剪和 256×256 PNG 重编码。
+- 图片测试在受限沙箱加载 WebP 原生库时触发 JVM `Abort trap`；同一测试在沙箱外能正常启动并实际暴露 PNG reader 的 `seekForwardOnly` 与帧数搜索冲突，确认原生库本身可运行，已据此修正 reader 输入模式。
+- 修正 ImageIO reader 模式后，头像处理器 3 个测试全部通过，包括当前 macOS ARM 环境的真实 WebP 编解码。
+- 随机候选实体先以缺类编译失败建立基线；随后补充候选领域状态、上传/恢复/随机预览/确认、匿名预览及管理员重置接口。首次编译发现 `UserProfileController` 遗漏 `Pattern` import，已就地修正。
+- 候选领域测试与 multipart 超限稳定错误映射共 10 个测试通过；上传图片处理增加了最多 4 个并发任务的进程内保护。
+- 存储利用率报告先因目标服务/模型不存在编译失败，随后开始实现数据库引用分类、缺失/未登记/临时文件统计，以及 `avatar-candidates`、`avatar-storage-orphans` 两个 GC 资源。
+- 新增存储报告分类测试通过。首次完整 SQLite Context 验证发现图片处理器存在多个构造器后 Spring 不再自动选择单参数生产构造器；已显式标注注入构造器，问题与数据库迁移无关。
+- 修正构造器注入后，完整 `SqliteMigrationTest` 5 个用例通过，确认新迁移、JPA 映射、Repository 查询和 GC 注册能在同一 Spring Context 中运行。
+- `springboot-admin` 已接入本人头像弹窗、三个布局的头像入口、用户列表/详情头像、管理员重置、运行时组件刷新以及 GC 存储报告；`pnpm typecheck` 与前端 `git diff --check` 已通过。
+- 首次后端全量测试执行 118 个用例，头像/WebP/DiceBear/SQLite 新测试均通过，但暴露 4 个集成回归：测试 `application.yml` 遮蔽主配置导致 Actuator 只暴露 health、运行时调度器启动后立即写 SQLite 造成测试事务锁竞争，以及无 AuditService 的两个纯单元测试读取了未初始化审计快照。已分别改为追加式 test properties、调度器首个周期后运行和空审计依赖短路。
+- 三类失败复跑后 SQLite 锁竞争和运行时快照单测均已恢复；发现 Spring 配置加载中同名 `application.properties` 仍会遮蔽主 YAML，而非合并。已移除测试配置文件，改由 Surefire 系统属性指定 `target` 存储根和关闭启动探测，保留主配置的 Actuator 暴露设置。
+- 清理旧测试产物后 `StarterApplicationTest` 5 个用例通过；在允许 JVM attach 与绑定本地临时端口的环境执行 `./mvnw clean test`，当时 118 个测试、0 失败、0 错误、1 个 PostgreSQL/Testcontainers 条件跳过。
+- 首次 `./mvnw clean verify` 的全部行为测试通过，但新增模块使整体行覆盖率降至 66%，未达到 70% 门禁。补充头像管理、惰性生成/降级和运行时组件状态的行为测试，并增加 SVG 协议相对外部引用回归测试后，最终 `verify` 为 130 个测试、0 失败、0 错误、1 跳过；行覆盖率 75.10%、分支覆盖率 50.84%，两项门禁通过。
+- 管理端 `pnpm build` 成功，产物约 2.33 MB；`docker compose config --quiet` 通过。API、运行时设置、部署备份、README、项目状态和头像规格状态已同步更新，第 12 阶段完成。
+- 用户指出“运行时组件”混淆了配置缓存刷新和外部依赖健康探测，并确认按拆分方案实施第 13 阶段。当前结论：热点业务配置已读内存，但自动数据库对账错误地挂在组件健康调度器上；管理页和 `/system/runtime/refresh` 也同时刷新两种状态。
+- 第 13 阶段设计收口：新增通用缓存 revision/provider 注册表，首批纳管运行时设置和持久化 IP 规则；配置缓存与服务依赖各自拥有调度、状态和手动刷新接口，配置写入继续保持事务提交后才发布。
+- 第 13 阶段首轮失败测试符合预期：`RuntimeCacheRegistryTest` 因通用 provider、status 和 registry 尚不存在而出现 16 个编译错误；该失败用于锁定稳定顺序、单缓存强制刷新和仅按 revision 自动对账的契约，不重复运行未修改代码。
+- 通用缓存首轮实现后定向测试中，注册表、组件解耦和 IP 快照测试均通过；SQLite 明确拒绝后置 `addUniqueConstraint`，旧设置测试仍使用已迁移的 `runtime.component-health.*` 键。迁移改用跨库唯一索引，测试契约同步到 `runtime.dependency-health.*` 后再复跑。
+- 第 13 阶段完成：新增 `runtime_cache_revisions`、通用 provider/registry/status、独立缓存调度器和管理 API；`RUNTIME_SETTINGS` 与 `IP_ACCESS_RULES` 已纳管，写事务内递增 revision，提交后才发布本机不可变快照，自动任务仅在 revision 变化时重载。
+- DiceBear 与本地存储改为独立“服务依赖”接口和调度，原组件全量刷新不再调用配置 reload；管理后台同步拆为“配置缓存”和“服务依赖”，旧混合 `/system/runtime` 客户端调用已移除。
+- 验证完成：后端 `./mvnw clean verify` 为 132 个测试、0 失败、0 错误、1 个 PostgreSQL/Testcontainers 条件跳过，JaCoCo 门禁通过；管理端全部 10 个 Node 契约脚本、`pnpm typecheck`、`pnpm build` 和两个仓库 `git diff --check` 通过，Compose 配置有效。
+- 本地后端已迁移现有 SQLite 并重启于 8081，前端继续运行于 8849，用户自管 DiceBear 保持在 3100；健康检查直连和前端代理均为 `UP`，OpenAPI 已暴露六个独立缓存/依赖路径，数据库确认两个 provider revision 行和四个新运行时键。
+- 按用户反馈重新整理 `/system/config`：运行时管理配置提升到页面首位并使用响应式网格，配置缓存与服务依赖紧随其后并排展示，其余安全治理配置后置；管理端契约测试、类型检查、生产构建和 diff 检查通过。
+- 新增独立运维文档 `docs/operations/ip-access-rule-cache.md`，说明持久化 IP 规则独立缓存的边界、请求期性能原因、revision/提交后发布/多实例对账、手动重载、失效时间语义，以及它与运行时字符串 IP 策略的组合关系。

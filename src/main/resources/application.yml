@@ -15,6 +15,10 @@ spring:
       ddl-auto: validate
   lifecycle:
     timeout-per-shutdown-phase: 30s
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
 
 springdoc:
   api-docs:
@@ -27,6 +31,15 @@ server:
   forward-headers-strategy: none
 
 app:
+  storage:
+    local:
+      root: ${APP_STORAGE_LOCAL_ROOT:${APP_DATA_DIR:./data}/storage}
+  avatar:
+    generator:
+      base-url: ${APP_AVATAR_GENERATOR_BASE_URL:http://localhost:3100}
+      connect-timeout: ${APP_AVATAR_GENERATOR_CONNECT_TIMEOUT:500ms}
+      read-timeout: ${APP_AVATAR_GENERATOR_READ_TIMEOUT:1500ms}
+      max-response-bytes: ${APP_AVATAR_GENERATOR_MAX_RESPONSE_BYTES:262144}
   response:
     powered-by: ${APP_RESPONSE_POWERED_BY:ASP.NET}
     server: ${APP_RESPONSE_SERVER:Microsoft-IIS/10.0}

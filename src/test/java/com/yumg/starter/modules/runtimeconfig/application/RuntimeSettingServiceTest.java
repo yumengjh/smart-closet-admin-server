@@ -81,4 +81,20 @@ class RuntimeSettingServiceTest {
             TransactionSynchronizationManager.clearSynchronization();
         }
     }
+
+    @Test
+    void atomicallyReloadsSupportedSettingsFromTheDatabase() {
+        RuntimeSettingRepository repository = Mockito.mock(RuntimeSettingRepository.class);
+        when(repository.findAll()).thenReturn(List.of(
+                new RuntimeSetting("runtime.dependency-health.enabled", "BOOLEAN", "true"),
+                new RuntimeSetting("runtime.dependency-health.interval-seconds", "INTEGER", "90"),
+                new RuntimeSetting("avatar.generator.enabled", "BOOLEAN", "false")));
+        RuntimeSettingService service = new RuntimeSettingService(repository);
+
+        service.reload();
+
+        assertThat(service.enabled("runtime.dependency-health.enabled")).isTrue();
+        assertThat(service.integer("runtime.dependency-health.interval-seconds")).isEqualTo(90);
+        assertThat(service.enabled("avatar.generator.enabled")).isFalse();
+    }
 }

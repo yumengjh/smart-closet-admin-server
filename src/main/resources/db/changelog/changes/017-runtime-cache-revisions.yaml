@@ -1,0 +1,30 @@
+databaseChangeLog:
+  - changeSet:
+      id: 017-runtime-cache-revisions
+      author: starter
+      changes:
+        - createTable:
+            tableName: runtime_cache_revisions
+            columns:
+              - column: { name: id, type: varchar(36), constraints: { primaryKey: true, nullable: false } }
+              - column: { name: cache_code, type: varchar(100), constraints: { nullable: false } }
+              - column: { name: revision, type: bigint, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: version, type: bigint, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: created_at, type: varchar(64), constraints: { nullable: false } }
+              - column: { name: updated_at, type: varchar(64), constraints: { nullable: false } }
+        - createIndex:
+            tableName: runtime_cache_revisions
+            indexName: uk_runtime_cache_revisions_code
+            unique: true
+            columns:
+              - column: { name: cache_code }
+        - update:
+            tableName: system_settings
+            columns:
+              - column: { name: setting_key, value: runtime.dependency-health.enabled }
+            where: setting_key = 'runtime.component-health.enabled'
+        - update:
+            tableName: system_settings
+            columns:
+              - column: { name: setting_key, value: runtime.dependency-health.interval-seconds }
+            where: setting_key = 'runtime.component-health.interval-seconds'

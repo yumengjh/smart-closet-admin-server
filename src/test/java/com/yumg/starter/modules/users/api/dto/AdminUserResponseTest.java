@@ -17,5 +17,7 @@ class AdminUserResponseTest {
         AdminUserResponse response = AdminUserResponse.from(user);
 
         assertThat(response.roles()).containsExactly("ADMIN", "USER");
+        assertThat(response.avatarUrl()).contains(user.getAvatarPublicId()).doesNotContain(user.getId());
+        assertThat(response.avatarType()).isEqualTo("SYSTEM_INITIAL");
     }
 }

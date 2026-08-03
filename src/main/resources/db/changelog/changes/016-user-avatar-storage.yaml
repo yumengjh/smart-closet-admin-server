@@ -1,0 +1,123 @@
+databaseChangeLog:
+  - changeSet:
+      id: 016-storage-objects
+      author: starter
+      changes:
+        - createTable:
+            tableName: storage_objects
+            columns:
+              - column: { name: id, type: varchar(36), constraints: { primaryKey: true, nullable: false } }
+              - column: { name: backend_code, type: varchar(32), constraints: { nullable: false } }
+              - column: { name: namespace, type: varchar(64), constraints: { nullable: false } }
+              - column: { name: object_key, type: varchar(500), constraints: { nullable: false } }
+              - column: { name: content_type, type: varchar(160), constraints: { nullable: false } }
+              - column: { name: size_bytes, type: bigint, constraints: { nullable: false } }
+              - column: { name: sha256, type: varchar(64), constraints: { nullable: false } }
+              - column: { name: state, type: varchar(32), constraints: { nullable: false } }
+              - column: { name: version, type: bigint, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: created_at, type: varchar(64), constraints: { nullable: false } }
+              - column: { name: updated_at, type: varchar(64), constraints: { nullable: false } }
+        - createIndex:
+            tableName: storage_objects
+            indexName: uk_storage_objects_object_key
+            unique: true
+            columns: [ { column: { name: object_key } } ]
+        - createIndex:
+            tableName: storage_objects
+            indexName: idx_storage_objects_namespace_state
+            columns:
+              - column: { name: namespace }
+              - column: { name: state }
+
+  # SQLite cannot add a foreign key to an existing table without rebuilding it. A Liquibase
+  # rebuild would rewrite inbound user_roles references to users_temporary, so add plain
+  # columns in place and keep the avatar-object invariant in the application/GC layers.
+  - changeSet:
+      id: 016-user-avatar-sqlite
+      author: starter
+      dbms: sqlite
+      changes:
+        - sql:
+            sql: |
+              alter table users add column avatar_public_id varchar(36);
+              alter table users add column avatar_type varchar(32) not null default 'SYSTEM_INITIAL';
+              alter table users add column avatar_seed varchar(64);
+              alter table users add column avatar_object_id varchar(36);
+              alter table users add column avatar_revision bigint not null default 0;
+        - createIndex:
+            tableName: users
+            indexName: uk_users_avatar_public_id
+            unique: true
+            columns: [ { column: { name: avatar_public_id } } ]
+
+  - changeSet:
+      id: 016-user-avatar-postgresql
+      author: starter
+      dbms: postgresql
+      changes:
+        - addColumn:
+            tableName: users
+            columns:
+              - column: { name: avatar_public_id, type: varchar(36) }
+              - column: { name: avatar_type, type: varchar(32), defaultValue: SYSTEM_INITIAL, constraints: { nullable: false } }
+              - column: { name: avatar_seed, type: varchar(64) }
+              - column:
+                  name: avatar_object_id
+                  type: varchar(36)
+                  constraints:
+                    foreignKeyName: fk_users_avatar_object
+                    references: storage_objects(id)
+              - column: { name: avatar_revision, type: bigint, defaultValueNumeric: 0, constraints: { nullable: false } }
+        - createIndex:
+            tableName: users
+            indexName: uk_users_avatar_public_id
+            unique: true
+            columns: [ { column: { name: avatar_public_id } } ]
+
+  - changeSet:
+      id: 016-avatar-candidates-runtime-components
+      author: starter
+      changes:
+        - createTable:
+            tableName: avatar_candidates
+            columns:
+              - column: { name: id, type: varchar(36), constraints: { primaryKey: true, nullable: false } }
+              - column: { name: public_id, type: varchar(36), constraints: { nullable: false } }
+              - column: { name: user_id, type: varchar(36), constraints: { nullable: false, foreignKeyName: fk_avatar_candidates_user, references: users(id) } }
+              - column: { name: seed, type: varchar(64), constraints: { nullable: false } }
+              - column: { name: storage_object_id, type: varchar(36), constraints: { nullable: false, foreignKeyName: fk_avatar_candidates_storage, references: storage_objects(id) } }
+              - column: { name: expires_at, type: varchar(64), constraints: { nullable: false } }
+              - column: { name: consumed_at, type: varchar(64) }
+              - column: { name: version, type: bigint, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: created_at, type: varchar(64), constraints: { nullable: false } }
+              - column: { name: updated_at, type: varchar(64), constraints: { nullable: false } }
+        - createIndex:
+            tableName: avatar_candidates
+            indexName: uk_avatar_candidates_public_id
+            unique: true
+            columns: [ { column: { name: public_id } } ]
+        - createIndex:
+            tableName: avatar_candidates
+            indexName: idx_avatar_candidates_user_expiry
+            columns:
+              - column: { name: user_id }
+              - column: { name: expires_at }
+        - createTable:
+            tableName: runtime_component_statuses
+            columns:
+              - column: { name: id, type: varchar(36), constraints: { primaryKey: true, nullable: false } }
+              - column: { name: component_code, type: varchar(100), constraints: { nullable: false } }
+              - column: { name: status, type: varchar(32), constraints: { nullable: false } }
+              - column: { name: last_checked_at, type: varchar(64) }
+              - column: { name: last_succeeded_at, type: varchar(64) }
+              - column: { name: latency_ms, type: bigint }
+              - column: { name: consecutive_failures, type: int, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: message, type: varchar(500) }
+              - column: { name: version, type: bigint, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: created_at, type: varchar(64), constraints: { nullable: false } }
+              - column: { name: updated_at, type: varchar(64), constraints: { nullable: false } }
+        - createIndex:
+            tableName: runtime_component_statuses
+            indexName: uk_runtime_component_statuses_code
+            unique: true
+            columns: [ { column: { name: component_code } } ]

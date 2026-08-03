@@ -43,6 +43,19 @@ APP_BOOTSTRAP_ADMIN_USERNAME=admin
 APP_BOOTSTRAP_ADMIN_PASSWORD=请替换为强密码
 ```
 
+用户头像由后端统一托管。默认连接本机 `3100` 端口的自托管 DiceBear Lorelei，
+生成结果和上传头像都写入本地通用存储；前端只消费 `avatarUrl`。本地开发可在
+`.env` 调整：
+
+```bash
+APP_AVATAR_GENERATOR_BASE_URL=http://localhost:3100
+APP_STORAGE_LOCAL_ROOT=./data/storage
+```
+
+DiceBear 未启动时，应用仍可正常注册、登录和读取资料，并返回内置回退头像；
+此时不能创建新的随机系统头像。上传支持静态 JPEG、PNG、WebP，后端统一裁剪并
+保存为 256×256 PNG。
+
 所有 HTTP 响应默认包含以下展示标识：
 
 ```http
@@ -79,8 +92,9 @@ APP_SECURITY_CORS_ALLOWED_ORIGINS=http://localhost:5173
 
 - 注册、登录、RSA JWT、Refresh Token 轮换、当前设备登出、本人会话列表与退出全部设备
 - 用户查看本人资料、修改显示名、修改密码
+- 后端托管头像：Lorelei 默认头像、随机候选预览/确认、JPEG/PNG/WebP 上传、管理员重置、公开不透明媒体 URL 和内置故障回退
 - 数据库 RBAC：初始角色/权限、角色与权限目录 CRUD、用户角色分配、角色权限分配
-- 运行时服务治理：动态 CORS、接口禁用、通用与接口级限流、CIDR IP 白黑名单、带有效期的 IP 规则、登录防爆破、请求日志开关、注册开关及审计查询
+- 运行时服务治理：动态 CORS、接口禁用、通用与接口级限流、CIDR IP 白黑名单、带有效期的 IP 规则、登录防爆破、请求日志开关、注册开关、DiceBear/本地存储组件探测及审计查询
 - 统一错误响应、Trace ID、可配置 `Powered-By`/`Server` 响应标识、字符化启动摘要、SQLite/PostgreSQL Liquibase 迁移
 - Docker、Compose、GitHub Actions 基础文件
 
@@ -135,8 +149,11 @@ JPA 默认关闭 Open Session in View。DTO 需要关联集合时由应用服务
 | --- | --- |
 | 认证 | `/api/v1/auth/register`、`login`、`refresh`、`logout` |
 | 当前用户 | `/api/v1/users/me` |
+| 头像媒体 | `/api/v1/avatars/{publicId}`、`/api/v1/avatar-candidates/{candidateId}` |
 | RBAC | `/api/v1/rbac/**` |
 | 运行时配置 | `/api/v1/system/runtime-config` |
+| 配置缓存 | `/api/v1/system/runtime-caches` |
+| 服务依赖 | `/api/v1/system/dependencies` |
 | 系统审计 | `/api/v1/system/audit-events` |
 | 公告示例 | `/api/v1/announcements` |
 | 健康检查 | `/actuator/health` |

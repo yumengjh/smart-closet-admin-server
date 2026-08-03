@@ -36,7 +36,8 @@ class SqliteMigrationTest {
             "user_roles", "role_permissions", "refresh_sessions", "system_settings",
             "ip_access_rules", "audit_events", "announcements", "navigation_menus",
             "maintenance_gc_policies",
-            "maintenance_gc_runs", "maintenance_gc_locks");
+            "maintenance_gc_runs", "maintenance_gc_locks", "storage_objects",
+            "avatar_candidates", "runtime_component_statuses", "runtime_cache_revisions");
 
     @TempDir
     static Path temporaryDirectory;
@@ -86,13 +87,27 @@ class SqliteMigrationTest {
         assertThat(indexNames("refresh_sessions")).contains("idx_refresh_sessions_user_issued",
                 "idx_refresh_sessions_family", "idx_refresh_sessions_expires_at");
         assertThat(indexNames("maintenance_gc_runs")).contains("idx_maintenance_gc_runs_started_at");
+        assertThat(indexNames("users")).contains("uk_users_avatar_public_id");
+        assertThat(indexNames("storage_objects")).contains(
+                "uk_storage_objects_object_key", "idx_storage_objects_namespace_state");
+        assertThat(indexNames("avatar_candidates")).contains(
+                "uk_avatar_candidates_public_id", "idx_avatar_candidates_user_expiry");
+        assertThat(indexNames("runtime_component_statuses"))
+                .contains("uk_runtime_component_statuses_code");
+        assertThat(indexNames("runtime_cache_revisions"))
+                .contains("uk_runtime_cache_revisions_code");
 
         assertThat(foreignKeyTargets("refresh_sessions")).contains("users");
         assertThat(foreignKeyTargets("announcements")).contains("users");
         assertThat(foreignKeyTargets("role_permissions")).contains("roles", "permissions");
+        assertThat(foreignKeyTargets("avatar_candidates")).contains("users", "storage_objects");
         assertThat(tables).doesNotContain("navigation_menu_roles", "resume_documents", "resume_feedbacks");
         assertThat(columnType("users", "id")).isEqualToIgnoringCase("varchar(36)");
         assertThat(columnType("users", "status")).isEqualToIgnoringCase("varchar(32)");
+        assertThat(columnType("users", "avatar_public_id")).isEqualToIgnoringCase("varchar(36)");
+        assertThat(columnType("users", "avatar_type")).isEqualToIgnoringCase("varchar(32)");
+        assertThat(columnType("users", "avatar_seed")).isEqualToIgnoringCase("varchar(64)");
+        assertThat(columnType("users", "avatar_revision")).isEqualToIgnoringCase("bigint");
         assertThat(columnType("audit_events", "version")).isEqualToIgnoringCase("bigint");
     }
 

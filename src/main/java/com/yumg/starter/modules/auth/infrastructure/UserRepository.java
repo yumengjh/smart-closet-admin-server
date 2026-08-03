@@ -14,6 +14,12 @@ import org.springframework.data.repository.query.Param;
 
 public interface UserRepository extends JpaRepository<User, String> {
     Optional<User> findByUsername(String username);
+    Optional<User> findByAvatarPublicId(String avatarPublicId);
+    List<User> findAllByAvatarPublicIdIsNullOrAvatarSeedIsNull();
+    boolean existsByAvatarObjectId(String avatarObjectId);
+
+    @Query("select user.avatarObjectId from User user where user.avatarObjectId is not null")
+    List<String> findAllAvatarObjectIds();
 
     boolean existsByUsername(String username);
     long countByRoles_Code(String roleCode);

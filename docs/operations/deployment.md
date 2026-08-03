@@ -33,7 +33,17 @@
   in production; protect or disable it according to policy.
 - Ensure the runtime identity is non-root and can write only required paths. SQLite
   storage is `/app/data` in the image, but PostgreSQL deployments should not depend on
-  container filesystem persistence.
+  container filesystem persistence. The application still needs persistent avatar/file
+  storage: mount `/app/data` as `compose.yaml` does, or set `APP_STORAGE_LOCAL_ROOT` to a
+  durable volume. A container's writable layer is not an acceptable storage target.
+- Run the self-hosted DiceBear API and set `APP_AVATAR_GENERATOR_BASE_URL`; the default
+  is `http://localhost:3100` outside containers and `http://host.docker.internal:3100`
+  in this Compose setup. The application never falls back to DiceBear's public service.
+  Generator failure degrades to cached or built-in avatars and can be retried from the
+  runtime management API.
+- Verify `com.github.usefulness:webp-imageio` on every production CPU/OS combination.
+  WebP decoding uses bundled JNI/libwebp binaries; CI coverage on one architecture does
+  not prove another architecture is supported.
 
 The canonical variable names are documented in `.env.example`; deployment manifests must
 not invent aliases. Runtime CORS policy remains database-backed. The environment value only
@@ -67,6 +77,13 @@ an isolated database with application smoke tests.
 Keep database recovery point/time objectives explicit. Include roles/privileges and
 required extensions in recovery runbooks, while storing backup credentials outside the
 repository. Do not use `docker compose down --volumes` against data you need to retain.
+
+Avatar metadata and files form one recoverable data set. Back up the database and
+`APP_STORAGE_LOCAL_ROOT` within a documented consistency window, retain both with the
+same recovery point, and restore both before opening traffic. After restore, inspect
+`GET /api/v1/system/storage/report`; missing files and untracked/orphan objects must be
+explained or reconciled before declaring recovery complete. The built-in fallback keeps
+profiles readable during an outage, but it is not a replacement for uploaded-avatar backups.
 
 ## Liquibase rollout
 

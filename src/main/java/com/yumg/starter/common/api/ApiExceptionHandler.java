@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,6 +95,15 @@ public class ApiExceptionHandler {
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     ResponseEntity<ApiError> unsupportedMediaType() {
         return ApiErrorFactory.response(ApiErrorCode.UNSUPPORTED_MEDIA_TYPE, List.of());
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ResponseEntity<ApiError> maxUploadSize(MaxUploadSizeExceededException ignored) {
+        return maxUploadSize();
+    }
+
+    ResponseEntity<ApiError> maxUploadSize() {
+        return ApiErrorFactory.response(ApiErrorCode.AVATAR_FILE_TOO_LARGE, List.of());
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)

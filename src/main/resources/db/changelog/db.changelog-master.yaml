@@ -25,3 +25,7 @@ databaseChangeLog:
       file: db/changelog/changes/014-maintenance-gc.yaml
   - include:
       file: db/changelog/changes/015-convert-postgres-later-instant-columns.yaml
+  - include:
+      file: db/changelog/changes/016-user-avatar-storage.yaml
+  - include:
+      file: db/changelog/changes/017-runtime-cache-revisions.yaml

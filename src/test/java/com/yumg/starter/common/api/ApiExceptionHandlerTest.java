@@ -104,6 +104,7 @@ class ApiExceptionHandlerTest {
         var unexpected = new ApiExceptionHandler().unexpected();
         assertError(unexpected, 500, "INTERNAL_ERROR");
         assertThat(unexpected.getBody().message()).doesNotContain("Exception", "stack", "secret");
+        assertError(new ApiExceptionHandler().maxUploadSize(), 413, "AVATAR_FILE_TOO_LARGE");
     }
 
     @Test
