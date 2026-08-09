@@ -58,7 +58,9 @@
 
 通用 API 限流按客户端 IP 使用一个全局桶。匹配端点模式的请求同时使用独立的“IP + 匹配模式”桶，同一动态路径不会因具体 ID 不同而绕过统计。运行时配置、缓存、运行检查和 IP 规则管理走容量更大的控制面桶，避免误配置后无法恢复。超过阈值返回 `429 RATE_LIMITED`，并携带 `Retry-After`、`X-RateLimit-Limit`、`X-RateLimit-Remaining` 与 `X-RateLimit-Reset`。
 
-连续收到 429 不会立刻永久拉黑。启用 `security.ip-auto-ban.enabled` 后，同一 IP 在观察窗口内累计达到 `security.ip-auto-ban.rejection-threshold` 才创建一条有期限的 `AUTO_RATE_LIMIT` 拒绝规则，时长由 `security.ip-auto-ban.duration-seconds` 决定。回环、任意本地和组播地址不会自动封禁，避免本机开发或同机反向代理把管理入口锁死；生产部署应正确配置可信代理，确保解析到真实客户端 IP。自动封禁持久化失败不会把原本的 429 替换成 500。
+全局或端点连续收到 429 不会立刻永久拉黑。启用 `security.ip-auto-ban.enabled` 后，同一 IP 在观察窗口内累计达到 `security.ip-auto-ban.rejection-threshold` 个 429 才创建一条有期限的 `AUTO_RATE_LIMIT` 拒绝规则，时长由 `security.ip-auto-ban.duration-seconds` 决定。控制面 429 不参与自动升级。回环、任意本地和组播地址不会自动封禁，避免本机开发或同机反向代理把管理入口锁死；生产部署应正确配置可信代理，确保解析到真实客户端 IP。自动封禁持久化失败不会把原本的 429 替换成 500。
+
+本地浏览器经 8849 的 Vite 代理访问 8081 时，后端通常只看到回环来源；配置页又使用不参与自动升级的控制面桶。因此本地出现 429 但规则页没有自动记录是预期行为。完整请求顺序、规则优先级、默认阈值、安全测试步骤和部署检查参见[《IP 访问控制与自动安全防护》](ip-security-protection.md)。
 
 字符串配置只用于 CORS 和 Ant 路径模式。空字符串表示清空相应策略，例如撤销全部接口禁用规则；请求体仍必须包含 `value` 字段。旧 `security.ip.allow-list` / `security.ip.deny-list` 会在升级启动时迁移为结构化 IP 规则并删除，不再参与请求判断。运行时配置、缓存和 IP 规则恢复接口不会被 IP 规则锁死，但仍要求对应 RBAC 权限并受独立控制面限流保护。
 
@@ -94,7 +96,7 @@ DiceBear 客户端只访问固定 `/10.x/lorelei/svg` 路由，seed 由后端产
 
 ## 持久化 IP 规则
 
-结构化规则为什么使用独立 `IP_ACCESS_RULES` Provider，以及 revision、自动封禁和历史规则的处理方式，参见[《为什么 IP 访问规则使用独立缓存》](ip-access-rule-cache.md)。
+完整安全行为与测试方式参见[《IP 访问控制与自动安全防护》](ip-security-protection.md)；结构化规则为什么使用独立 `IP_ACCESS_RULES` Provider，以及 revision、自动封禁和历史规则的处理方式，参见[《为什么 IP 访问规则使用独立缓存》](ip-access-rule-cache.md)。
 
 - `GET /api/v1/system/ip-access-rules`：查看 API 范围规则，需 `system:config:read`。
 - `POST /api/v1/system/ip-access-rules`：创建规则，需 `system:config:write`。

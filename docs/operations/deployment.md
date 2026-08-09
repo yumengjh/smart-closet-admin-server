@@ -23,6 +23,8 @@
 - Keep forwarded-header handling disabled unless trusted proxy CIDRs are explicitly
   configured through `APP_SECURITY_TRUSTED_PROXIES`. The immediate sender must be
   trusted before `X-Forwarded-For` is considered; test the complete load-balancer/proxy chain.
+  See the [IP protection operations guide](ip-security-protection.md) for rule precedence,
+  automatic blocking, local-test behavior, and a production verification checklist.
 - Set `APP_RESPONSE_POWERED_BY` and `APP_RESPONSE_SERVER` when the deployment should
   use response identities other than the defaults `ASP.NET` and
   `Microsoft-IIS/10.0`. The application adds `Powered-By` and `Server` to every Servlet

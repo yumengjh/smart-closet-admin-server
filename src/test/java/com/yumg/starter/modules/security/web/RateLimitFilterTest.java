@@ -77,6 +77,33 @@ class RateLimitFilterTest {
         verify(chain, never()).doFilter(Mockito.any(), Mockito.any());
     }
 
+    @Test
+    void usesTheDedicatedControlPlaneBucketWithoutAutomaticEscalation() throws Exception {
+        RateLimitService limits = Mockito.mock(RateLimitService.class);
+        RuntimeSettingService settings = Mockito.mock(RuntimeSettingService.class);
+        IpAbuseTracker abuse = Mockito.mock(IpAbuseTracker.class);
+        FilterChain chain = Mockito.mock(FilterChain.class);
+        when(settings.integer("security.control-plane.rate-limit.capacity")).thenReturn(600);
+        when(settings.integer("security.control-plane.rate-limit.window-seconds")).thenReturn(60);
+        when(limits.evaluate("control:203.0.113.8", 600, 60))
+                .thenReturn(RateLimitDecision.denied(
+                        600, Instant.now().plusSeconds(17), 17));
+        RateLimitFilter filter = new RateLimitFilter(limits, settings, new ApiErrorWriter(),
+                new ClientIpResolver(""), abuse);
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "GET", "/api/v1/system/runtime-config");
+        request.setRemoteAddr("203.0.113.8");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(429);
+        assertThat(response.getHeader("X-RateLimit-Limit")).isEqualTo("600");
+        verify(abuse, never()).recordRateLimitRejection(
+                Mockito.anyString(), Mockito.anyString(), Mockito.anyString());
+        verify(chain, never()).doFilter(Mockito.any(), Mockito.any());
+    }
+
     private RateLimitDecision allowed() {
         return RateLimitDecision.allowed(120, 119, Instant.now().plusSeconds(60));
     }

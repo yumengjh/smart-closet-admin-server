@@ -94,7 +94,7 @@ APP_SECURITY_CORS_ALLOWED_ORIGINS=http://localhost:5173
 - 用户查看本人资料、修改显示名、修改密码
 - 后端托管头像：Lorelei 默认头像、随机候选预览/确认、JPEG/PNG/WebP 上传、管理员重置、公开不透明媒体 URL 和内置故障回退
 - 数据库 RBAC：初始角色/权限、角色与权限目录 CRUD、用户角色分配、角色权限分配
-- 运行时服务治理：动态 CORS、接口禁用、通用与接口级限流、CIDR IP 白黑名单、带有效期的 IP 规则、登录防爆破、请求日志开关、注册开关、DiceBear/本地存储组件探测及审计查询
+- 运行时服务治理：动态 CORS、接口禁用、全局/端点/控制面限流、结构化 CIDR IP 规则、自动临时封禁、登录防爆破、请求日志开关、注册开关、DiceBear/本地存储组件探测及审计查询
 - 统一错误响应、Trace ID、可配置 `Powered-By`/`Server` 响应标识、字符化启动摘要、SQLite/PostgreSQL Liquibase 迁移
 - Docker、Compose、GitHub Actions 基础文件
 
@@ -133,6 +133,7 @@ JPA 默认关闭 Open Session in View。DTO 需要关联集合时由应用服务
 - [认证与会话](docs/api/authentication.md)
 - [RBAC 权限](docs/api/rbac.md)
 - [运行时服务配置](docs/operations/runtime-settings.md)
+- [IP 访问控制与自动安全防护](docs/operations/ip-security-protection.md)
 - [公告示例模块](docs/api/announcements.md)
 - [项目目标与进度](docs/PROJECT_STATUS.md)
 - [部署说明](docs/operations/deployment.md)
