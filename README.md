@@ -218,5 +218,5 @@ Actions 中构建、扫描，通过后推送同一份归档；一般不在开发
 
 - `local` Profile 可临时生成 JWT 密钥方便开发；`postgres` Profile 必须配置一对 RSA 私钥/公钥（`APP_JWT_*_PEM` 或 `APP_JWT_*_PATH`）。用户状态、密码、角色或权限变化会递增 `token_version`，旧 Access Token 会立即被拒绝。
 - Refresh Cookie 在 `postgres` Profile 默认启用 `Secure`；只有健康端点公开，`info`、`metrics` 等其余 Actuator 端点需要 `system:config:read`。
-- IP 白黑名单、限流和防爆破计数仍是单实例能力；多实例部署时应替换为 Redis 等共享实现。仅来自 `APP_SECURITY_TRUSTED_PROXIES` 的代理才会读取 `X-Forwarded-For`。
+- 结构化 IP 规则和自动封禁结果会持久化，但限流、自动封禁触发计数和防爆破计数仍是有界的单实例内存状态；多实例部署时应将计数器替换为 Redis 等共享实现。仅来自 `APP_SECURITY_TRUSTED_PROXIES` 的代理才会读取 `X-Forwarded-For`。
 - 不包含 MySQL、SQL Server、Redis、邮件验证、OAuth、MFA 和前端。

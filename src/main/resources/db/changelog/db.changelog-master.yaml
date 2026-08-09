@@ -31,3 +31,5 @@ databaseChangeLog:
       file: db/changelog/changes/017-runtime-cache-revisions.yaml
   - include:
       file: db/changelog/changes/018-runtime-health-checks.yaml
+  - include:
+      file: db/changelog/changes/019-ip-protection.yaml

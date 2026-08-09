@@ -26,6 +26,12 @@
 - `security.endpoint.rate-limit.patterns`
 - `security.endpoint.rate-limit.capacity`
 - `security.endpoint.rate-limit.window-seconds`
+- `security.control-plane.rate-limit.capacity`
+- `security.control-plane.rate-limit.window-seconds`
+- `security.ip-auto-ban.enabled`
+- `security.ip-auto-ban.rejection-threshold`
+- `security.ip-auto-ban.window-seconds`
+- `security.ip-auto-ban.duration-seconds`
 - `security.brute-force.enabled`
 - `security.brute-force.failure-threshold`
 - `security.brute-force.window-seconds`
@@ -35,8 +41,6 @@
 - `security.cors.allowed-origins`
 - `security.cors.allowed-methods`
 - `security.endpoint.disabled-patterns`
-- `security.ip.allow-list`
-- `security.ip.deny-list`
 - `identity.registration.enabled`
 - `runtime.config-refresh.enabled`
 - `runtime.config-refresh.interval-seconds`
@@ -50,11 +54,15 @@
 
 服务启动时会为缺失项写入默认值，并将配置缓存为内存快照。业务请求只读取该快照，不会逐次查询配置表。配置写事务同时递增 `runtime_cache_revisions` 中对应缓存的 revision；事务成功提交后才会原子切换本机快照，回滚不会产生仅在当前进程生效的“幽灵配置”。自动任务只查询各缓存的一行 revision，发生变化才全量加载；管理员也可手动刷新全部或单个缓存。首批统一管理 `RUNTIME_SETTINGS` 与 `IP_ACCESS_RULES`。
 
-`runtime.config-refresh.enabled` 控制自动 revision 对账，`runtime.config-refresh.interval-seconds` 可设为 10–3600 秒。关闭它不影响写接口提交后立即发布本机快照，也不影响手动刷新，但其它实例不会自动发现数据库变化。直接绕过应用修改业务表不会递增 revision，应在修改后手动刷新，或同步维护对应 revision。通用 API 限流按客户端 IP 使用一个全局桶，超过阈值返回 `429 RATE_LIMITED`；匹配接口级模式的请求还会进入独立的“IP + 路径”桶，因此同时受全局和端点容量约束。例如可对 `/api/v1/auth/login` 配置更严格的窗口。
+`GET /runtime-config` 同时返回 `group`、整数上下界和 `dangerous` 元数据，后台不再维护一份容易遗漏的配置键白名单。`runtime.config-refresh.enabled` 控制全部 Provider 的自动 revision 对账，`runtime.config-refresh.interval-seconds` 可设为 10–3600 秒。即使把自动刷新关闭，调度器仍按心跳只检查 `RUNTIME_SETTINGS` 的 revision，以便其它实例能发现“重新开启自动刷新”这项修改；关闭期间不会自动重载其它 Provider。写接口提交后仍立即发布本机快照，管理员也始终可以手动刷新。直接绕过应用修改业务表不会递增 revision，应在修改后手动刷新，或同步维护对应 revision。
 
-字符串配置用于 CORS、Ant 路径模式和 IP 策略。空字符串表示清空该字符串策略，例如撤销全部接口禁用规则；请求体仍必须包含 `value` 字段。IP 白名单非空时仅匹配的来源可访问；黑名单优先级更高。两者支持逗号分隔的 IPv4、IPv6 或 CIDR，例如 `192.168.10.0/24`。运行时配置和配置缓存恢复接口不会被接口禁用策略或 IP 策略锁死，但仍要求对应 RBAC 权限。
+通用 API 限流按客户端 IP 使用一个全局桶。匹配端点模式的请求同时使用独立的“IP + 匹配模式”桶，同一动态路径不会因具体 ID 不同而绕过统计。运行时配置、缓存、运行检查和 IP 规则管理走容量更大的控制面桶，避免误配置后无法恢复。超过阈值返回 `429 RATE_LIMITED`，并携带 `Retry-After`、`X-RateLimit-Limit`、`X-RateLimit-Remaining` 与 `X-RateLimit-Reset`。
 
-登录防爆破已实现：在 `security.brute-force.window-seconds` 观察窗口内达到失败阈值会锁定账户，锁定时长由 `security.brute-force.lock-seconds` 控制；锁定会撤销该用户 Refresh Token，到期后下次登录自动恢复。`security.request-log.enabled` 控制 `/api/**` 的结构化请求日志（方法、路径、状态、耗时、Trace ID、已认证用户 ID），绝不记录密码、令牌或请求体。限流计数和防爆破状态目前是单实例内存状态；多实例部署时应以 Redis 等共享存储替换，不能把当前实现当作分布式限流。
+连续收到 429 不会立刻永久拉黑。启用 `security.ip-auto-ban.enabled` 后，同一 IP 在观察窗口内累计达到 `security.ip-auto-ban.rejection-threshold` 才创建一条有期限的 `AUTO_RATE_LIMIT` 拒绝规则，时长由 `security.ip-auto-ban.duration-seconds` 决定。回环、任意本地和组播地址不会自动封禁，避免本机开发或同机反向代理把管理入口锁死；生产部署应正确配置可信代理，确保解析到真实客户端 IP。自动封禁持久化失败不会把原本的 429 替换成 500。
+
+字符串配置只用于 CORS 和 Ant 路径模式。空字符串表示清空相应策略，例如撤销全部接口禁用规则；请求体仍必须包含 `value` 字段。旧 `security.ip.allow-list` / `security.ip.deny-list` 会在升级启动时迁移为结构化 IP 规则并删除，不再参与请求判断。运行时配置、缓存和 IP 规则恢复接口不会被 IP 规则锁死，但仍要求对应 RBAC 权限并受独立控制面限流保护。
+
+登录防爆破已实现：在 `security.brute-force.window-seconds` 观察窗口内达到失败阈值会锁定账户，锁定时长由 `security.brute-force.lock-seconds` 控制；锁定会撤销该用户 Refresh Token，到期后下次登录自动恢复。`security.request-log.enabled` 控制 `/api/**` 的结构化请求日志（方法、路径、状态、耗时、Trace ID、客户端 IP、已认证用户 ID），绝不记录密码、令牌或请求体。限流、自动封禁触发计数和防爆破状态均使用有容量上限的 Caffeine 单实例缓存，避免恶意高基数 key 无界占用堆内存；真正的封禁规则会持久化。多实例部署仍应以 Redis 等共享存储替换计数器，否则每个实例分别计数，达到阈值的速度取决于流量分配。
 
 为避免唯一管理入口被误锁，`SUPER_ADMIN` 不会被自动防爆破策略锁定；普通管理员和用户仍受该策略约束。
 
@@ -86,12 +94,12 @@ DiceBear 客户端只访问固定 `/10.x/lorelei/svg` 路由，seed 由后端产
 
 ## 持久化 IP 规则
 
-持久化规则为什么使用独立 `IP_ACCESS_RULES` 缓存、它与运行时字符串 IP 策略的区别，以及 revision/过期规则的处理方式，参见[《为什么 IP 访问规则使用独立缓存》](ip-access-rule-cache.md)。
+结构化规则为什么使用独立 `IP_ACCESS_RULES` Provider，以及 revision、自动封禁和历史规则的处理方式，参见[《为什么 IP 访问规则使用独立缓存》](ip-access-rule-cache.md)。
 
 - `GET /api/v1/system/ip-access-rules`：查看 API 范围规则，需 `system:config:read`。
 - `POST /api/v1/system/ip-access-rules`：创建规则，需 `system:config:write`。
-- `DELETE /api/v1/system/ip-access-rules/{id}`：删除规则，需 `system:config:write`。
+- `DELETE /api/v1/system/ip-access-rules/{id}`：撤销规则，需 `system:config:write`；记录仍保留用于审计和统计。
 
-创建示例：`{"type":"DENY","network":"203.0.113.0/24","expiresAt":1783814400000,"reason":"temporary abuse block"}`。`expiresAt` 可省略表示永久；`ALLOW` 规则存在时，只有命中任一有效 allow 规则的客户端可访问 API，deny 规则优先。规则变更会写审计记录。
+创建示例：`{"type":"DENY","network":"203.0.113.0/24","expiresAt":1783814400000,"reason":"temporary abuse block"}`。`expiresAt` 可省略表示永久。人工/迁移 deny 优先于 allow；显式 allow 可放行自动 deny；未显式放行时自动 deny 生效；存在任意有效 allow 时，未命中的地址默认拒绝。列表包含 `MANUAL`、`MIGRATED`、`AUTO_RATE_LIMIT` 来源以及 `ACTIVE`、`EXPIRED`、`REVOKED` 状态、违规次数和触发时间。规则变更会写审计记录。
 
 服务默认使用直接 TCP 来源。只有直接来源命中启动期 `APP_SECURITY_TRUSTED_PROXIES`（逗号分隔 IP/CIDR）时，才解析 `X-Forwarded-For`；不可信客户端伪造该请求头不会影响 IP 策略或限流。

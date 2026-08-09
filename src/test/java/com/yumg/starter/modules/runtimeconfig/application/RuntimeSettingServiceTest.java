@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.mock.env.MockEnvironment;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RuntimeSettingServiceTest {
     @Test
@@ -24,6 +26,24 @@ class RuntimeSettingServiceTest {
 
         assertThat(response.displayName()).isEqualTo("开放自助注册");
         assertThat(response.description()).isEqualTo("控制访客是否可以自行注册新账号。");
+        assertThat(response.group()).isEqualTo("identity");
+        assertThat(response.dangerous()).isFalse();
+    }
+
+    @Test
+    void rejectsWildcardCorsAtRuntimeInThePostgresProfile() {
+        RuntimeSettingRepository repository = Mockito.mock(RuntimeSettingRepository.class);
+        RuntimeSetting setting = new RuntimeSetting(
+                "security.cors.allowed-origins", "STRING", "https://admin.example.com");
+        when(repository.findByKey("security.cors.allowed-origins"))
+                .thenReturn(Optional.of(setting));
+        MockEnvironment environment = new MockEnvironment();
+        environment.setActiveProfiles("postgres");
+        RuntimeSettingService service = new RuntimeSettingService(
+                repository, null, "", null, environment);
+
+        assertThatThrownBy(() -> service.update("security.cors.allowed-origins", "*"))
+                .hasMessage("Request parameter is invalid");
     }
 
     @Test

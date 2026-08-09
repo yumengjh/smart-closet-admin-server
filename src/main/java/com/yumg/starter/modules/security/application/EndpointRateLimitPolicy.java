@@ -1,6 +1,7 @@
 package com.yumg.starter.modules.security.application;
 
 import java.util.Arrays;
+import java.util.Optional;
 import org.springframework.util.AntPathMatcher;
 
 /** Matches the explicitly protected endpoints used by the runtime rate-limit policy. */
@@ -16,6 +17,10 @@ public final class EndpointRateLimitPolicy {
     }
 
     public boolean matches(String path) {
-        return Arrays.stream(patterns).anyMatch(pattern -> matcher.match(pattern, path));
+        return matchingPattern(path).isPresent();
+    }
+
+    public Optional<String> matchingPattern(String path) {
+        return Arrays.stream(patterns).filter(pattern -> matcher.match(pattern, path)).findFirst();
     }
 }

@@ -17,5 +17,5 @@ public class IpAccessRuleController {
  private final IpAccessRuleService rules; public IpAccessRuleController(IpAccessRuleService rules){this.rules=rules;}
  @GetMapping @PreAuthorize("hasAuthority('system:config:read')") public List<IpAccessRuleResponse> list(){return rules.list();}
  @PostMapping @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("hasAuthority('system:config:write')") public IpAccessRuleResponse create(@Valid @RequestBody IpAccessRuleRequest request){return rules.create(request);}
- @DeleteMapping("/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) @PreAuthorize("hasAuthority('system:config:write')") public void delete(@PathVariable String id){rules.delete(id);}
+ @DeleteMapping("/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) @PreAuthorize("hasAuthority('system:config:write')") public void delete(@PathVariable String id){rules.revoke(id);}
 }

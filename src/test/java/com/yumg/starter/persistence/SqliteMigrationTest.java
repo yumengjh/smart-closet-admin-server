@@ -115,6 +115,9 @@ class SqliteMigrationTest {
         assertThat(columnType("users", "avatar_seed")).isEqualToIgnoringCase("varchar(64)");
         assertThat(columnType("users", "avatar_revision")).isEqualToIgnoringCase("bigint");
         assertThat(columnType("audit_events", "version")).isEqualToIgnoringCase("bigint");
+        assertThat(columnType("ip_access_rules", "source")).isEqualToIgnoringCase("varchar(32)");
+        assertThat(columnType("ip_access_rules", "violation_count")).isEqualToIgnoringCase("bigint");
+        assertThat(indexNames("ip_access_rules")).contains("idx_ip_access_rules_status");
     }
 
     @Test

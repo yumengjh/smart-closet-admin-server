@@ -547,10 +547,10 @@ Authorization: Bearer <accessToken>
 `data` 是如下数组：
 
 ```json
-[{ "key": "security.rate-limit.capacity", "displayName": "全局请求上限", "description": "每个客户端在全局限流窗口内最多可发起的请求次数。", "type": "INTEGER", "value": "120" }]
+[{ "key": "security.rate-limit.capacity", "displayName": "全局请求上限", "description": "每个客户端在全局限流窗口内最多可发起的请求次数。", "group": "rateLimit", "type": "INTEGER", "value": "120", "minValue": 1, "maxValue": 10000, "dangerous": false }]
 ```
 
-`displayName` 是管理界面可直接显示的中文名称，`description` 说明配置的作用；`key` 仍是更新接口使用的稳定技术标识。
+`displayName` 和 `description` 可由管理界面直接显示；`group` 用于分组，整数配置返回 `minValue` / `maxValue`，`dangerous` 表示修改前是否应二次确认；`key` 仍是更新接口使用的稳定技术标识。
 
 ### `PUT /api/v1/system/runtime-config/{key}`
 
@@ -559,7 +559,7 @@ Authorization: Bearer <accessToken>
 | 权限 | `system:config:write` |
 | 成功 | `200 OK`，返回更新后的配置 |
 | 请求体 | `{"value":"..."}`；`value` 必须存在，始终是字符串。 |
-| 特有错误 | `404 NOT_FOUND`（不允许修改的键或值不符合该键定义） |
+| 特有错误 | `404 NOT_FOUND`（不允许修改的键）；`400 INVALID_PARAMETER`（值不符合该键定义） |
 
 允许的键和值域：
 
@@ -571,6 +571,12 @@ Authorization: Bearer <accessToken>
 | `security.endpoint.rate-limit.patterns` | 最长 1000 字符 | 空 | 逗号分隔 Ant 路径模式。 |
 | `security.endpoint.rate-limit.capacity` | 整数 1–10000 | `20` | 匹配接口的独立窗口容量。 |
 | `security.endpoint.rate-limit.window-seconds` | 整数 1–3600 | `60` | 匹配接口的独立窗口秒数。 |
+| `security.control-plane.rate-limit.capacity` | 整数 10–10000 | `600` | 配置、缓存、检查与 IP 规则管理接口的独立容量。 |
+| `security.control-plane.rate-limit.window-seconds` | 整数 1–3600 | `60` | 管理控制面独立窗口秒数。 |
+| `security.ip-auto-ban.enabled` | `true` / `false` | `true` | 是否在持续触发 429 后创建临时 IP 拒绝规则。 |
+| `security.ip-auto-ban.rejection-threshold` | 整数 2–1000 | `10` | 观察窗口内触发自动封禁的 429 次数。 |
+| `security.ip-auto-ban.window-seconds` | 整数 10–86400 | `300` | 自动封禁拒绝次数观察窗口。 |
+| `security.ip-auto-ban.duration-seconds` | 整数 60–604800 | `900` | 自动拒绝规则有效时间。 |
 | `security.brute-force.enabled` | `true` / `false` | `true` | 登录防爆破开关。 |
 | `security.brute-force.failure-threshold` | 整数 3–20 | `5` | 观察窗口内失败阈值。 |
 | `security.brute-force.window-seconds` | 整数 60–86400 | `900` | 失败观察窗口秒数。 |
@@ -580,14 +586,16 @@ Authorization: Bearer <accessToken>
 | `security.cors.allowed-origins` | 最长 1000 字符 | 空 | 逗号分隔允许来源模式；新数据库可由 `APP_SECURITY_CORS_ALLOWED_ORIGINS` 初始化，生产禁止 `*`。 |
 | `security.cors.allowed-methods` | 最长 1000 字符 | `GET,POST,PUT,PATCH,DELETE,OPTIONS` | 逗号分隔允许方法。不要移除测试/业务需要的方法。 |
 | `security.endpoint.disabled-patterns` | 最长 1000 字符 | 空 | 逗号分隔禁用的 Ant 路径模式。 |
-| `security.ip.allow-list` | 最长 1000 字符 | 空 | 逗号分隔 IP/CIDR 白名单；非空时只允许命中地址。 |
-| `security.ip.deny-list` | 最长 1000 字符 | 空 | 逗号分隔 IP/CIDR 黑名单，优先级高于白名单。 |
 | `identity.registration.enabled` | `true` / `false` | `true` | 是否允许 `POST /api/v1/auth/register`。 |
 | `runtime.config-refresh.enabled` | `true` / `false` | `true` | 是否定时比较 revision 并刷新变化的配置缓存。 |
 | `runtime.config-refresh.interval-seconds` | 整数 10–3600 | `60` | 配置缓存自动检查间隔。 |
 | `runtime.health-check.enabled` | `true` / `false` | `true` | 是否定时检查 DiceBear 服务依赖与本地存储资源。 |
 | `runtime.health-check.interval-seconds` | 整数 10–3600 | `60` | 运行状态自动检查间隔。 |
 | `avatar.generator.enabled` | `true` / `false` | `true` | 是否允许创建新的系统头像；已有头像读取不受影响。 |
+| `maintenance.gc.enabled` | `true` / `false` | `true` | 是否允许执行数据清理任务。 |
+| `maintenance.gc.schedule.enabled` | `true` / `false` | `true` | 是否自动调度数据清理任务。 |
+| `maintenance.gc.interval-minutes` | 整数 1–1440 | `60` | 自动清理最小间隔分钟数。 |
+| `maintenance.gc.max-run-seconds` | 整数 10–3600 | `120` | 单次清理持锁的最长秒数。 |
 
 数据库连接、JWT 密钥、可信代理和初始管理员不属于运行时配置，必须通过 `.env` 或启动环境变量设置并重启。
 
@@ -599,7 +607,7 @@ Authorization: Bearer <accessToken>
 | `POST /api/v1/system/runtime-caches/refresh` | `system:config:write` | 从数据库强制重载全部配置缓存 |
 | `POST /api/v1/system/runtime-caches/{code}/refresh` | `system:config:write` | 重载单个缓存，如 `RUNTIME_SETTINGS` 或 `IP_ACCESS_RULES` |
 
-缓存状态包括 `snapshotRevision`、`databaseRevision`、`synchronizedState`、加载/检查/失败时间、脱敏失败消息和条目数。业务请求只读取不可变内存快照；写入在同一事务递增数据库 revision，并在提交后发布本机快照。自动刷新只比较 revision，变化时才全量加载对应缓存。
+缓存状态包括 `snapshotRevision`、`databaseRevision`、`synchronizedState`、加载/检查/失败时间、脱敏失败消息和条目数。业务请求只读取不可变内存快照；写入在同一事务递增数据库 revision，并在提交后发布本机快照。自动刷新只比较 revision，变化时才全量加载对应缓存；单个 Provider 刷新失败不会阻止其它 Provider 刷新。
 
 ### 运行状态检查
 
@@ -627,10 +635,10 @@ Authorization: Bearer <accessToken>
 每项：
 
 ```json
-{ "id": "uuid", "type": "DENY", "network": "203.0.113.0/24", "scope": "API", "expiresAt": null, "reason": "temporary abuse block" }
+{ "id": "uuid", "type": "DENY", "source": "AUTO_RATE_LIMIT", "status": "ACTIVE", "network": "203.0.113.8", "scope": "API", "expiresAt": 1784000000000, "reason": "Repeated rate-limit violations: global", "triggerType": "RATE_LIMIT_GLOBAL", "violationCount": 10, "firstTriggeredAt": 1783999700000, "lastTriggeredAt": 1783999800000, "blockedAt": 1783999800000, "revokedAt": null, "createdAt": 1783999800000, "updatedAt": 1783999800000 }
 ```
 
-`DENY` 优先；存在有效 `ALLOW` 规则时，只允许命中任一 Allow 的客户端访问 API。
+`source` 为 `MANUAL`、`MIGRATED`、`AUTO_RATE_LIMIT`（预留 `AUTO_LOGIN_ABUSE`）；`status` 为 `ACTIVE`、`EXPIRED` 或 `REVOKED`。人工/迁移 deny 优先；显式 allow 可覆盖自动 deny；存在有效 allow 时，未命中的客户端默认拒绝。
 
 ### `POST /api/v1/system/ip-access-rules`
 
@@ -654,7 +662,7 @@ Authorization: Bearer <accessToken>
 
 ### `DELETE /api/v1/system/ip-access-rules/{id}`
 
-删除一条持久化 IP 规则。
+撤销一条持久化 IP 规则。规则不再参与判断，但保留在列表中作为历史记录。
 
 | 权限 | `system:config:write` |
 | 成功 | `204 No Content` |

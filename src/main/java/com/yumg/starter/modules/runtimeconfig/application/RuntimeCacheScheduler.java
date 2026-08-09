@@ -18,7 +18,10 @@ public class RuntimeCacheScheduler {
 
     @Scheduled(fixedDelay = 10000)
     public void refreshWhenDue() {
-        if (!settings.enabled("runtime.config-refresh.enabled")) return;
+        if (!settings.enabled("runtime.config-refresh.enabled")) {
+            settings.refreshIfChanged();
+            return;
+        }
         long now = Instant.now().toEpochMilli();
         long interval = settings.integer("runtime.config-refresh.interval-seconds") * 1000L;
         long previous = lastRun.get();

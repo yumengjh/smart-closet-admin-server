@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: 019-ip-protection
+      author: starter
+      changes:
+        - addColumn:
+            tableName: ip_access_rules
+            columns:
+              - column: { name: source, type: varchar(32), defaultValue: MANUAL, constraints: { nullable: false } }
+              - column: { name: trigger_type, type: varchar(64) }
+              - column: { name: violation_count, type: bigint, defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: first_triggered_at, type: timestamp with time zone }
+              - column: { name: last_triggered_at, type: timestamp with time zone }
+              - column: { name: blocked_at, type: timestamp with time zone }
+              - column: { name: revoked_at, type: timestamp with time zone }
+        - createIndex:
+            tableName: ip_access_rules
+            indexName: idx_ip_access_rules_status
+            columns:
+              - column: { name: scope }
+              - column: { name: source }
+              - column: { name: revoked_at }
+              - column: { name: expires_at }

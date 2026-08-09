@@ -35,11 +35,24 @@ class RuntimeCacheRegistryTest {
         assertThat(provider.forcedRefreshes).isZero();
     }
 
+    @Test
+    void oneBrokenProviderDoesNotPreventTheRemainingCachesFromRefreshing() {
+        FakeProvider broken = new FakeProvider("BROKEN", 0);
+        broken.failure = new IllegalStateException("database unavailable");
+        FakeProvider healthy = new FakeProvider("HEALTHY", 100);
+        RuntimeCacheRegistry registry = new RuntimeCacheRegistry(List.of(healthy, broken));
+
+        assertThat(registry.refreshAll()).extracting(RuntimeCacheStatus::code)
+                .containsExactly("BROKEN", "HEALTHY");
+        assertThat(healthy.forcedRefreshes).isEqualTo(1);
+    }
+
     private static final class FakeProvider implements RuntimeCacheProvider {
         private final String code;
         private final int order;
         private int forcedRefreshes;
         private int changedRefreshes;
+        private RuntimeException failure;
 
         private FakeProvider(String code, int order) {
             this.code = code;
@@ -50,7 +63,11 @@ class RuntimeCacheRegistryTest {
         @Override public String displayName() { return code; }
         @Override public int order() { return order; }
         @Override public RuntimeCacheStatus status() { return state(); }
-        @Override public RuntimeCacheStatus forceRefresh() { forcedRefreshes++; return state(); }
+        @Override public RuntimeCacheStatus forceRefresh() {
+            forcedRefreshes++;
+            if (failure != null) throw failure;
+            return state();
+        }
         @Override public boolean refreshIfChanged() { changedRefreshes++; return false; }
 
         private RuntimeCacheStatus state() {

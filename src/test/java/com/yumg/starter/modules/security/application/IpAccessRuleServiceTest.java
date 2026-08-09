@@ -59,4 +59,28 @@ class IpAccessRuleServiceTest {
                 .isEqualTo(IpAccessRuleService.Decision.ALLOW);
         verify(repository, times(1)).findAllByScope("API");
     }
+
+    @Test
+    void explicitAllowOverridesAutomaticBlockButNotAManualDeny() {
+        IpAccessRuleRepository repository = Mockito.mock(IpAccessRuleRepository.class);
+        Instant now = Instant.now();
+        IpAccessRule allow = new IpAccessRule(
+                IpAccessRule.Type.ALLOW, "203.0.113.8", "API", null, "trusted operator");
+        IpAccessRule automatic = IpAccessRule.automaticDeny("203.0.113.8", "API",
+                now.plusSeconds(900), "abuse", "RATE_LIMIT_GLOBAL", 10, now, now);
+        when(repository.findAllByScope("API")).thenReturn(List.of(allow, automatic));
+        IpAccessRuleService service = new IpAccessRuleService(
+                repository, Mockito.mock(AuditService.class));
+
+        service.refreshSnapshot();
+        assertThat(service.decision("203.0.113.8", now))
+                .isEqualTo(IpAccessRuleService.Decision.ALLOW);
+
+        IpAccessRule manualDeny = new IpAccessRule(
+                IpAccessRule.Type.DENY, "203.0.113.8", "API", null, "manual block");
+        when(repository.findAllByScope("API")).thenReturn(List.of(allow, automatic, manualDeny));
+        service.refreshSnapshot();
+        assertThat(service.decision("203.0.113.8", now))
+                .isEqualTo(IpAccessRuleService.Decision.DENY);
+    }
 }

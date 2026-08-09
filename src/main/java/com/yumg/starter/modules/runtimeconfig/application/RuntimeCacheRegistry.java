@@ -8,9 +8,12 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class RuntimeCacheRegistry {
+    private static final Logger log = LoggerFactory.getLogger(RuntimeCacheRegistry.class);
     private final Map<String, RuntimeCacheProvider> providers;
 
     public RuntimeCacheRegistry(List<RuntimeCacheProvider> providers) {
@@ -26,7 +29,7 @@ public class RuntimeCacheRegistry {
     }
 
     public List<RuntimeCacheStatus> refreshAll() {
-        return providers.values().stream().map(RuntimeCacheProvider::forceRefresh).toList();
+        return providers.values().stream().map(this::refreshSafely).toList();
     }
 
     public RuntimeCacheStatus refresh(String code) {
@@ -36,6 +39,19 @@ public class RuntimeCacheRegistry {
     }
 
     public void refreshChanged() {
-        providers.values().forEach(RuntimeCacheProvider::refreshIfChanged);
+        providers.values().forEach(provider -> {
+            try { provider.refreshIfChanged(); }
+            catch (RuntimeException exception) {
+                log.warn("Runtime cache reconciliation failed for {}", provider.code(), exception);
+            }
+        });
+    }
+
+    private RuntimeCacheStatus refreshSafely(RuntimeCacheProvider provider) {
+        try { return provider.forceRefresh(); }
+        catch (RuntimeException exception) {
+            log.warn("Runtime cache refresh failed for {}", provider.code(), exception);
+            return provider.status();
+        }
     }
 }
