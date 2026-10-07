@@ -40,6 +40,14 @@ app:
       connect-timeout: ${APP_AVATAR_GENERATOR_CONNECT_TIMEOUT:500ms}
       read-timeout: ${APP_AVATAR_GENERATOR_READ_TIMEOUT:1500ms}
       max-response-bytes: ${APP_AVATAR_GENERATOR_MAX_RESPONSE_BYTES:262144}
+  integrations:
+    closet:
+      enabled: ${APP_CLOSET_ENABLED:false}
+      base-url: ${APP_CLOSET_BASE_URL:http://127.0.0.1:8080}
+      key-id: ${APP_CLOSET_KEY_ID:primary}
+      secret: ${APP_CLOSET_SECRET:}
+      connect-timeout: ${APP_CLOSET_CONNECT_TIMEOUT:2s}
+      read-timeout: ${APP_CLOSET_READ_TIMEOUT:10s}
   response:
     powered-by: ${APP_RESPONSE_POWERED_BY:ASP.NET}
     server: ${APP_RESPONSE_SERVER:Microsoft-IIS/10.0}

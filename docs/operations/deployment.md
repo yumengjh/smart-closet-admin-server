@@ -43,6 +43,16 @@
   in this Compose setup. The application never falls back to DiceBear's public service.
   Generator failure degrades to cached or built-in avatars and can be retried from the
   runtime management API.
+- The optional Fish Closet management integration is disabled by default. To enable it,
+  set `APP_CLOSET_ENABLED=true`, an internal `APP_CLOSET_BASE_URL`, a key identifier, and
+  a unique `APP_CLOSET_SECRET` containing at least 32 UTF-8 bytes. Inject the same key ID
+  and secret into Fish Closet's management API configuration through its secret manager.
+  Start validates the URL and secret before serving traffic. Keep the upstream management
+  listener on loopback or a private network and allow access only from this service; HMAC
+  does not replace network isolation. The startup log prints a sanitized integration URL,
+  never the secret. Set `APP_CLOSET_CONNECT_TIMEOUT` and `APP_CLOSET_READ_TIMEOUT` only
+  when the defaults (2s and 10s) do not fit the deployment. Full route, signature, and
+  error-mapping details are in [the Fish Closet integration guide](../api/closet-integration.md).
 - Verify `com.github.usefulness:webp-imageio` on every production CPU/OS combination.
   WebP decoding uses bundled JNI/libwebp binaries; CI coverage on one architecture does
   not prove another architecture is supported.

@@ -15,6 +15,7 @@ import org.springframework.core.annotation.Order;
 import com.yumg.starter.modules.runtimeconfig.application.RuntimeComponentRegistry;
 import com.yumg.starter.modules.runtimeconfig.api.dto.RuntimeComponentResponse;
 import java.util.List;
+import java.net.URI;
 
 @Component
 public class StartupSummaryLogger {
@@ -57,6 +58,10 @@ public class StartupSummaryLogger {
         log.info("\n{}", renderSummary(applicationName, version, profiles, port, database,
                 openApiEnabled, responseIdentity.poweredBy(), responseIdentity.server(),
                 event.getTimeTaken(), runtimeComponents.list()));
+        if (environment.getProperty("app.integrations.closet.enabled", Boolean.class, false)) {
+            log.info("鱼搭集成：已启用 → {}", safeIntegrationUrl(environment.getProperty(
+                    "app.integrations.closet.base-url", "unknown")));
+        }
     }
 
     static String renderSummary(String applicationName, String version, String profiles, int port,
@@ -119,5 +124,14 @@ public class StartupSummaryLogger {
 
     private static String value(String candidate) {
         return candidate == null || candidate.isBlank() ? "unknown" : candidate;
+    }
+
+    private static String safeIntegrationUrl(String candidate) {
+        try {
+            URI uri = URI.create(candidate);
+            if (uri.getHost() == null) return "invalid-url";
+            String safe = new URI(uri.getScheme(), null, uri.getHost(), uri.getPort(), uri.getPath(), null, null).toString();
+            return safe.length() <= 256 ? safe : safe.substring(0, 255) + "…";
+        } catch (Exception ignored) { return "invalid-url"; }
     }
 }

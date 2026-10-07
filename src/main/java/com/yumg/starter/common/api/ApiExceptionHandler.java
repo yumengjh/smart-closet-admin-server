@@ -89,7 +89,7 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ApiError> apiException(ApiException exception) {
-        return ApiErrorFactory.response(exception.error(), List.of());
+        return ApiErrorFactory.response(exception.error(), exception.getMessage(), exception.violations());
     }
 
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)

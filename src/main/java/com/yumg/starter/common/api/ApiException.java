@@ -2,11 +2,22 @@ package com.yumg.starter.common.api;
 
 public class ApiException extends RuntimeException {
     private final ApiErrorCode error;
+    private final java.util.List<FieldViolation> violations;
 
-    private ApiException(ApiErrorCode error) {
-        super(error.message());
+    private ApiException(ApiErrorCode error) { this(error, error.message(), java.util.List.of()); }
+    private ApiException(ApiErrorCode error, String message, java.util.List<FieldViolation> violations) {
+        super(message == null || message.isBlank() ? error.message() : message);
         this.error = error;
+        this.violations = violations == null ? java.util.List.of() : java.util.List.copyOf(violations);
     }
+
+    public static ApiException closetLastAdminProtected() { return new ApiException(ApiErrorCode.CLOSET_LAST_ADMIN_PROTECTED); }
+    public static ApiException closetServiceUnavailable() { return new ApiException(ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE); }
+    public static ApiException closetIntegrationMisconfigured() { return new ApiException(ApiErrorCode.CLOSET_INTEGRATION_MISCONFIGURED); }
+    public static ApiException fromUpstream(ApiErrorCode error, String message, java.util.List<FieldViolation> violations) {
+        return new ApiException(error, message, violations);
+    }
+    public java.util.List<FieldViolation> violations() { return violations; }
 
     public static ApiException notFound() {
         return new ApiException(ApiErrorCode.NOT_FOUND);
@@ -39,5 +50,5 @@ public class ApiException extends RuntimeException {
     public static ApiException accountLocked() { return new ApiException(ApiErrorCode.ACCOUNT_LOCKED); }
     public static ApiException accountDisabled() { return new ApiException(ApiErrorCode.ACCOUNT_DISABLED); }
 
-    ApiErrorCode error() { return error; }
+    public ApiErrorCode error() { return error; }
 }

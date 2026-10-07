@@ -27,6 +27,9 @@ public enum ApiErrorCode {
     AVATAR_CANDIDATE_EXPIRED(HttpStatus.GONE, "Avatar candidate has expired"),
     AVATAR_CANDIDATE_INVALID(HttpStatus.NOT_FOUND, "Avatar candidate is invalid"),
     AVATAR_GENERATOR_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Avatar generator is unavailable"),
+    CLOSET_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Closet management service is unavailable"),
+    CLOSET_INTEGRATION_MISCONFIGURED(HttpStatus.BAD_GATEWAY, "Closet integration authentication is misconfigured"),
+    CLOSET_LAST_ADMIN_PROTECTED(HttpStatus.CONFLICT, "The last enabled closet administrator cannot be disabled or demoted"),
     STORAGE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Storage service is unavailable"),
     IP_ACCESS_DENIED(HttpStatus.FORBIDDEN, "Client IP is not allowed"),
     UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Unsupported media type"),
@@ -41,6 +44,6 @@ public enum ApiErrorCode {
         this.message = message;
     }
 
-    HttpStatus status() { return status; }
-    String message() { return message; }
+    public HttpStatus status() { return status; }
+    public String message() { return message; }
 }

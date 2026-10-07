@@ -13,8 +13,20 @@ final class ApiErrorFactory {
         return new ApiError(error.name(), error.message(), traceId(), violations, System.currentTimeMillis());
     }
 
+    static ApiError create(ApiErrorCode error, String message, List<FieldViolation> violations) {
+        return new ApiError(error.name(), message == null || message.isBlank() ? error.message() : message,
+                traceId(), violations, System.currentTimeMillis());
+    }
+
     static ResponseEntity<ApiError> response(ApiErrorCode error, List<FieldViolation> violations) {
         ApiError body = create(error, violations);
+        return ResponseEntity.status(error.status())
+            .header(TraceIdFilter.TRACE_ID_HEADER, body.traceId())
+            .body(body);
+    }
+
+    static ResponseEntity<ApiError> response(ApiErrorCode error, String message, List<FieldViolation> violations) {
+        ApiError body = create(error, message, violations);
         return ResponseEntity.status(error.status())
             .header(TraceIdFilter.TRACE_ID_HEADER, body.traceId())
             .body(body);

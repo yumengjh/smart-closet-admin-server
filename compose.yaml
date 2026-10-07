@@ -40,6 +40,12 @@ services:
       APP_SECURITY_TRUSTED_PROXIES: ${APP_SECURITY_TRUSTED_PROXIES:-}
       APP_STORAGE_LOCAL_ROOT: /app/data/storage
       APP_AVATAR_GENERATOR_BASE_URL: ${APP_AVATAR_GENERATOR_BASE_URL:-http://host.docker.internal:3100}
+      APP_CLOSET_ENABLED: ${APP_CLOSET_ENABLED:-false}
+      APP_CLOSET_BASE_URL: ${APP_CLOSET_BASE_URL:-http://host.docker.internal:8080}
+      APP_CLOSET_KEY_ID: ${APP_CLOSET_KEY_ID:-primary}
+      APP_CLOSET_SECRET: ${APP_CLOSET_SECRET:-}
+      APP_CLOSET_CONNECT_TIMEOUT: ${APP_CLOSET_CONNECT_TIMEOUT:-2s}
+      APP_CLOSET_READ_TIMEOUT: ${APP_CLOSET_READ_TIMEOUT:-10s}
     depends_on:
       postgres:
         condition: service_healthy

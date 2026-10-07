@@ -95,6 +95,7 @@ APP_SECURITY_CORS_ALLOWED_ORIGINS=http://localhost:5173
 - 后端托管头像：Lorelei 默认头像、随机候选预览/确认、JPEG/PNG/WebP 上传、管理员重置、公开不透明媒体 URL 和内置故障回退
 - 数据库 RBAC：初始角色/权限、角色与权限目录 CRUD、用户角色分配、角色权限分配
 - 运行时服务治理：动态 CORS、接口禁用、全局/端点/控制面限流、结构化 CIDR IP 规则、自动临时封禁、登录防爆破、请求日志开关、注册开关、DiceBear/本地存储组件探测及审计查询
+- 可选的鱼搭管理集成：HMAC-SHA256 签名客户端、业务用户管理、额度调整、衣柜洞察、RBAC 权限与动态导航，默认关闭
 - 统一错误响应、Trace ID、可配置 `Powered-By`/`Server` 响应标识、字符化启动摘要、SQLite/PostgreSQL Liquibase 迁移
 - Docker、Compose、GitHub Actions 基础文件
 
@@ -157,6 +158,7 @@ JPA 默认关闭 Open Session in View。DTO 需要关联集合时由应用服务
 | 运行状态检查 | `/api/v1/system/runtime-checks` |
 | 系统审计 | `/api/v1/system/audit-events` |
 | 公告示例 | `/api/v1/announcements` |
+| 鱼搭业务用户与洞察（可选） | `/api/v1/closet/users/**`、`/api/v1/closet/insights/**` |
 | 健康检查 | `/actuator/health` |
 | OpenAPI | `/v3/api-docs`、`/swagger-ui/index.html` |
 

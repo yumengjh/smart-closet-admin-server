@@ -15,16 +15,30 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+import com.yumg.starter.modules.integrations.closet.infrastructure.ClosetManagementClient;
+import com.yumg.starter.modules.navigation.infrastructure.NavigationMenuRepository;
+import com.yumg.starter.modules.rbac.infrastructure.PermissionRepository;
+import org.springframework.beans.factory.ObjectProvider;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK, properties = {
         "spring.datasource.url=jdbc:sqlite:target/starter-application-test.db",
-        "app.sql-console.enabled=false"
+        "app.sql-console.enabled=false",
+        // Pin the default explicitly so a developer's local .env cannot enable the integration here.
+        "app.integrations.closet.enabled=false"
 })
 class StarterApplicationTest {
+    static {
+        // The SQLite file outlives runs; drop it so seeds from an earlier enabled run cannot leak in.
+        new java.io.File("target/starter-application-test.db").delete();
+    }
+
     @Autowired
     private WebApplicationContext context;
     @Autowired
     private ResponseIdentityHeaderFilter responseIdentityHeaderFilter;
+    @Autowired private PermissionRepository permissions;
+    @Autowired private NavigationMenuRepository menus;
+    @Autowired private ObjectProvider<ClosetManagementClient> closetClient;
     private MockMvc mvc;
 
     @BeforeEach
@@ -70,5 +84,16 @@ class StarterApplicationTest {
                         .contentType("application/json")
                         .content("{\"sql\":\"select 1\",\"confirmDangerous\":false}"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @WithMockUser(authorities = "closet:user:read")
+    void closetIntegrationIsDisabledWithoutRoutesPermissionsOrMenusByDefault() throws Exception {
+        mvc.perform(get("/api/v1/closet/users")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/closet/insights/overview")).andExpect(status().isNotFound());
+        org.assertj.core.api.Assertions.assertThat(permissions.findByCode("closet:user:read")).isEmpty();
+        org.assertj.core.api.Assertions.assertThat(permissions.findByCode("closet:insights:read")).isEmpty();
+        org.assertj.core.api.Assertions.assertThat(menus.findByCode("closet")).isEmpty();
+        org.assertj.core.api.Assertions.assertThat(closetClient.getIfAvailable()).isNull();
     }
 }

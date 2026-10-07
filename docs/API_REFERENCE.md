@@ -871,3 +871,19 @@ Actuator health 保持公开以服务容器探针；其余 Actuator 路径统一
 | `example:announcement:delete` | 删除公告。 |
 
 `SUPER_ADMIN`、`ADMIN`、`USER` 是初始数据而非硬编码枚举。后续角色与权限均通过 RBAC 接口维护。
+
+## 15. 鱼搭管理集成（可选）
+
+集成由 `APP_CLOSET_ENABLED` 控制，默认关闭。开启后所有鱼搭路由仍使用本平台 JWT 和逐接口 `closet:*` 权限；不会把鱼搭账户当成本平台账户。业务用户列表的分页从本平台 0-based 转为鱼搭 1-based，再转回统一 `PageResponse`。洞察仅支持 overview、wardrobe、usage、trends 四个路径和各自的查询参数白名单。
+
+可选路由包括：
+
+- `GET /api/v1/closet/users`、`GET /api/v1/closet/users/{username}`
+- `POST /api/v1/closet/users`、`PATCH /api/v1/closet/users/{username}/status`、`PATCH /api/v1/closet/users/{username}/role`
+- `POST /api/v1/closet/users/{username}/password-reset`
+- `GET|DELETE /api/v1/closet/users/{username}/sessions`
+- `GET /api/v1/closet/users/{username}/portable-links`、`DELETE /api/v1/closet/users/{username}/portable-links/{linkId}`
+- `GET|PUT /api/v1/closet/users/{username}/quota`
+- `GET /api/v1/closet/insights/{overview,wardrobe,usage,trends}`
+
+签名协议、输入规则、权限矩阵、审计 action、错误转换和部署安全见[鱼搭管理集成说明](api/closet-integration.md)。新增错误码：`CLOSET_SERVICE_UNAVAILABLE`（503）、`CLOSET_INTEGRATION_MISCONFIGURED`（502）、`CLOSET_LAST_ADMIN_PROTECTED`（409）。上游 401 始终映射为 502；调用失败时写入 FAILURE 审计，metadata 不含密码。
