@@ -35,7 +35,7 @@ APP_CLOSET_READ_TIMEOUT=10s
 | `PUT /{username}/quota` | `closet:quota:write` | 设置额度；`null` 表示恢复默认，数值范围 0–1000。 |
 | `GET /api/v1/closet/insights/{overview,wardrobe,usage,trends}` | `closet:insights:read` | 仅转发明确列出的洞察路由与各路由允许的查询参数；趋势 `metric` 可重复。 |
 
-SUPER_ADMIN 在集成启用时获得十项 `closet:*` 权限。导航包含“鱼搭业务”目录及业务大屏、衣柜洞察、业务用户、运行监控、数据导出、模板审核六个页面。关闭开关不会删除数据库里已种入的菜单，避免覆盖管理员调整；关闭后可在菜单管理中隐藏或删除该目录。
+SUPER_ADMIN 在集成启用时获得十项 `closet:*` 权限。导航包含“鱼搭业务”目录及衣柜洞察、业务用户、运行监控、数据导出、模板审核五个页面；业务大屏作为平台首页，不再有独立菜单（启动时会清理早期种入的 `closet-dashboard` 菜单）。关闭开关不会删除数据库里已种入的菜单，避免覆盖管理员调整；关闭后可在菜单管理中隐藏或删除该目录。
 
 ## 签名与追踪
 
@@ -78,7 +78,7 @@ start 使用 UTF-8 secret 计算 HMAC-SHA256，签名采用 base64url 无填充�
 
 大屏与数仓出口保持鱼搭的隐私契约，只给汇总或 userKey；AI topUsers、任务所属用户仅在具备对应洞察/运维权限的管理页面展示。大屏不会复用这类明细接口。网关只允许已知路径和参数，不提供任意 URL 代理。
 
-前端四个新增组件键为 `closet-dashboard`、`closet-ops`、`closet-exports`、`closet-templates`，和原有两个键一起注册到路由及菜单编辑器。大屏按 refreshAfterMs 刷新，最少 30 秒；页面隐藏/退出时暂停，读取失败后由管理员点击重试。模板审核查看与写入权限分离。
+前端新增组件键为 `closet-ops`、`closet-exports`、`closet-templates`，和原有两个键一起注册到路由及菜单编辑器。大屏按 refreshAfterMs 刷新，最少 30 秒；页面隐藏/退出时暂停，读取失败后由管理员点击重试。模板审核查看与写入权限分离。
 
 ### 启动配置
 

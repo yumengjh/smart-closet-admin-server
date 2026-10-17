@@ -93,6 +93,16 @@ public class NavigationMenu extends AuditedEntity {
         this.parentId = parentId;
     }
 
+    /**
+     * Bare Element Plus names such as "Setting" never rendered in the sidebar. Upgrade only those
+     * to an icon key the frontend registers; keys an administrator already chose stay untouched.
+     */
+    public void upgradeLegacyIcon(String icon) {
+        if (this.icon != null && !this.icon.contains("/") && !this.icon.contains(":")) {
+            this.icon = icon;
+        }
+    }
+
     public void update(String parentId, String title, String routePath, String componentKey,
             String icon, int sortOrder, NavigationMenuType menuType, String requiredPermission,
             boolean visible, boolean enabled, boolean keepAlive) {

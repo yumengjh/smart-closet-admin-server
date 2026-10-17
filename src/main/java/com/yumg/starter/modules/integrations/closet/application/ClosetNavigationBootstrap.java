@@ -19,20 +19,23 @@ public class ClosetNavigationBootstrap implements ApplicationRunner {
     public ClosetNavigationBootstrap(NavigationMenuRepository menus) { this.menus = menus; }
     @Override @Transactional public void run(ApplicationArguments args) {
         NavigationMenu directory = menus.findByCode("closet").orElseGet(() -> menus.save(new NavigationMenu(
-                null, "closet", "鱼搭业务", "/closet", null, "Connection", 150,
+                null, "closet", "鱼搭业务", "/closet", null, "ri/t-shirt-line", 150,
                 NavigationMenuType.DIRECTORY, null, true, true, false, true)));
-        seed(directory, "closet-insights", "衣柜洞察", "/closet/insights", "closet-insights", 10, "closet:insights:read");
-        seed(directory, "closet-dashboard", "业务大屏", "/closet/dashboard", "closet-dashboard", 5, "closet:dashboard:read");
-        seed(directory, "closet-ops", "运行监控", "/closet/ops", "closet-ops", 30, "closet:ops:read");
-        seed(directory, "closet-exports", "数据导出", "/closet/exports", "closet-exports", 40, "closet:exports:read");
-        seed(directory, "closet-templates", "模板审核", "/closet/templates", "closet-templates", 50, "closet:templates:read");
-        seed(directory, "closet-users", "业务用户", "/closet/users", "closet-users", 20, "closet:user:read");
+        directory.upgradeLegacyIcon("ri/t-shirt-line");
+        // The business screen is the home page now; drop the duplicate entry seeded earlier.
+        menus.findByCode("closet-dashboard").ifPresent(menus::delete);
+        seed(directory, "closet-insights", "衣柜洞察", "/closet/insights", "closet-insights", "ri/bar-chart-box-line", 10, "closet:insights:read");
+        seed(directory, "closet-ops", "运行监控", "/closet/ops", "closet-ops", "ri/pulse-line", 30, "closet:ops:read");
+        seed(directory, "closet-exports", "数据导出", "/closet/exports", "closet-exports", "ri/download-2-line", 40, "closet:exports:read");
+        seed(directory, "closet-templates", "模板审核", "/closet/templates", "closet-templates", "ri/checkbox-multiple-line", 50, "closet:templates:read");
+        seed(directory, "closet-users", "业务用户", "/closet/users", "closet-users", "ri/group-line", 20, "closet:user:read");
     }
     private void seed(NavigationMenu parent, String code, String title, String path, String component,
-                      int order, String permission) {
+                      String icon, int order, String permission) {
         NavigationMenu menu = menus.findByCode(code).orElseGet(() -> menus.save(new NavigationMenu(
-                parent.getId(), code, title, path, component, "User", order, NavigationMenuType.PAGE,
+                parent.getId(), code, title, path, component, icon, order, NavigationMenuType.PAGE,
                 permission, true, true, false, true)));
         menu.moveTo(parent.getId());
+        menu.upgradeLegacyIcon(icon);
     }
 }

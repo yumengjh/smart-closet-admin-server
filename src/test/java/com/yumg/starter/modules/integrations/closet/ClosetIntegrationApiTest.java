@@ -223,8 +223,11 @@ class ClosetIntegrationApiTest {
     @Test void phaseTwoPermissionsAndMenusAreSeeded() {
         for (String permission : java.util.List.of("closet:ops:read", "closet:dashboard:read", "closet:exports:read", "closet:templates:read", "closet:templates:write"))
             assertThat(permissions.findByCode(permission)).isPresent();
-        for (String code : java.util.List.of("closet-dashboard", "closet-ops", "closet-exports", "closet-templates"))
+        for (String code : java.util.List.of("closet-ops", "closet-exports", "closet-templates"))
             assertThat(menus.findByCode(code)).isPresent();
+        // The business screen is the home page; it no longer has a menu entry of its own.
+        assertThat(menus.findByCode("closet-dashboard")).isEmpty();
+        assertThat(menus.findByCode("closet-ops").orElseThrow().getIcon()).startsWith("ri/");
     }
 
     @org.junit.jupiter.params.ParameterizedTest
