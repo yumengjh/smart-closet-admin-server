@@ -21,6 +21,11 @@ class ClosetProblemTranslatorTest {
         assertThat(translator.translate(new ResourceAccessException("Read timed out")).error())
                 .isEqualTo(ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE);
     }
+    @Test void templateNotFoundKeeps404Semantics() {
+        var error = translator.translate(error(HttpStatus.NOT_FOUND, "{\"code\":\"TEMPLATE_NOT_FOUND\",\"detail\":\"template missing\"}"));
+        assertThat(error.error()).isEqualTo(ApiErrorCode.NOT_FOUND);
+        assertThat(error.getMessage()).isEqualTo("template missing");
+    }
     private static RestClientResponseException error(HttpStatus status, String body) {
         return new RestClientResponseException("upstream", status, status.getReasonPhrase(), HttpHeaders.EMPTY,
                 body.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8);

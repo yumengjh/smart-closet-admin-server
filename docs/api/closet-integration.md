@@ -35,7 +35,7 @@ APP_CLOSET_READ_TIMEOUT=10s
 | `PUT /{username}/quota` | `closet:quota:write` | 设置额度；`null` 表示恢复默认，数值范围 0–1000。 |
 | `GET /api/v1/closet/insights/{overview,wardrobe,usage,trends}` | `closet:insights:read` | 仅转发明确列出的洞察路由与各路由允许的查询参数；趋势 `metric` 可重复。 |
 
-SUPER_ADMIN 在集成启用时获得五项 `closet:*` 权限。导航包含“鱼搭业务”目录和洞察、业务用户页面。关闭开关不会删除数据库里已种入的菜单，避免覆盖管理员调整；关闭后可在菜单管理中隐藏或删除该目录。
+SUPER_ADMIN 在集成启用时获得十项 `closet:*` 权限。导航包含“鱼搭业务”目录及业务大屏、衣柜洞察、业务用户、运行监控、数据导出、模板审核六个页面。关闭开关不会删除数据库里已种入的菜单，避免覆盖管理员调整；关闭后可在菜单管理中隐藏或删除该目录。
 
 ## 签名与追踪
 
@@ -45,7 +45,7 @@ start 使用 UTF-8 secret 计算 HMAC-SHA256，签名采用 base64url 无填充�
 
 ## 错误映射
 
-鱼搭 `401 MANAGEMENT_*` 映射为 `502 CLOSET_INTEGRATION_MISCONFIGURED`，不会伪装成平台管理员未登录。上游 5xx、连接错误和超时映射为 `503 CLOSET_SERVICE_UNAVAILABLE`。鱼搭校验错误保留 `VALIDATION_FAILED` 与字段 violations；用户/便携链接缺失映射为 `404 NOT_FOUND`，重名映射为 `409 CONFLICT`，最后一个启用 ADMIN 保护映射为 `409 CLOSET_LAST_ADMIN_PROTECTED`。
+鱼搭 `401 MANAGEMENT_*` 映射为 `502 CLOSET_INTEGRATION_MISCONFIGURED`，不会伪装成平台管理员未登录。上游 5xx、连接错误和超时映射为 `503 CLOSET_SERVICE_UNAVAILABLE`。鱼搭校验错误保留 `VALIDATION_FAILED` 与字段 violations；用户/便携链接/模板缺失映射为 `404 NOT_FOUND`，重名映射为 `409 CONFLICT`，最后一个启用 ADMIN 保护映射为 `409 CLOSET_LAST_ADMIN_PROTECTED`。
 
 ## 审计与运行检查
 
@@ -56,3 +56,38 @@ start 使用 UTF-8 secret 计算 HMAC-SHA256，签名采用 base64url 无填充�
 ## 限制
 
 该适配不缓存洞察结果；超时不会自动重试，避免重复执行或制造不确定的远端行为。联调仍需鱼搭管理接口启用并配置相同 HMAC 凭据。
+
+
+## 二期完整接入（2026-10-10）
+
+当前鱼搭 `feat/image-search` 已包含 `feat/management-ops-kpi`、全身穿搭、模型内存和图像检索能力。以 `../smart-closet-server/docs/management-api.yaml` 与当前 Controller 为准，共 26 个 HTTP 操作；本适配全部支持。上游路径前缀 `/api/manage/v1` 对应本平台 `/api/v1/closet`，CSV 是同一操作的另一种格式。
+
+| 新增路由（省略 `/api/v1/closet`） | 权限 | 页面及说明 |
+| --- | --- | --- |
+| `GET /insights/recommendations`、`GET /insights/ai` | `closet:insights:read` | 衣柜洞察中的推荐效果和 AI 用量，支持 username/from/to。 |
+| `GET /ops/status` | `closet:ops:read` | 运行监控：健康问题、JVM/物理内存、磁盘、模型、索引、队列、服务商、会话。 |
+| `GET /ops/tasks`、`GET /ops/operation-log` | `closet:ops:read` | 参数白名单；页码从 0 起，响应统一 `PageResponse`；status 可重复。无远程重试/取消/改配置入口。 |
+| `GET /dashboard/snapshot` | `closet:dashboard:read` | 大屏汇总、24 小时/30 天趋势和分布，不接收 username 筛选。 |
+| `GET /exports/daily?format=json` | `closet:exports:read` | 按天宽表封装在 `data` 中，支持 from/to。 |
+| `GET /exports/daily?format=csv` | `closet:exports:read` | 保持认证，直接返回 UTF-8 CSV 与 Content-Disposition，不加 JSON 信封。 |
+| `GET /exports/events` | `closet:exports:read` | cursor/since/limit/types，types 可重复，游标不改写。 |
+| `GET /templates` | `closet:templates:read` | 查看内置和样本模板。 |
+| `PATCH /templates/{id}` | `closet:templates:write` | reviewStatus/enabled/bonus 三选至少一项，bonus 0–5，部分更新省略 null；成功/失败记录 `CLOSET_TEMPLATE_REVIEW`，鱼搭同步记录 TEMPLATE_REVIEW。 |
+
+趋势新增 active_users、recommendations_shown、recommendation_likes/dislikes、wear_logs、model_calls/tokens、ootd_samples，粒度新增 month。
+
+大屏与数仓出口保持鱼搭的隐私契约，只给汇总或 userKey；AI topUsers、任务所属用户仅在具备对应洞察/运维权限的管理页面展示。大屏不会复用这类明细接口。网关只允许已知路径和参数，不提供任意 URL 代理。
+
+前端四个新增组件键为 `closet-dashboard`、`closet-ops`、`closet-exports`、`closet-templates`，和原有两个键一起注册到路由及菜单编辑器。大屏按 refreshAfterMs 刷新，最少 30 秒；页面隐藏/退出时暂停，读取失败后由管理员点击重试。模板审核查看与写入权限分离。
+
+### 启动配置
+
+鱼搭设置 `CLOSET_MANAGEMENT_ENABLED=true`、`CLOSET_MANAGEMENT_KEY_ID`、`CLOSET_MANAGEMENT_SECRET`（至少 32 UTF-8 字节）；管理后端设置 `APP_CLOSET_ENABLED=true`、`APP_CLOSET_BASE_URL`、`APP_CLOSET_KEY_ID`、`APP_CLOSET_SECRET`。两端 ID 和密钥必须一致。默认仍关闭，不在代码或前端写入真实密钥。
+
+前端开发默认代理到 8081；非默认端口通过 `VITE_API_TARGET` 指向管理后端。浏览器来源需加入运行时配置 `security.cors.allowed-origins`；`APP_SECURITY_CORS_ALLOWED_ORIGINS` 只在新数据库初始化该值，已有数据库请在运行配置界面修改。
+
+验证记录见 `docs/retrospectives/2026-10-10-closet-phase2.md`。
+
+### 鱼搭内部管理页面的边界
+
+鱼搭还存在使用本产品登录会话的 `/api/admin/ootd-samples`（含原图审核与模型提取）、`/api/admin/processing/config`、任务取消及生图能力配置等内部 API。它们不在中立管理契约中，不通过本平台代理；本次完整接入指契约中的全部 26 个操作。原图和私密媒体不开放给中立管理接口，运维接口只读。内置 `/api/admin/outfit-templates` 的审核行为已由中立 `/templates` 覆盖并共用存储。

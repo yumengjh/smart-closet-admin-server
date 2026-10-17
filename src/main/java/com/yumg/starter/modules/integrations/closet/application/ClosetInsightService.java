@@ -14,6 +14,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 @ConditionalOnProperty(prefix = "app.integrations.closet", name = "enabled", havingValue = "true")
 public class ClosetInsightService {
     private static final Map<String, Set<String>> ALLOWED = Map.of(
+            "recommendations", Set.of("username", "from", "to"),
+            "ai", Set.of("username", "from", "to"),
             "overview", Set.of("username", "from", "to"),
             "wardrobe", Set.of("username"),
             "usage", Set.of("username"),

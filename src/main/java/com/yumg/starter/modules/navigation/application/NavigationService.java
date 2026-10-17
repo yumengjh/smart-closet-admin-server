@@ -25,7 +25,8 @@ public class NavigationService {
     private static final Set<String> COMPONENT_KEYS = Set.of("welcome", "permission-page",
             "menu-management", "user-management", "rbac-management", "runtime-config",
             "ip-rule-management", "audit-log", "announcement-management",
-            "account-security", "gc-management", "sql-console");
+            "account-security", "gc-management", "sql-console",
+            "closet-users", "closet-insights", "closet-dashboard", "closet-ops", "closet-exports", "closet-templates");
 
     private final NavigationMenuRepository menus;
     private final PermissionRepository permissions;

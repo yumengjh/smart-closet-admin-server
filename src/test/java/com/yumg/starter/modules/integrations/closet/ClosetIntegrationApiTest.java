@@ -219,6 +219,88 @@ class ClosetIntegrationApiTest {
         server.verify();
     }
 
+
+    @Test void phaseTwoPermissionsAndMenusAreSeeded() {
+        for (String permission : java.util.List.of("closet:ops:read", "closet:dashboard:read", "closet:exports:read", "closet:templates:read", "closet:templates:write"))
+            assertThat(permissions.findByCode(permission)).isPresent();
+        for (String code : java.util.List.of("closet-dashboard", "closet-ops", "closet-exports", "closet-templates"))
+            assertThat(menus.findByCode(code)).isPresent();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+            "insights/recommendations,closet:insights:read", "insights/ai,closet:insights:read",
+            "ops/status,closet:ops:read", "dashboard/snapshot,closet:dashboard:read",
+            "exports/daily,closet:exports:read", "exports/events,closet:exports:read", "templates,closet:templates:read"})
+    void phaseTwoReadsAreSignedAndPermissionProtected(String path, String permission) throws Exception {
+        mvc.perform(get("/api/v1/closet/" + path)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/closet/" + path).with(jwtAs("system:user:read"))).andExpect(status().isForbidden());
+        server.expect(requestTo("http://closet.test/api/manage/v1/" + path))
+                .andExpect(request -> capture(request)).andRespond(withSuccess("{\"marker\":1}", MediaType.APPLICATION_JSON));
+        mvc.perform(get("/api/v1/closet/" + path).with(jwtAs(permission)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.marker").value(1));
+        assertThat(recorded.get().signature()).isNotBlank(); server.verify();
+    }
+
+    @Test void taskPagingPreservesRepeatedFiltersAndOperationLogPagingIsZeroBased() throws Exception {
+        for (String path : java.util.List.of("tasks", "operation-log")) {
+            server.reset();
+            server.expect(requestTo(org.hamcrest.Matchers.containsString("/api/manage/v1/ops/" + path)))
+                    .andExpect(request -> capture(request))
+                    .andRespond(withSuccess("{\"items\":[{\"id\":\"task-1\"}],\"total\":11,\"page\":2,\"size\":5}", MediaType.APPLICATION_JSON));
+            var request = get("/api/v1/closet/ops/" + path).param("page", "1").param("size", "5").with(jwtAs("closet:ops:read"));
+            if (path.equals("tasks")) request.param("status", "FAILED", "RUNNING");
+            mvc.perform(request).andExpect(status().isOk()).andExpect(jsonPath("$.data.page").value(1))
+                    .andExpect(jsonPath("$.data.totalElements").value(11)).andExpect(jsonPath("$.data.totalPages").value(3));
+            assertThat(recorded.get().rawQuery()).contains("page=2", "size=5");
+            if (path.equals("tasks")) assertThat(recorded.get().rawQuery()).contains("status=FAILED", "status=RUNNING");
+            server.verify();
+        }
+        server.verify();
+    }
+
+    @Test void csvDownloadIsRawUtf8AndRetainsAuthentication() throws Exception {
+        mvc.perform(get("/api/v1/closet/exports/daily?format=csv")).andExpect(status().isUnauthorized());
+        server.expect(requestTo("http://closet.test/api/manage/v1/exports/daily?format=csv"))
+                .andExpect(request -> capture(request)).andRespond(withSuccess("date,active_users\n2026-10-10,2\n", MediaType.parseMediaType("text/csv;charset=UTF-8")));
+        var result = mvc.perform(get("/api/v1/closet/exports/daily?format=csv").with(jwtAs("closet:exports:read")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.request().asyncStarted()).andReturn();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch(result))
+                .andExpect(status().isOk()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string("date,active_users\n2026-10-10,2\n"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Content-Disposition", "attachment; filename=\"closet-daily.csv\""));
+        assertThat(recorded.get().signature()).isNotBlank(); server.verify();
+    }
+
+    @Test void reviewRequiresWritePermissionValidatesAndAudits() throws Exception {
+        var patch = org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/closet/templates/file_template.v1");
+        mvc.perform(patch.with(jwtAs("closet:templates:read")).contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":true}"))
+                .andExpect(status().isForbidden());
+        for (String invalid : java.util.List.of("{}", "{\"bonus\":6}", "{\"reviewStatus\":\"WRONG\"}", "{\"unknown\":true}"))
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/closet/templates/file_template.v1")
+                    .with(jwtAs("closet:templates:write")).contentType(MediaType.APPLICATION_JSON).content(invalid)).andExpect(status().isBadRequest());
+        server.expect(requestTo("http://closet.test/api/manage/v1/templates/file_template.v1"))
+                .andExpect(org.springframework.test.web.client.match.MockRestRequestMatchers.method(HttpMethod.PATCH))
+                .andExpect(org.springframework.test.web.client.match.MockRestRequestMatchers.content().json("{\"enabled\":true}"))
+                .andRespond(withSuccess("{\"id\":\"file_template.v1\",\"enabled\":true}", MediaType.APPLICATION_JSON));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/closet/templates/file_template.v1")
+                .with(jwtAs("closet:templates:write")).contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":true}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.enabled").value(true));
+        assertThat(auditEvents.findAll().stream().filter(event -> event.getAction().equals("CLOSET_TEMPLATE_REVIEW")))
+                .anySatisfy(event -> { assertThat(event.getTargetId()).isEqualTo("file_template.v1"); assertThat(event.getResult()).isEqualTo("SUCCESS"); });
+        server.verify();
+    }
+
+    @Test void phaseTwoRejectsUnknownQueryAndBadPaginationWithoutUpstreamCalls() throws Exception {
+        mvc.perform(get("/api/v1/closet/ops/tasks?page=-1").with(jwtAs("closet:ops:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/closet/ops/tasks?size=101").with(jwtAs("closet:ops:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/closet/ops/tasks?page=1&page=2").with(jwtAs("closet:ops:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/closet/dashboard/snapshot?username=alice").with(jwtAs("closet:dashboard:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/closet/exports/events?username=alice").with(jwtAs("closet:exports:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/closet/exports/daily?format=xml").with(jwtAs("closet:exports:read"))).andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/closet/ops/tasks/task-1/retry").with(jwtAs("closet:ops:read"))).andExpect(status().isNotFound());
+        server.verify();
+    }
+
     private static void capture(ClientHttpRequest request) {
         try {
             recorded.set(new RecordedRequest(request.getURI().getRawPath(), request.getURI().getRawQuery(),

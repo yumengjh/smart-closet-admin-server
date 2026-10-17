@@ -39,6 +39,16 @@ public class ClosetManagementClient {
     public JsonNode patch(String path, Object body) { return exchange(HttpMethod.PATCH, path, Map.of(), body); }
     public JsonNode put(String path, Object body) { return exchange(HttpMethod.PUT, path, Map.of(), body); }
 
+    public byte[] getBytes(String path, Map<String, ? extends List<String>> query) {
+        URI uri = uri(path, query);
+        try {
+            return restClient().get().uri(uri)
+                    .headers(headers -> headers.addAll(headers(uri, "GET", query, new byte[0])))
+                    .retrieve().body(byte[].class);
+        } catch (RestClientResponseException exception) { throw translator.translate(exception); }
+        catch (ResourceAccessException exception) { throw translator.translate(exception); }
+    }
+
     public void delete(String path) {
         URI uri = uri(path, Map.of());
         try {
