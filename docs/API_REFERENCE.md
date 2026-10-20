@@ -874,16 +874,30 @@ Actuator health 保持公开以服务容器探针；其余 Actuator 路径统一
 
 ## 15. 鱼搭管理集成（可选）
 
-集成由 `APP_CLOSET_ENABLED` 控制，默认关闭。开启后所有鱼搭路由仍使用本平台 JWT 和逐接口 `closet:*` 权限；不会把鱼搭账户当成本平台账户。业务用户列表的分页从本平台 0-based 转为鱼搭 1-based，再转回统一 `PageResponse`。洞察仅支持 overview、wardrobe、usage、trends 四个路径和各自的查询参数白名单。
+集成由 `APP_CLOSET_ENABLED` 控制，默认关闭；关闭时鱼搭控制器、服务、权限/菜单种子与运行检查均不注册。所有路由使用本平台 JWT 和逐接口 `closet:*` 权限；不会把鱼搭账户当成本平台账户。以下路径均省略 `/api/v1/closet`，对应上游 `/api/manage/v1` 的同名路径。
 
-可选路由包括：
+| 路由 | 权限 |
+| --- | --- |
+| `GET /users`、`GET /users/{username}` | `closet:user:read` |
+| `POST /users`、`PATCH /users/{username}/status`、`PATCH /users/{username}/role`、`PATCH /users/{username}/profile` | `closet:user:write` |
+| `POST /users/{username}/password-reset` | `closet:user:reset-password` |
+| `GET /users/{username}/sessions`、`GET /users/{username}/portable-links`、`GET /users/{username}/quota`、`GET /users/{username}/login-lock`、`GET /users/{username}/events` | `closet:user:read` |
+| `DELETE /users/{username}/sessions`、`DELETE /users/{username}/sessions/{sessionRef}`、`DELETE /users/{username}/portable-links/{linkId}`、`DELETE /users/{username}/login-lock` | `closet:user:write` |
+| `PUT /users/{username}/quota` | `closet:quota:write` |
+| `GET /registration`、`GET /invites`、`GET /invites/{id}` | `closet:registration:read` |
+| `PUT /registration`、`POST /invites`、`PATCH /invites/{id}`、`DELETE /invites/{id}` | `closet:registration:write` |
+| `GET /account-events` | `closet:user:read` |
+| `GET /insights/{overview,wardrobe,usage,trends,recommendations,ai}` | `closet:insights:read` |
+| `GET /ops/status`、`GET /ops/tasks`、`GET /ops/operation-log` | `closet:ops:read` |
+| `GET /dashboard/snapshot` | `closet:dashboard:read` |
+| `GET /exports/daily`（JSON/CSV）、`GET /exports/events` | `closet:exports:read` |
+| `GET /templates` | `closet:templates:read` |
+| `PATCH /templates/{id}` | `closet:templates:write` |
 
-- `GET /api/v1/closet/users`、`GET /api/v1/closet/users/{username}`
-- `POST /api/v1/closet/users`、`PATCH /api/v1/closet/users/{username}/status`、`PATCH /api/v1/closet/users/{username}/role`
-- `POST /api/v1/closet/users/{username}/password-reset`
-- `GET|DELETE /api/v1/closet/users/{username}/sessions`
-- `GET /api/v1/closet/users/{username}/portable-links`、`DELETE /api/v1/closet/users/{username}/portable-links/{linkId}`
-- `GET|PUT /api/v1/closet/users/{username}/quota`
-- `GET /api/v1/closet/insights/{overview,wardrobe,usage,trends}`
+所有分页对外使用 0-based `PageResponse`（`items/page/size/totalElements/totalPages`），转发上游时页码加 1，返回时减 1；默认 page=0、size=20，size 范围 1–100。用户、邀请码、账号事件列表拒绝白名单以外和重复的查询参数。
 
-签名协议、输入规则、权限矩阵、审计 action、错误转换和部署安全见[鱼搭管理集成说明](api/closet-integration.md)。新增错误码：`CLOSET_SERVICE_UNAVAILABLE`（503）、`CLOSET_INTEGRATION_MISCONFIGURED`（502）、`CLOSET_LAST_ADMIN_PROTECTED`（409）。上游 401 始终映射为 502；调用失败时写入 FAILURE 审计，metadata 不含密码。
+1.2 用户列表新增 `registeredVia=ADMIN|INVITE|OPEN`、`deactivated=true|false`，排序新增 `sort=lastLoginAt`；创建新增可选 `displayName`（最多 40 字）。列表/详情原样保留 `displayName/registeredVia/lastLoginAtMs/deactivatedAtMs`，详情另有 `inviteId/loginLock`。
+
+资料更新体为必填 `{displayName}`（空串清除）；单会话 `sessionRef` 为 16 位小写十六进制，删除返回 204。邀请码创建返回 201 和仅展示一次的 `code`；撤销返回 204。注册模式、邀请码输入范围、账号审计筛选及新增审计 action 详见 [1.2 账号控制代理契约](integrations/closet/accounts-1.2.md)。
+
+签名协议、输入规则、权限矩阵、审计和部署安全见[鱼搭管理集成说明](api/closet-integration.md)。上游 401 映射为 `502 CLOSET_INTEGRATION_MISCONFIGURED`，连接失败/超时/5xx 映射为 `503 CLOSET_SERVICE_UNAVAILABLE`；用户、会话、邀请码等不存在映射为 `404 NOT_FOUND`，已撤销邀请码修改映射为 `409 CONFLICT`，最后一个管理员保护映射为 `409 CLOSET_LAST_ADMIN_PROTECTED`。写操作成功/失败均审计；元数据不含密码、临时密码、邀请码明文或上游 detail。

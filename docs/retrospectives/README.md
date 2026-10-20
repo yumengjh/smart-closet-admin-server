@@ -50,3 +50,4 @@ YYYY-MM-DD-NNN-<slug>.md
 | 2026-07-28 | [003 工程文档与复盘制度](2026-07-28-003-documentation-and-retrospective-system.md) | README、AGENT、运维说明和提交复盘规范 |
 | 2026-07-29 | [001 启动可观测性与响应标识](2026-07-29-001-startup-observability-and-response-identity.md) | Ready 摘要、Powered-By/Server 与环境变量 |
 | 2026-10-07 | [001 鱼搭管理集成 M4](2026-10-07-001-closet-integration.md) | 可插拔鱼搭 API、签名、权限、审计与健康检查 |
+| 2026-10-20 | [001 鱼搭 1.2 完整账号控制](2026-10-20-001-closet-accounts.md) | 账号、注册邀请码、账号审计、权限菜单与代理测试 |

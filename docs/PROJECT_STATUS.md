@@ -19,7 +19,7 @@
 - 数据库 RBAC：角色/权限目录 CRUD、用户角色分配、角色权限分配，以及角色或权限变动后的 Refresh Session 撤销。
 - 运行时 CORS、全局/接口级限流、接口禁用、CIDR IP 白黑名单、可配置观察窗口的登录防爆破、请求日志/审计开关、配置审计和审计分页查询。
 - 公告示例：公开已发布列表/内容、管理端草稿读取/创建/修改/发布/撤回/删除、乐观锁版本和公告审计。
-- 鱼搭管理集成（默认关闭）：HMAC-SHA256 RestClient、业务用户/会话/便携链接/额度转发、洞察白名单、RBAC/导航种子、脱敏审计与 `closet-service` 运行检查；API 和部署说明见 [鱼搭集成](api/closet-integration.md)。
+- 鱼搭管理集成（默认关闭）：HMAC-SHA256 RestClient、完整账号控制（用户资料、会话/单设备、登录锁定、便携链接、额度）、注册模式/邀请码与账号事件转发、洞察白名单、RBAC/导航种子、脱敏审计与 `closet-service` 运行检查；API 和部署说明见 [鱼搭集成](api/closet-integration.md)。
 - `@PublicApi`：只跳过认证，仍通过 Trace ID、IP 策略、接口禁用和限流；公告公开接口可按调用者权限返回最简或管理详情。
 - Dockerfile、Compose、GitHub Actions CI、GHCR 镜像扫描/发布基础文件，以及根目录浏览器 API 测试页。
 - 管理员用户 `q/status` 组合筛选在数据库分页层执行，用户角色与角色权限采用批量加载，避免列表 DTO 的 N+1 查询。

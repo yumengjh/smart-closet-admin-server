@@ -35,7 +35,7 @@ APP_CLOSET_READ_TIMEOUT=10s
 | `PUT /{username}/quota` | `closet:quota:write` | 设置额度；`null` 表示恢复默认，数值范围 0–1000。 |
 | `GET /api/v1/closet/insights/{overview,wardrobe,usage,trends}` | `closet:insights:read` | 仅转发明确列出的洞察路由与各路由允许的查询参数；趋势 `metric` 可重复。 |
 
-SUPER_ADMIN 在集成启用时获得十项 `closet:*` 权限。导航包含“鱼搭业务”目录及衣柜洞察、业务用户、运行监控、数据导出、模板审核五个页面；业务大屏作为平台首页，不再有独立菜单（启动时会清理早期种入的 `closet-dashboard` 菜单）。关闭开关不会删除数据库里已种入的菜单，避免覆盖管理员调整；关闭后可在菜单管理中隐藏或删除该目录。
+SUPER_ADMIN 在集成启用时获得十二项 `closet:*` 权限。导航包含“鱼搭业务”目录及衣柜洞察、业务用户、注册与邀请、账号审计、运行监控、数据导出、模板审核七个页面；业务大屏作为平台首页，不再有独立菜单（启动时会清理早期种入的 `closet-dashboard` 菜单）。关闭开关不会删除数据库里已种入的菜单，避免覆盖管理员调整；关闭后可在菜单管理中隐藏或删除该目录。
 
 ## 签名与追踪
 
@@ -45,11 +45,11 @@ start 使用 UTF-8 secret 计算 HMAC-SHA256，签名采用 base64url 无填充�
 
 ## 错误映射
 
-鱼搭 `401 MANAGEMENT_*` 映射为 `502 CLOSET_INTEGRATION_MISCONFIGURED`，不会伪装成平台管理员未登录。上游 5xx、连接错误和超时映射为 `503 CLOSET_SERVICE_UNAVAILABLE`。鱼搭校验错误保留 `VALIDATION_FAILED` 与字段 violations；用户/便携链接/模板缺失映射为 `404 NOT_FOUND`，重名映射为 `409 CONFLICT`，最后一个启用 ADMIN 保护映射为 `409 CLOSET_LAST_ADMIN_PROTECTED`。
+鱼搭 `401 MANAGEMENT_*` 映射为 `502 CLOSET_INTEGRATION_MISCONFIGURED`，不会伪装成平台管理员未登录。上游 5xx、连接错误和超时映射为 `503 CLOSET_SERVICE_UNAVAILABLE`。鱼搭校验错误保留 `VALIDATION_FAILED` 与字段 violations；用户/会话/便携链接/邀请码/模板缺失映射为 `404 NOT_FOUND`，重名或修改已撤销邀请码映射为 `409 CONFLICT`，最后一个启用 ADMIN 保护映射为 `409 CLOSET_LAST_ADMIN_PROTECTED`。
 
 ## 审计与运行检查
 
-写请求逐项使用设计规定的 `CLOSET_*` action 审计成功/失败。metadata 只包含用户名、状态、角色或稳定错误码；请求密码、临时密码不会写入审计。读取操作不产生写审计。
+写请求逐项使用设计规定的 `CLOSET_*` action 审计成功/失败。metadata 只包含用户名、状态、角色或稳定错误码；请求密码、临时密码、邀请码明文不会写入审计。读取操作不产生写审计。
 
 运行时服务依赖组件 `closet-service` 使用签名 GET `/api/manage/v1/users?size=1` 检查上游，探测超时为 2 秒。可在运行状态检查界面手动刷新。探测失败只显示通用原因，不包括密钥或完整配置。
 
@@ -60,7 +60,7 @@ start 使用 UTF-8 secret 计算 HMAC-SHA256，签名采用 base64url 无填充�
 
 ## 二期完整接入（2026-10-10）
 
-当前鱼搭 `feat/image-search` 已包含 `feat/management-ops-kpi`、全身穿搭、模型内存和图像检索能力。以 `../smart-closet-server/docs/management-api.yaml` 与当前 Controller 为准，共 26 个 HTTP 操作；本适配全部支持。上游路径前缀 `/api/manage/v1` 对应本平台 `/api/v1/closet`，CSV 是同一操作的另一种格式。
+二期接入时鱼搭 `feat/image-search` 已包含 `feat/management-ops-kpi`、全身穿搭、模型内存和图像检索能力。以 `../smart-closet-server/docs/management-api.yaml` 与当前 Controller 为准，二期共 26 个 HTTP 操作；本适配全部支持，1.2 增量见下节。上游路径前缀 `/api/manage/v1` 对应本平台 `/api/v1/closet`，CSV 是同一操作的另一种格式。
 
 | 新增路由（省略 `/api/v1/closet`） | 权限 | 页面及说明 |
 | --- | --- | --- |
@@ -90,4 +90,13 @@ start 使用 UTF-8 secret 计算 HMAC-SHA256，签名采用 base64url 无填充�
 
 ### 鱼搭内部管理页面的边界
 
-鱼搭还存在使用本产品登录会话的 `/api/admin/ootd-samples`（含原图审核与模型提取）、`/api/admin/processing/config`、任务取消及生图能力配置等内部 API。它们不在中立管理契约中，不通过本平台代理；本次完整接入指契约中的全部 26 个操作。原图和私密媒体不开放给中立管理接口，运维接口只读。内置 `/api/admin/outfit-templates` 的审核行为已由中立 `/templates` 覆盖并共用存储。
+鱼搭还存在使用本产品登录会话的 `/api/admin/ootd-samples`（含原图审核与模型提取）、`/api/admin/processing/config`、任务取消及生图能力配置等内部 API。它们不在中立管理契约中，不通过本平台代理；二期完整接入指 1.1 契约中的全部 26 个操作。原图和私密媒体不开放给中立管理接口，运维接口只读。内置 `/api/admin/outfit-templates` 的审核行为已由中立 `/templates` 覆盖并共用存储。
+
+
+## 1.2 完整账号控制（2026-10-20）
+
+新增 13 个 HTTP 操作，连同 1.1 共支持 39 个操作。新增用户昵称、注册来源/注销筛选、单会话退出、登录锁定查看/解除、用户账号事件，以及注册模式、邀请码和全站账号审计。全部新路由、请求/响应、权限/菜单种子与审计 action 见 [1.2 代理契约](../integrations/closet/accounts-1.2.md)；完整路由权限目录见 [API 参考第 15 节](../API_REFERENCE.md#15-鱼搭管理集成可选)。
+
+新增 `closet:registration:read/write` 授予 SUPER_ADMIN；菜单 `closet-registration`（注册与邀请）与 `closet-account-events`（账号审计）位于鱼搭业务目录。菜单组件键是前端接入约定，本次仅修改管理后端，未实现前端页面。
+
+邀请码创建仅在当前响应透传一次性 `code`，成功审计只保存返回的 `id`；失败审计只保存目标 id 和稳定错误码，不保存请求/响应内容。邀请码 PATCH 只转发非 null 字段，空备注仍保留以清除原值；至少提供一个字段，有效期须在现在之后 90 天内，`maxUses` 不低于已用次数由上游判断。所有路径参数按单个路径段编码。
