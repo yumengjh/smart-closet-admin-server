@@ -21,6 +21,8 @@ public class ClosetPermissionBootstrap implements ApplicationRunner {
             new PermissionSeed("closet:user:read", "查看鱼搭业务用户、会话、便携链接与额度"),
             new PermissionSeed("closet:user:write", "创建鱼搭用户、管理状态角色会话与便携链接"),
             new PermissionSeed("closet:user:reset-password", "重置鱼搭业务用户密码"),
+            new PermissionSeed("closet:registration:read", "查看鱼搭注册模式与邀请码"),
+            new PermissionSeed("closet:registration:write", "修改注册模式、管理邀请码"),
             new PermissionSeed("closet:quota:write", "调整鱼搭业务用户额度"),
             new PermissionSeed("closet:insights:read", "查看鱼搭衣柜洞察与推荐 AI 指标"),
             new PermissionSeed("closet:ops:read", "查看鱼搭运维状态、任务与操作日志"),

@@ -6,6 +6,9 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -59,13 +62,17 @@ class ClosetIntegrationApiTest {
     @Autowired RoleRepository roles;
     @Autowired NavigationMenuRepository menus;
     @Autowired @Qualifier("closetManagementRestClientBuilder") RestClient.Builder restClientBuilder;
+    private static final java.util.concurrent.atomic.AtomicInteger clientSequence = new java.util.concurrent.atomic.AtomicInteger();
     MockMvc mvc;
     MockRestServiceServer server;
     @BeforeAll void bindMockServer() { server = MockRestServiceServer.bindTo(restClientBuilder).ignoreExpectOrder(true).build(); }
     @BeforeEach void setUp() {
         recorded.set(null);
         server.reset();
-        mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+        // Each case represents a fresh client, so accumulated requests cannot mask RBAC or validation results.
+        String clientIp = "192.0.2." + clientSequence.incrementAndGet();
+        mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity())
+                .defaultRequest(get("/").with(request -> { request.setRemoteAddr(clientIp); return request; })).build();
     }
 
     @Test void gatedSeedersCreatePermissionAndNavigationForSuperAdmin() {
@@ -301,6 +308,234 @@ class ClosetIntegrationApiTest {
         mvc.perform(get("/api/v1/closet/exports/events?username=alice").with(jwtAs("closet:exports:read"))).andExpect(status().isBadRequest());
         mvc.perform(get("/api/v1/closet/exports/daily?format=xml").with(jwtAs("closet:exports:read"))).andExpect(status().isBadRequest());
         mvc.perform(post("/api/v1/closet/ops/tasks/task-1/retry").with(jwtAs("closet:ops:read"))).andExpect(status().isNotFound());
+        server.verify();
+    }
+
+    @Test void accountPermissionsAndMenusMatchTheContract() {
+        assertThat(roles.findAllWithPermissions().stream().filter(role -> role.getCode().equals("SUPER_ADMIN"))
+                .findFirst().orElseThrow().getPermissions()).extracting(permission -> permission.getCode())
+                .contains("closet:registration:read", "closet:registration:write");
+        var directory = menus.findByCode("closet").orElseThrow();
+        var registration = menus.findByCode("closet-registration").orElseThrow();
+        assertThat(registration.getParentId()).isEqualTo(directory.getId());
+        assertThat(registration.getTitle()).isEqualTo("注册与邀请");
+        assertThat(registration.getRoutePath()).isEqualTo("/closet/registration");
+        assertThat(registration.getComponentKey()).isEqualTo("closet-registration");
+        assertThat(registration.getIcon()).isEqualTo("ri/coupon-3-line");
+        assertThat(registration.getSortOrder()).isEqualTo(25);
+        assertThat(registration.getRequiredPermission()).isEqualTo("closet:registration:read");
+        var events = menus.findByCode("closet-account-events").orElseThrow();
+        assertThat(events.getParentId()).isEqualTo(directory.getId());
+        assertThat(events.getTitle()).isEqualTo("账号审计");
+        assertThat(events.getRoutePath()).isEqualTo("/closet/account-events");
+        assertThat(events.getComponentKey()).isEqualTo("closet-account-events");
+        assertThat(events.getIcon()).isEqualTo("ri/file-list-3-line");
+        assertThat(events.getSortOrder()).isEqualTo(27);
+        assertThat(events.getRequiredPermission()).isEqualTo("closet:user:read");
+    }
+
+    private record AccountRoute(HttpMethod method, String path, String permission, String body,
+                                String response, int status, String action) {
+        String upstream() {
+            return "http://closet.test/api/manage/v1" + path
+                    + (method == HttpMethod.GET && (path.equals("/invites") || path.equals("/account-events")) ? "?page=1&size=20" : "");
+        }
+        @Override public String toString() { return method + " " + path; }
+    }
+    static java.util.stream.Stream<AccountRoute> accountRoutes() {
+        return java.util.stream.Stream.of(
+                new AccountRoute(HttpMethod.PATCH, "/users/alice/profile", "closet:user:write", "{\"displayName\":\"\"}", "{\"username\":\"alice\",\"displayName\":null}", 200, "CLOSET_USER_PROFILE_UPDATED"),
+                new AccountRoute(HttpMethod.DELETE, "/users/alice/sessions/0123456789abcdef", "closet:user:write", null, null, 204, "CLOSET_USER_SESSION_REVOKED"),
+                new AccountRoute(HttpMethod.GET, "/users/alice/login-lock", "closet:user:read", null, "{\"locked\":true,\"recentFailures\":5,\"retryAfterSeconds\":812}", 200, null),
+                new AccountRoute(HttpMethod.DELETE, "/users/alice/login-lock", "closet:user:write", null, "{\"locked\":false,\"recentFailures\":0,\"retryAfterSeconds\":0}", 200, "CLOSET_USER_LOGIN_UNLOCKED"),
+                new AccountRoute(HttpMethod.GET, "/users/alice/events", "closet:user:read", null, "[{\"action\":\"MANAGE_PROFILE_UPDATED\"}]", 200, null),
+                new AccountRoute(HttpMethod.GET, "/registration", "closet:registration:read", null, "{\"mode\":\"INVITE\",\"configuredMode\":\"INVITE\",\"overridden\":false,\"activeInviteCount\":1}", 200, null),
+                new AccountRoute(HttpMethod.PUT, "/registration", "closet:registration:write", "{\"mode\":\"OPEN\"}", "{\"mode\":\"OPEN\"}", 200, "CLOSET_REGISTRATION_MODE_CHANGED"),
+                new AccountRoute(HttpMethod.GET, "/invites", "closet:registration:read", null, "{\"items\":[],\"total\":0,\"page\":1,\"size\":20}", 200, null),
+                new AccountRoute(HttpMethod.POST, "/invites", "closet:registration:write", "{\"note\":\"渠道 A\",\"maxUses\":3,\"expiresInDays\":7}", "{\"id\":\"invite-12\",\"code\":\"SECRET-ONCE-CODE\"}", 201, "CLOSET_INVITE_CREATED"),
+                new AccountRoute(HttpMethod.GET, "/invites/invite-12", "closet:registration:read", null, "{\"invite\":{\"id\":\"invite-12\"},\"registeredUsers\":[{\"username\":\"alice\",\"createdAtMs\":1,\"enabled\":true}]}", 200, null),
+                new AccountRoute(HttpMethod.PATCH, "/invites/invite-12", "closet:registration:write", "{\"note\":\"\",\"maxUses\":4}", "{\"id\":\"invite-12\",\"note\":\"\",\"maxUses\":4}", 200, "CLOSET_INVITE_UPDATED"),
+                new AccountRoute(HttpMethod.DELETE, "/invites/invite-12", "closet:registration:write", null, null, 204, "CLOSET_INVITE_REVOKED"),
+                new AccountRoute(HttpMethod.GET, "/account-events", "closet:user:read", null, "{\"items\":[],\"total\":0,\"page\":1,\"size\":20}", 200, null));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.MethodSource("accountRoutes")
+    void accountRoutesForwardMethodBodyAndEnforceTheirOwnPermission(AccountRoute route) throws Exception {
+        var denied = request(route.method(), "/api/v1/closet" + route.path()).contentType(MediaType.APPLICATION_JSON);
+        var anonymous = request(route.method(), "/api/v1/closet" + route.path()).contentType(MediaType.APPLICATION_JSON);
+        if (route.body() != null) { denied.content(route.body()); anonymous.content(route.body()); }
+        mvc.perform(anonymous).andExpect(status().isUnauthorized());
+        mvc.perform(denied.with(jwtAs("system:user:read"))).andExpect(status().isForbidden());
+        if (route.action() != null) {
+            var readOnly = request(route.method(), "/api/v1/closet" + route.path()).contentType(MediaType.APPLICATION_JSON);
+            if (route.body() != null) readOnly.content(route.body());
+            mvc.perform(readOnly.with(jwtAs(route.permission().replace(":write", ":read")))).andExpect(status().isForbidden());
+        }
+        var expected = server.expect(requestTo(route.upstream())).andExpect(method(route.method())).andExpect(ClosetIntegrationApiTest::capture);
+        if (route.body() != null) expected.andExpect(content().json(route.body()));
+        expected.andRespond(route.status() == 204 ? withStatus(HttpStatus.NO_CONTENT) : withSuccess(route.response(), MediaType.APPLICATION_JSON));
+        long before = auditEvents.count();
+        var forwarded = request(route.method(), "/api/v1/closet" + route.path()).with(jwtAs(route.permission())).contentType(MediaType.APPLICATION_JSON);
+        if (route.body() != null) forwarded.content(route.body());
+        var result = mvc.perform(forwarded).andExpect(status().is(route.status()));
+        if (route.status() == 204) result.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(""));
+        else if (route.path().equals("/invites") && route.method() == HttpMethod.POST)
+            result.andExpect(jsonPath("$.data.code").value("SECRET-ONCE-CODE"));
+        else if (route.path().equals("/invites") || route.path().equals("/account-events"))
+            result.andExpect(jsonPath("$.data.page").value(0));
+        else result.andExpect(jsonPath("$.data").exists());
+        assertThat(recorded.get().signature()).isNotBlank();
+        if (route.action() == null) assertThat(auditEvents.count()).isEqualTo(before);
+        else {
+            assertThat(auditEvents.count()).isEqualTo(before + 1);
+            assertThat(auditEvents.findAll().stream().filter(event -> route.action().equals(event.getAction()) && "SUCCESS".equals(event.getResult())))
+                    .anySatisfy(event -> {
+                        assertThat(event.getMetadata()).doesNotContain("SECRET-ONCE-CODE", "code", "渠道 A");
+                        if (route.action().equals("CLOSET_INVITE_CREATED")) {
+                            assertThat(event.getTargetId()).isEqualTo("invite-12");
+                            assertThat(event.getMetadata()).isEqualTo("{\"id\":\"invite-12\"}");
+                        }
+                    });
+        }
+        server.verify();
+    }
+
+    static java.util.stream.Stream<AccountRoute> accountWrites() { return accountRoutes().filter(route -> route.action() != null); }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.MethodSource("accountWrites")
+    void everyAccountWriteAuditsUpstreamFailureWithoutSecrets(AccountRoute route) throws Exception {
+        server.expect(requestTo(route.upstream())).andExpect(method(route.method()))
+                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("{\"code\":\"INTERNAL_ERROR\",\"detail\":\"SECRET-ONCE-CODE\"}"));
+        long before = auditEvents.count();
+        var forwarded = request(route.method(), "/api/v1/closet" + route.path()).with(jwtAs(route.permission())).contentType(MediaType.APPLICATION_JSON);
+        if (route.body() != null) forwarded.content(route.body());
+        mvc.perform(forwarded).andExpect(status().isServiceUnavailable());
+        assertThat(auditEvents.count()).isEqualTo(before + 1);
+        assertThat(auditEvents.findAll().stream().filter(event -> route.action().equals(event.getAction()) && "FAILURE".equals(event.getResult())))
+                .anySatisfy(event -> assertThat(event.getMetadata()).contains("CLOSET_SERVICE_UNAVAILABLE")
+                        .doesNotContain("SECRET-ONCE-CODE", "渠道 A", "password"));
+        server.verify();
+    }
+
+    @Test void accountListsWhitelistFiltersConvertPagingAndPreserveNewFields() throws Exception {
+        String user = "{\"username\":\"alice\",\"displayName\":\"小鱼\",\"registeredVia\":\"INVITE\",\"lastLoginAtMs\":123,\"deactivatedAtMs\":456}";
+        server.expect(requestTo("http://closet.test/api/manage/v1/users?sort=lastLoginAt&registeredVia=INVITE&deactivated=true&page=2&size=5"))
+                .andExpect(method(HttpMethod.GET)).andRespond(withSuccess("{\"items\":[" + user + "],\"total\":11,\"page\":2,\"size\":5}", MediaType.APPLICATION_JSON));
+        mvc.perform(get("/api/v1/closet/users?sort=lastLoginAt&registeredVia=INVITE&deactivated=true&page=1&size=5").with(jwtAs("closet:user:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.page").value(1)).andExpect(jsonPath("$.data.totalPages").value(3))
+                .andExpect(jsonPath("$.data.items[0].displayName").value("小鱼")).andExpect(jsonPath("$.data.items[0].registeredVia").value("INVITE"))
+                .andExpect(jsonPath("$.data.items[0].lastLoginAtMs").value(123)).andExpect(jsonPath("$.data.items[0].deactivatedAtMs").value(456));
+        server.verify(); server.reset();
+        server.expect(requestTo("http://closet.test/api/manage/v1/users/alice"))
+                .andRespond(withSuccess(user.substring(0, user.length() - 1) + ",\"inviteId\":\"invite-12\",\"loginLock\":{\"locked\":true}}", MediaType.APPLICATION_JSON));
+        mvc.perform(get("/api/v1/closet/users/alice").with(jwtAs("closet:user:read"))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.inviteId").value("invite-12")).andExpect(jsonPath("$.data.loginLock.locked").value(true));
+        server.verify(); server.reset();
+        for (String path : java.util.List.of("invites", "account-events")) {
+            String filters = path.equals("invites") ? "status=ACTIVE" : "from=2026-10-01&to=2026-10-20&username=alice&action=LOGIN_SUCCEEDED&actor=manage%3Aprimary%3Aadmin";
+            server.expect(requestTo("http://closet.test/api/manage/v1/" + path + "?" + filters + "&page=2&size=5"))
+                    .andExpect(method(HttpMethod.GET)).andRespond(withSuccess("{\"items\":[{\"id\":\"one\"}],\"total\":11,\"page\":2,\"size\":5}", MediaType.APPLICATION_JSON));
+            mvc.perform(get("/api/v1/closet/" + path)
+                            .queryParams(org.springframework.web.util.UriComponentsBuilder.fromUriString("?" + filters.replace("%3A", ":")).build().getQueryParams())
+                            .queryParam("page", "1").queryParam("size", "5")
+                            .with(jwtAs(path.equals("invites") ? "closet:registration:read" : "closet:user:read")))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.data.page").value(1)).andExpect(jsonPath("$.data.totalElements").value(11))
+                    .andExpect(jsonPath("$.data.totalPages").value(3)).andExpect(jsonPath("$.data.items[0].id").value("one"));
+            server.verify(); server.reset();
+        }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+            "users,registeredVia=INVALID", "users,deactivated=yes", "users,sort=invalid", "users,unexpected=x", "users,page=1&page=2", "users,page=2147483647",
+            "invites,status=INVALID", "invites,status=ACTIVE&status=EXPIRED", "invites,unexpected=x", "invites,page=-1", "invites,size=101", "invites,page=1&page=2",
+            "account-events,unexpected=x", "account-events,from=2026-02-30", "account-events,to=20-10-2026", "account-events,action=bad-action",
+            "account-events,username=x", "account-events,action=LOGIN_SUCCEEDED&action=REGISTERED", "account-events,size=0", "account-events,page=NaN"})
+    void accountQueriesRejectUnknownInvalidAndRepeatedParameters(String path, String query) throws Exception {
+        mvc.perform(get("/api/v1/closet/" + path + "?" + query).with(jwtAs(path.equals("invites") ? "closet:registration:read" : "closet:user:read")))
+                .andExpect(status().isBadRequest());
+        server.verify();
+    }
+
+    @Test void accountFiltersRejectOverlongValues() throws Exception {
+        mvc.perform(get("/api/v1/closet/account-events").param("actor", "a".repeat(201)).with(jwtAs("closet:user:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/closet/account-events").param("action", "A".repeat(49)).with(jwtAs("closet:user:read"))).andExpect(status().isBadRequest());
+        server.verify();
+    }
+
+    @Test void validatesAccountRequestBodiesAndPathVariablesBeforeCallingUpstream() throws Exception {
+        for (String body : java.util.List.of("{}", "{\"displayName\":null}", "{\"displayName\":\"" + "x".repeat(41) + "\"}", "{\"displayName\":\"ok\",\"extra\":1}"))
+            mvc.perform(request(HttpMethod.PATCH, "/api/v1/closet/users/alice/profile").with(jwtAs("closet:user:write")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
+        mvc.perform(request(HttpMethod.DELETE, "/api/v1/closet/users/alice/sessions/ABCDEF0123456789").with(jwtAs("closet:user:write"))).andExpect(status().isBadRequest());
+        mvc.perform(request(HttpMethod.DELETE, "/api/v1/closet/users/alice/sessions/short").with(jwtAs("closet:user:write"))).andExpect(status().isBadRequest());
+        mvc.perform(request(HttpMethod.PUT, "/api/v1/closet/registration").with(jwtAs("closet:registration:write")).contentType(MediaType.APPLICATION_JSON).content("{\"mode\":\"ANY\"}")).andExpect(status().isBadRequest());
+        for (String body : java.util.List.of("{\"note\":\"" + "x".repeat(101) + "\"}", "{\"maxUses\":0}", "{\"maxUses\":101}", "{\"expiresInDays\":0}", "{\"expiresInDays\":91}", "{\"code\":\"secret\"}"))
+            mvc.perform(post("/api/v1/closet/invites").with(jwtAs("closet:registration:write")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
+        for (String body : java.util.List.of("{}", "{\"note\":null,\"maxUses\":null,\"expiresAtMs\":null}", "{\"note\":\"" + "x".repeat(101) + "\"}", "{\"maxUses\":0}", "{\"maxUses\":101}", "{\"expiresAtMs\":0}", "{\"expiresAtMs\":" + (System.currentTimeMillis() + java.time.Duration.ofDays(91).toMillis()) + "}"))
+            mvc.perform(request(HttpMethod.PATCH, "/api/v1/closet/invites/invite-12").with(jwtAs("closet:registration:write")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/closet/invites/" + "i".repeat(37)).with(jwtAs("closet:registration:read"))).andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/closet/users").with(jwtAs("closet:user:write")).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"alice\",\"role\":\"USER\",\"displayName\":\"" + "x".repeat(41) + "\"}")).andExpect(status().isBadRequest());
+        server.verify();
+    }
+
+    @Test void forwardsDisplayNameOnCreationWithoutAuditingTemporaryPassword() throws Exception {
+        server.expect(requestTo("http://closet.test/api/manage/v1/users")).andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("{\"username\":\"named-user\",\"role\":\"USER\",\"displayName\":\"小鱼\"}"))
+                .andRespond(withSuccess("{\"username\":\"named-user\",\"temporaryPassword\":\"SECRET-TEMP-PASSWORD\"}", MediaType.APPLICATION_JSON));
+        mvc.perform(post("/api/v1/closet/users").with(jwtAs("closet:user:write")).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"named-user\",\"role\":\"USER\",\"displayName\":\"小鱼\"}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.temporaryPassword").value("SECRET-TEMP-PASSWORD"));
+        assertThat(auditEvents.findAll().stream().filter(event -> "named-user".equals(event.getTargetId())))
+                .allSatisfy(event -> assertThat(event.getMetadata()).doesNotContain("SECRET-TEMP-PASSWORD", "temporaryPassword", "小鱼"));
+        server.verify();
+    }
+
+    @Test void registrationNullRestoresDefaultAndInviteDefaultsRemainUpstreamOwned() throws Exception {
+        for (String body : java.util.List.of("{\"mode\":null}", "{}")) {
+            server.expect(requestTo("http://closet.test/api/manage/v1/registration")).andExpect(method(HttpMethod.PUT))
+                    .andExpect(content().json("{\"mode\":null}", org.springframework.test.json.JsonCompareMode.STRICT))
+                    .andRespond(withSuccess("{\"mode\":\"INVITE\",\"overridden\":false}", MediaType.APPLICATION_JSON));
+            mvc.perform(request(HttpMethod.PUT, "/api/v1/closet/registration").with(jwtAs("closet:registration:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.data.overridden").value(false));
+            server.verify(); server.reset();
+        }
+        server.expect(requestTo("http://closet.test/api/manage/v1/invites")).andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("{\"id\":\"default-invite\",\"maxUses\":1,\"code\":\"DEFAULT-SECRET-CODE\"}", MediaType.APPLICATION_JSON));
+        mvc.perform(post("/api/v1/closet/invites").with(jwtAs("closet:registration:write")).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.maxUses").value(1));
+        server.verify();
+    }
+
+    @Test void inviteUpdatesPreservePartialFieldsAndEncodeTheIdAsOnePathSegment() throws Exception {
+        long expiry = System.currentTimeMillis() + java.time.Duration.ofDays(1).toMillis();
+        String body = "{\"expiresAtMs\":" + expiry + "}";
+        server.expect(requestTo("http://closet.test/api/manage/v1/invites/%E6%B8%A0%E9%81%93%20A"))
+                .andExpect(method(HttpMethod.PATCH)).andExpect(content().json(body, org.springframework.test.json.JsonCompareMode.STRICT))
+                .andRespond(withSuccess("{\"id\":\"渠道 A\",\"expiresAtMs\":" + expiry + "}", MediaType.APPLICATION_JSON));
+        mvc.perform(request(HttpMethod.PATCH, "/api/v1/closet/invites/{id}", "渠道 A").with(jwtAs("closet:registration:write"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk()).andExpect(jsonPath("$.data.expiresAtMs").value(expiry));
+        server.verify();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+            "DELETE, /users/alice/sessions/0123456789abcdef, SESSION_NOT_FOUND, 404, NOT_FOUND, CLOSET_USER_SESSION_REVOKED",
+            "GET, /invites/missing, INVITE_NOT_FOUND, 404, NOT_FOUND, ''",
+            "PATCH, /invites/invite-12, INVITE_REVOKED, 409, CONFLICT, CLOSET_INVITE_UPDATED"})
+    void accountProblemDetailsKeepNotFoundAndConflictSemantics(String verb, String path, String code, int httpStatus, String platformCode, String action) throws Exception {
+        HttpMethod method = HttpMethod.valueOf(verb);
+        server.expect(requestTo("http://closet.test/api/manage/v1" + path)).andExpect(method(method))
+                .andRespond(withStatus(HttpStatus.valueOf(httpStatus)).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("{\"code\":\"" + code + "\",\"detail\":\"上游业务错误\"}"));
+        var req = request(method, "/api/v1/closet" + path).with(jwtAs(path.startsWith("/users") ? "closet:user:write" : method == HttpMethod.GET ? "closet:registration:read" : "closet:registration:write"));
+        if (method == HttpMethod.PATCH) req.contentType(MediaType.APPLICATION_JSON).content("{\"note\":\"new\"}");
+        mvc.perform(req).andExpect(status().is(httpStatus)).andExpect(jsonPath("$.code").value(platformCode)).andExpect(jsonPath("$.message").value("上游业务错误"));
+        if (!action.isEmpty()) assertThat(auditEvents.findAll().stream().filter(event -> action.equals(event.getAction()) && "FAILURE".equals(event.getResult())))
+                .anySatisfy(event -> assertThat(event.getMetadata()).contains(platformCode).doesNotContain("上游业务错误"));
         server.verify();
     }
 

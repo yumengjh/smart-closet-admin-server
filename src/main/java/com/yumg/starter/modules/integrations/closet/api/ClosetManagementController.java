@@ -24,6 +24,9 @@ public class ClosetManagementController {
     private final ClosetManagementService management;
     public ClosetManagementController(ClosetManagementService management) { this.management = management; }
 
+    @GetMapping("/account-events") @PreAuthorize("hasAuthority('closet:user:read')")
+    public PageResponse<JsonNode> accountEvents(@RequestParam MultiValueMap<String, String> query) { return management.page("/account-events", query); }
+
     @GetMapping("/ops/status") @PreAuthorize("hasAuthority('closet:ops:read')")
     public JsonNode status(@RequestParam MultiValueMap<String, String> query) { return management.get("/ops/status", query); }
     @GetMapping("/ops/tasks") @PreAuthorize("hasAuthority('closet:ops:read')")

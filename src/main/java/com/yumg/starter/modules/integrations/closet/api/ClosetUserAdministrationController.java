@@ -1,6 +1,8 @@
 package com.yumg.starter.modules.integrations.closet.api;
 
 import tools.jackson.databind.JsonNode;
+import com.yumg.starter.common.api.ApiException;
+import com.yumg.starter.modules.integrations.closet.api.dto.ClosetProfileRequest;
 import com.yumg.starter.common.api.PageResponse;
 import com.yumg.starter.modules.integrations.closet.api.dto.ClosetCreateUserRequest;
 import com.yumg.starter.modules.integrations.closet.api.dto.ClosetPasswordResetRequest;
@@ -13,6 +15,8 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.util.Set;
+import org.springframework.util.MultiValueMap;
 import org.springframework.http.HttpStatus;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
@@ -40,11 +44,16 @@ public class ClosetUserAdministrationController {
     public PageResponse<JsonNode> list(@RequestParam(required = false) @Size(max = 80) String q,
             @RequestParam(required = false) @Pattern(regexp = "^(ENABLED|DISABLED)$") String status,
             @RequestParam(required = false) @Pattern(regexp = "^(USER|ADMIN)$") String role,
-            @RequestParam(required = false) @Pattern(regexp = "^(createdAt|username|lastActiveAt)$") String sort,
+            @RequestParam(required = false) @Pattern(regexp = "^(createdAt|username|lastActiveAt|lastLoginAt)$") String sort,
             @RequestParam(required = false) @Pattern(regexp = "^(asc|desc)$") String order,
-            @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return users.list(q, status, role, sort, order, page, size);
+            @RequestParam(required = false) @Pattern(regexp = "^(ADMIN|INVITE|OPEN)$") String registeredVia,
+            @RequestParam(required = false) @Pattern(regexp = "^(true|false)$") String deactivated,
+            @RequestParam(defaultValue = "0") @Min(0) @Max(2147483646) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size, @RequestParam MultiValueMap<String, String> query) {
+        Set<String> allowed = Set.of("q", "status", "role", "sort", "order", "registeredVia", "deactivated", "page", "size");
+        if (query.entrySet().stream().anyMatch(entry -> !allowed.contains(entry.getKey()) || entry.getValue().size() != 1))
+            throw ApiException.invalidParameter();
+        return users.list(q, status, role, sort, order, registeredVia, deactivated, page, size);
     }
     @GetMapping("/{username}") @PreAuthorize("hasAuthority('closet:user:read')")
     public JsonNode detail(@PathVariable @Pattern(regexp = USERNAME) String username) { return users.detail(username); }
@@ -71,6 +80,22 @@ public class ClosetUserAdministrationController {
     public JsonNode sessions(@PathVariable @Pattern(regexp = USERNAME) String username) { return users.sessions(username); }
     @DeleteMapping("/{username}/sessions") @PreAuthorize("hasAuthority('closet:user:write')")
     public JsonNode revokeSessions(@PathVariable @Pattern(regexp = USERNAME) String username) { return users.revokeSessions(username); }
+    @PatchMapping("/{username}/profile") @PreAuthorize("hasAuthority('closet:user:write')")
+    public JsonNode profile(@PathVariable @Pattern(regexp = USERNAME) String username,
+                           @Valid @RequestBody ClosetProfileRequest request) {
+        return users.profile(username, request);
+    }
+    @DeleteMapping("/{username}/sessions/{sessionRef}") @PreAuthorize("hasAuthority('closet:user:write')")
+    public ResponseEntity<Void> revokeSession(@PathVariable @Pattern(regexp = USERNAME) String username,
+            @PathVariable @Pattern(regexp = "^[0-9a-f]{16}$") String sessionRef) {
+        users.revokeSession(username, sessionRef); return ResponseEntity.noContent().build();
+    }
+    @GetMapping("/{username}/login-lock") @PreAuthorize("hasAuthority('closet:user:read')")
+    public JsonNode loginLock(@PathVariable @Pattern(regexp = USERNAME) String username) { return users.loginLock(username); }
+    @DeleteMapping("/{username}/login-lock") @PreAuthorize("hasAuthority('closet:user:write')")
+    public JsonNode unlock(@PathVariable @Pattern(regexp = USERNAME) String username) { return users.unlock(username); }
+    @GetMapping("/{username}/events") @PreAuthorize("hasAuthority('closet:user:read')")
+    public JsonNode events(@PathVariable @Pattern(regexp = USERNAME) String username) { return users.events(username); }
     @GetMapping("/{username}/portable-links") @PreAuthorize("hasAuthority('closet:user:read')")
     public JsonNode portableLinks(@PathVariable @Pattern(regexp = USERNAME) String username) { return users.portableLinks(username); }
     @DeleteMapping("/{username}/portable-links/{linkId}") @PreAuthorize("hasAuthority('closet:user:write')")

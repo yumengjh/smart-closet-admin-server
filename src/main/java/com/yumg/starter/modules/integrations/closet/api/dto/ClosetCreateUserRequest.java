@@ -6,4 +6,5 @@ import jakarta.validation.constraints.NotBlank;
 public record ClosetCreateUserRequest(
         @NotBlank @Pattern(regexp = "^[A-Za-z0-9_.-]{2,80}$") String username,
         @NotBlank @Pattern(regexp = "^(USER|ADMIN)$") String role,
-        @Size(min = 12, max = 200) String password) {}
+        @Size(min = 12, max = 200) String password,
+        @Size(max = 40) String displayName) {}

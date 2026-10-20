@@ -26,10 +26,11 @@ public class ClosetUserAdministrationService {
         this.client = client; this.audit = audit; this.mapper = mapper;
     }
 
-    public PageResponse<JsonNode> list(String q, String status, String role, String sort, String order, int page, int size) {
+    public PageResponse<JsonNode> list(String q, String status, String role, String sort, String order, String registeredVia, String deactivated, int page, int size) {
         Map<String, List<String>> query = new LinkedHashMap<>();
         add(query, "q", q); add(query, "status", status); add(query, "role", role);
         add(query, "sort", sort); add(query, "order", order);
+        add(query, "registeredVia", registeredVia); add(query, "deactivated", deactivated);
         query.put("page", List.of(Integer.toString(page + 1))); query.put("size", List.of(Integer.toString(size)));
         JsonNode result = client.get("/users", query);
         List<JsonNode> items = result.path("items").isArray() ? mapper.convertValue(result.path("items"),
@@ -43,6 +44,24 @@ public class ClosetUserAdministrationService {
     public JsonNode sessions(String username) { return client.get("/users/" + segment(username) + "/sessions", Map.of()); }
     public JsonNode portableLinks(String username) { return client.get("/users/" + segment(username) + "/portable-links", Map.of()); }
     public JsonNode quota(String username) { return client.get("/users/" + segment(username) + "/quota", Map.of()); }
+
+    public JsonNode loginLock(String username) { return client.get("/users/" + segment(username) + "/login-lock", Map.of()); }
+    public JsonNode events(String username) { return client.get("/users/" + segment(username) + "/events", Map.of()); }
+    public JsonNode profile(String username, Object body) {
+        return audited("CLOSET_USER_PROFILE_UPDATED", username, Map.of("username", username),
+                () -> client.patch("/users/" + segment(username) + "/profile", body));
+    }
+    public void revokeSession(String username, String sessionRef) {
+        audited("CLOSET_USER_SESSION_REVOKED", username, Map.of("username", username, "sessionRef", sessionRef), () -> {
+            if (sessionRef == null || !sessionRef.matches("^[0-9a-f]{16}$")) throw ApiException.invalidParameter();
+            client.delete("/users/" + segment(username) + "/sessions/" + UriUtils.encodePathSegment(sessionRef, StandardCharsets.UTF_8));
+            return null;
+        });
+    }
+    public JsonNode unlock(String username) {
+        return audited("CLOSET_USER_LOGIN_UNLOCKED", username, Map.of("username", username),
+                () -> client.deleteWithResponse("/users/" + segment(username) + "/login-lock"));
+    }
 
     public JsonNode create(Object body, String username) {
         return audited("CLOSET_USER_CREATED", username, Map.of("username", username), () -> client.post("/users", body));

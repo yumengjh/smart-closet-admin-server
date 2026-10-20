@@ -5,6 +5,8 @@ import com.yumg.starter.common.api.PageResponse;
 import com.yumg.starter.modules.integrations.closet.api.dto.ClosetTemplateReviewRequest;
 import com.yumg.starter.modules.integrations.closet.infrastructure.ClosetManagementClient;
 import com.yumg.starter.modules.security.application.AuditService;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,6 +21,8 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnProperty(prefix = "app.integrations.closet", name = "enabled", havingValue = "true")
 public class ClosetManagementService {
     private static final Map<String, Set<String>> QUERIES = Map.of(
+            "/invites", Set.of("status", "page", "size"),
+            "/account-events", Set.of("from", "to", "username", "action", "actor", "page", "size"),
             "/ops/status", Set.of(),
             "/ops/tasks", Set.of("status", "kind", "page", "size"),
             "/ops/operation-log", Set.of("from", "to", "action", "targetUsername", "page", "size"),
@@ -38,7 +42,7 @@ public class ClosetManagementService {
     }
     public PageResponse<JsonNode> page(String path, Map<String, List<String>> query) {
         validate(path, query);
-        int page = integer(query, "page", 0, 0, 99999);
+        int page = integer(query, "page", 0, 0, Integer.MAX_VALUE - 1);
         int size = integer(query, "size", 20, 1, 100);
         var upstream = new LinkedHashMap<>(query);
         upstream.put("page", List.of(Integer.toString(page + 1)));
@@ -75,6 +79,26 @@ public class ClosetManagementService {
         Set<String> allowed = QUERIES.get(path);
         if (allowed == null) throw ApiException.notFound();
         if (query.keySet().stream().anyMatch(key -> !allowed.contains(key))) throw ApiException.invalidParameter();
+        if (path.equals("/invites") || path.equals("/account-events")) {
+            if (query.values().stream().anyMatch(values -> values.size() != 1)) throw ApiException.invalidParameter();
+            if (path.equals("/invites")) {
+                matches(query, "status", "^(ACTIVE|USED_UP|EXPIRED|REVOKED)$");
+            } else {
+                matches(query, "username", "^[A-Za-z0-9_.-]{2,80}$");
+                matches(query, "action", "^[A-Z_]{1,48}$");
+                if (query.containsKey("actor") && query.get("actor").getFirst().length() > 200) throw ApiException.invalidParameter();
+                for (String key : List.of("from", "to")) {
+                    if (query.containsKey(key)) {
+                        matches(query, key, "^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+                        try { LocalDate.parse(query.get(key).getFirst()); }
+                        catch (DateTimeParseException e) { throw ApiException.invalidParameter(); }
+                    }
+                }
+            }
+        }
+    }
+    private static void matches(Map<String, List<String>> query, String key, String pattern) {
+        if (query.containsKey(key) && !query.get(key).getFirst().matches(pattern)) throw ApiException.invalidParameter();
     }
     private static int integer(Map<String, List<String>> query, String key, int fallback, int min, int max) {
         if (!query.containsKey(key)) return fallback;
