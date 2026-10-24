@@ -50,3 +50,5 @@ promotions:
           required: true
           default_value: latest
           description: 要部署的镜像标签，例如 0.1.0、sha-abc1234
+  - name: Link Fish Closet
+    pipeline_file: link-closet.yml
