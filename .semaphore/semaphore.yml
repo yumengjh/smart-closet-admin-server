@@ -1,0 +1,52 @@
+# Semaphore: everyday checks, and the release path of a version tag (docs/operations/semaphore-deploy.md).
+#
+#   push a branch / PR  -> checks (mvn verify)
+#   push a tag vX.Y.Z   -> checks, then release.yml: publish the GHCR image -> deploy it to the server automatically
+#   Promote "Deploy published image" by hand -> deploy.yml: deploy an already published tag, no build
+version: v1.0
+name: Checks
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2404
+
+# A newer push replaces the running check on a branch; main and tags always finish.
+auto_cancel:
+  running:
+    when: "branch != 'main' AND tag !~ '.*'"
+  queued:
+    when: "branch != 'main' AND tag !~ '.*'"
+
+execution_time_limit:
+  minutes: 45
+
+blocks:
+  - name: Java backend
+    dependencies: []
+    task:
+      jobs:
+        - name: mvn verify
+          commands:
+            - checkout
+            - sem-version java 21
+            - cache restore maven-$(checksum pom.xml),maven-
+            - ./mvnw -B verify
+            - cache store maven-$(checksum pom.xml) ~/.m2/repository
+      epilogue:
+        always:
+          commands:
+            - '[ -d target/surefire-reports ] && test-results publish target/surefire-reports || true'
+
+promotions:
+  - name: Release
+    pipeline_file: release.yml
+    auto_promote:
+      when: "result = 'passed' AND tag =~ '^v[0-9]+\\.[0-9]+\\.[0-9]+$'"
+  - name: Deploy published image
+    pipeline_file: deploy.yml
+    parameters:
+      env_vars:
+        - name: DEPLOY_IMAGE_TAG
+          required: true
+          default_value: latest
+          description: 要部署的镜像标签，例如 0.1.0、sha-abc1234

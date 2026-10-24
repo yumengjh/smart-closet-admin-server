@@ -1,0 +1,62 @@
+# Production stack on the backend host, installed by scripts/deploy/remote-deploy.sh as $ADMIN_DEPLOY_DIR/compose.yaml.
+# Variables come from $ADMIN_DEPLOY_DIR/.env (created on the first deployment, never overwritten) and from the
+# deployment itself (IMAGE_TAG, ADMIN_HOST_PORT).
+name: smart-closet-admin
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-starter}
+      POSTGRES_USER: ${POSTGRES_USER:-starter}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?missing in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  app:
+    image: ghcr.io/yumengjh/smart-closet-admin-server:${IMAGE_TAG:-latest}
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      SERVER_PORT: 8080
+      APP_RESPONSE_POWERED_BY: ${APP_RESPONSE_POWERED_BY:-ASP.NET}
+      APP_RESPONSE_SERVER: ${APP_RESPONSE_SERVER:-Microsoft-IIS/10.0}
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-starter}
+      DB_USERNAME: ${POSTGRES_USER:-starter}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?missing in .env}
+      APP_BOOTSTRAP_ADMIN_USERNAME: ${APP_BOOTSTRAP_ADMIN_USERNAME:-}
+      APP_BOOTSTRAP_ADMIN_PASSWORD: ${APP_BOOTSTRAP_ADMIN_PASSWORD:-}
+      APP_JWT_PRIVATE_KEY_PATH: /run/keys/jwt-private.pem
+      APP_JWT_PUBLIC_KEY_PATH: /run/keys/jwt-public.pem
+      APP_AUTH_REFRESH_COOKIE_SECURE: ${APP_AUTH_REFRESH_COOKIE_SECURE:-true}
+      APP_SECURITY_CORS_ALLOWED_ORIGINS: ${APP_SECURITY_CORS_ALLOWED_ORIGINS:-}
+      APP_SECURITY_TRUSTED_PROXIES: ${APP_SECURITY_TRUSTED_PROXIES:-}
+      APP_STORAGE_LOCAL_ROOT: /app/data/storage
+      APP_AVATAR_GENERATOR_BASE_URL: ${APP_AVATAR_GENERATOR_BASE_URL:-http://host.docker.internal:3100}
+      APP_CLOSET_ENABLED: ${APP_CLOSET_ENABLED:-false}
+      APP_CLOSET_BASE_URL: ${APP_CLOSET_BASE_URL:-http://host.docker.internal:8080}
+      APP_CLOSET_KEY_ID: ${APP_CLOSET_KEY_ID:-primary}
+      APP_CLOSET_SECRET: ${APP_CLOSET_SECRET:-}
+      APP_CLOSET_CONNECT_TIMEOUT: ${APP_CLOSET_CONNECT_TIMEOUT:-2s}
+      APP_CLOSET_READ_TIMEOUT: ${APP_CLOSET_READ_TIMEOUT:-10s}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${ADMIN_HOST_PORT:-8081}:8080"
+    volumes:
+      - app-data:/app/data
+      - ./keys:/run/keys:ro
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  app-data:

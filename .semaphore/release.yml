@@ -1,0 +1,35 @@
+# Started by the Release promotion of a passed tag pipeline: image to GHCR, then deploy.
+# Secret "deploy" (shared with smart-closet-server, the backend host): GHCR_USER, GHCR_TOKEN, DEPLOY_SSH_HOST,
+# DEPLOY_SSH_USER, DEPLOY_SSH_PASSWORD or DEPLOY_SSH_KEY (optional DEPLOY_SSH_PORT, DEPLOY_SSH_KNOWN_HOSTS).
+version: v1.0
+name: Release
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2404
+
+execution_time_limit:
+  minutes: 45
+
+blocks:
+  - name: Publish GHCR image
+    dependencies: []
+    task:
+      secrets:
+        - name: deploy
+      jobs:
+        - name: build and push
+          commands:
+            - checkout
+            - bash scripts/ci/publish-image.sh
+
+  - name: Deploy to server
+    dependencies: ["Publish GHCR image"]
+    task:
+      secrets:
+        - name: deploy
+      jobs:
+        - name: deploy
+          commands:
+            - checkout
+            - bash scripts/ci/deploy.sh
