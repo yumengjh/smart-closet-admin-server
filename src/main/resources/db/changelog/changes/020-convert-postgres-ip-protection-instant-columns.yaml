@@ -1,0 +1,12 @@
+databaseChangeLog:
+  - changeSet:
+      id: 020-convert-postgres-ip-protection-instant-columns
+      author: starter
+      dbms: postgresql
+      changes:
+        - sql:
+            sql: |
+              alter table ip_access_rules alter column first_triggered_at type varchar(64) using to_char(first_triggered_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"');
+              alter table ip_access_rules alter column last_triggered_at type varchar(64) using to_char(last_triggered_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"');
+              alter table ip_access_rules alter column blocked_at type varchar(64) using to_char(blocked_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"');
+              alter table ip_access_rules alter column revoked_at type varchar(64) using to_char(revoked_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"');
