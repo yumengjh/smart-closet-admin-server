@@ -1,0 +1,21 @@
+# Started by hand (promotion "Deploy published image"): deploy an already published image tag, no build.
+version: v1.0
+name: Deploy
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2404
+
+execution_time_limit:
+  minutes: 20
+
+blocks:
+  - name: Deploy to server
+    task:
+      secrets:
+        - name: deploy
+      jobs:
+        - name: deploy
+          commands:
+            - checkout
+            - bash scripts/ci/deploy.sh
