@@ -34,11 +34,14 @@ sudo grep APP_BOOTSTRAP_ADMIN /opt/smart-closet-admin/.env
 
 PostgreSQL data and avatar files live in the compose volumes `postgres-data` and `app-data`.
 
-## Reverse proxy
+## Reverse proxy and CORS
 
-The container publishes `ADMIN_HOST_PORT` on the host. The static site (a different host) proxies `/api/` to
-`http://<backend host>:<port>/api/`; restrict that port to the web host in the firewall. Keep
-`APP_AUTH_REFRESH_COOKIE_SECURE=true`, so the site must be served over HTTPS.
+The container publishes `ADMIN_HOST_PORT` on the host. The admin site (`https://yuda-admin.yumg.cn`, another host) calls
+this service directly at `https://yuda-admin-server.yumg.cn`: proxy that domain to `http://127.0.0.1:<port>` (or the
+host's address) and restrict the port to the proxy in the firewall. Credentialed CORS must allow the site origin:
+`APP_SECURITY_CORS_ALLOWED_ORIGINS=https://yuda-admin.yumg.cn` seeds a new database (`ADMIN_ALLOWED_ORIGINS` on the first
+deployment); on an existing database change it through the runtime-config API. The refresh cookie is `SameSite=Strict` and
+`Secure`, which works because both names are under `yumg.cn` and served over HTTPS.
 
 ## Fish Closet integration
 
