@@ -45,7 +45,18 @@ deployment); on an existing database change it through the runtime-config API. T
 
 ## Fish Closet integration
 
-`APP_CLOSET_ENABLED` is `false` after the first deployment. To manage Fish Closet, set the same key id and a secret of at
-least 32 bytes on both sides (`APP_CLOSET_KEY_ID`, `APP_CLOSET_SECRET` here; `CLOSET_MANAGEMENT_ENABLED`,
-`CLOSET_MANAGEMENT_KEY_ID`, `CLOSET_MANAGEMENT_SECRET` in smart-closet-server) and set `APP_CLOSET_ENABLED=true`, then
-`docker compose -p smart-closet-admin up -d` in `$ADMIN_DEPLOY_DIR`. See [closet-integration](../api/closet-integration.md).
+Run the promotion **Link Fish Closet** (`.semaphore/link-closet.yml`, `scripts/deploy/link-closet.sh`) on a passed `main`
+or tag pipeline. It is safe to repeat and, on the host:
+
+1. finds the running Fish Closet `server` container and its compose env file (backed up as `.bak-<time>`);
+2. sets `CLOSET_MANAGEMENT_ENABLED=true`, `CLOSET_MANAGEMENT_KEY_ID`, `CLOSET_MANAGEMENT_SECRET` (an existing secret is kept,
+   otherwise `openssl rand -base64 48`) and `CLOSET_MANAGEMENT_EXPORT_SALT`, then recreates only the closet `server`
+   container with the image tag it already runs (a short interruption; the env file is restored if it does not turn healthy);
+3. writes `compose.override.yaml` so the admin app joins the closet's compose network, sets `APP_CLOSET_ENABLED=true`,
+   `APP_CLOSET_BASE_URL=http://server:8080` and the same key id and secret in `.env`, and recreates the admin app;
+4. checks from inside the admin container that `/api/manage/v1/users` answers `401` to an unsigned request.
+
+The management API stays on the closet's loopback port and the shared compose network. If the public reverse proxy of the
+closet forwards `/api/` as a whole, also block `/api/manage/` there (see `docs/MANAGEMENT_API.md` of smart-closet-server):
+the HMAC signature proves possession of the key, it does not replace network isolation.
+Full route, signature and error-mapping details: [the Fish Closet integration guide](../api/closet-integration.md).
