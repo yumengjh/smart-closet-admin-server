@@ -1,3 +1,21 @@
+# 鱼搭管理平台 · 后端
+
+鱼搭（数字衣柜）独立管理平台的后端：Java 21 / Spring Boot 4.1，账号、RBAC、审计与服务治理自带，并通过 HMAC-SHA256 签名的中立管理接口（`/api/manage/v1`）接入鱼搭业务服务，不改动鱼搭本体。前端见 [smart-closet-admin](https://github.com/yumengjh/smart-closet-admin)。
+
+- **鱼搭集成默认关闭**：设置 `APP_CLOSET_ENABLED=true`，并让 `APP_CLOSET_BASE_URL`、`APP_CLOSET_SECRET` 与鱼搭的 `CLOSET_MANAGEMENT_ENABLED` 配置对应；接口说明见 [鱼搭集成](docs/api/closet-integration.md)。
+- **能做什么**：业务账号控制（资料、会话、登录锁定、额度）、注册模式与邀请码、衣柜洞察、业务大屏数据、运行监控、数据导出、模板审核；平台自身的用户、角色权限、菜单、运行配置、IP 规则、审计日志。
+- **启动**：下文“SQLite 本地启动”，端口由 `.env` 的 `SERVER_PORT` 决定（示例 8080；前端开发代理默认指向 8081，需保持一致）；部署见 [部署文档](docs/operations/deployment.md) 与 [Semaphore 部署](docs/operations/semaphore-deploy.md)。
+
+| 相关仓库 | 内容 |
+|---|---|
+| [smart-closet-admin](https://github.com/yumengjh/smart-closet-admin) | 管理平台前端（Vue 3 + Element Plus） |
+| [smart-closet](https://github.com/yumengjh/smart-closet) · [smart-closet-server-review](https://github.com/yumengjh/smart-closet-server-review) | 鱼搭用户端、后端评审裁剪副本（管理接口契约 `docs/management-api.yaml`） |
+| [smart-closet-mp](https://github.com/yumengjh/smart-closet-mp) · [yuda-website](https://github.com/yumengjh/yuda-website) · [smart-closet-promo](https://github.com/yumengjh/smart-closet-promo) | 小程序、官网、演示视频 |
+
+本项目由 Spring Boot 后端启动模板演进而来，下面保留模板的工程说明。
+
+---
+
 # Spring Boot 后端启动模板
 
 一个面向真实 REST API 项目的 Java 21 / Spring Boot 4.1 模板。它采用模块化单体结构，提供 SQLite 本地开发、PostgreSQL 部署、Liquibase、JWT、Refresh Token、RBAC、运行时服务配置、容器化与 CI 基础。
