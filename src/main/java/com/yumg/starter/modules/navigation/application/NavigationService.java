@@ -10,17 +10,21 @@ import com.yumg.starter.modules.navigation.infrastructure.NavigationMenuReposito
 import com.yumg.starter.modules.rbac.infrastructure.PermissionRepository;
 import com.yumg.starter.modules.security.application.AuditService;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class NavigationService {
+    private static final Logger log = LoggerFactory.getLogger(NavigationService.class);
 
     private static final Set<String> COMPONENT_KEYS = Set.of("welcome", "permission-page",
             "menu-management", "user-management", "rbac-management", "runtime-config",
@@ -57,6 +61,7 @@ public class NavigationService {
 
     @Transactional
     public NavigationMenuResponse create(NavigationMenuRequest request) {
+        menus.lockAllForStructureChange();
         if (menus.findByCode(request.code()).isPresent()) {
             throw ApiException.conflict();
         }
@@ -72,6 +77,8 @@ public class NavigationService {
 
     @Transactional
     public NavigationMenuResponse update(String id, NavigationMenuRequest request) {
+        // Lock before reading the parent chain; the per-row @Version cannot protect a multi-row invariant.
+        menus.lockAllForStructureChange();
         NavigationMenu menu = menu(id);
         if (!menu.getCode().equals(request.code()) || menu.isSystemManaged()) {
             throw ApiException.conflict();
@@ -95,6 +102,7 @@ public class NavigationService {
 
     @Transactional
     public void delete(String id) {
+        menus.lockAllForStructureChange();
         NavigationMenu menu = menu(id);
         if (menu.isSystemManaged() || menus.existsByParentId(id)) {
             throw ApiException.conflict();
@@ -133,25 +141,42 @@ public class NavigationService {
 
     private boolean permitted(NavigationMenu menu, Set<String> grantedPermissions,
             Map<String, NavigationMenu> byId) {
-        if (!menu.isVisible() || !menu.isEnabled()) {
-            return false;
+        // Iterative walk with a visited set: corrupted data with a parent cycle must not overflow the stack
+        // or hang; menus on such a cycle are simply not routed, everything else stays available.
+        Set<String> seen = new HashSet<>();
+        NavigationMenu current = menu;
+        while (true) {
+            if (!seen.add(current.getId())) {
+                log.warn("navigation menu parent cycle detected at menu={}", menu.getCode());
+                return false;
+            }
+            if (!current.isVisible() || !current.isEnabled()) {
+                return false;
+            }
+            if (current.getRequiredPermission() != null
+                    && !grantedPermissions.contains(current.getRequiredPermission())) {
+                return false;
+            }
+            String parentId = current.getParentId();
+            if (parentId == null) {
+                return true;
+            }
+            current = byId.get(parentId);
+            if (current == null) {
+                return false;
+            }
         }
-        if (menu.getRequiredPermission() != null
-                && !grantedPermissions.contains(menu.getRequiredPermission())) {
-            return false;
-        }
-        String parentId = menu.getParentId();
-        return parentId == null || (byId.containsKey(parentId)
-                && permitted(byId.get(parentId), grantedPermissions, byId));
     }
 
     private boolean reachesCurrentMenu(NavigationMenu candidateParent, String currentId) {
-        if (currentId == null) {
-            return false;
-        }
+        Set<String> seen = new HashSet<>();
         NavigationMenu current = candidateParent;
         while (current != null) {
-            if (currentId.equals(current.getId())) {
+            if (Objects.equals(currentId, current.getId())) {
+                return true;
+            }
+            if (!seen.add(current.getId())) {
+                // The existing chain is already cyclic: refuse to attach anything to it.
                 return true;
             }
             String parentId = current.getParentId();
