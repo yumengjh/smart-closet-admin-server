@@ -22,7 +22,9 @@ import com.yumg.starter.modules.security.application.AuditService;
 public class UserAdministrationService {
     private final UserRepository users; private final TokenService tokens; private final AuditService audit;
     private final SuperAdminGuard superAdmins;
-    public UserAdministrationService(UserRepository users, TokenService tokens, AuditService audit, SuperAdminGuard superAdmins) { this.users = users; this.tokens = tokens; this.audit = audit; this.superAdmins = superAdmins; }
+    private final com.yumg.starter.modules.security.application.BruteForceService bruteForce;
+    public UserAdministrationService(UserRepository users, TokenService tokens, AuditService audit, SuperAdminGuard superAdmins,
+                                     com.yumg.starter.modules.security.application.BruteForceService bruteForce) { this.users = users; this.tokens = tokens; this.audit = audit; this.superAdmins = superAdmins; this.bruteForce = bruteForce; }
     @Transactional(readOnly = true) public List<AdminUserResponse> list() { return users.findAllWithRoles().stream().map(AdminUserResponse::from).toList(); }
     @Transactional(readOnly = true) public PageResponse<AdminUserResponse> list(String query, UserStatus status, int page, int size) {
         var pageable = PageRequest.of(page, size);
@@ -43,7 +45,7 @@ public class UserAdministrationService {
     @Transactional public AdminUserResponse changeStatus(String id, UserStatus status) {
         User user = users.findWithRolesById(id).orElseThrow(ApiException::notFound);
         if (status != UserStatus.ACTIVE) superAdmins.requireAnotherSuperAdmin(user);
-        switch (status) { case ACTIVE -> { user.enable(); user.unlock(); } case DISABLED -> user.disable(); case LOCKED -> user.lock(Instant.now().plus(15, ChronoUnit.MINUTES)); }
+        switch (status) { case ACTIVE -> { user.enable(); user.unlock(); bruteForce.clear(user.getUsername()); } case DISABLED -> user.disable(); case LOCKED -> user.lock(Instant.now().plus(15, ChronoUnit.MINUTES)); }
         tokens.revokeAllForUser(id);
         audit.event("USER_STATUS_UPDATED","User",id,"SUCCESS","{\"status\":\""+status+"\"}"); return AdminUserResponse.from(user);
     }

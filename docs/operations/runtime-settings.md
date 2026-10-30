@@ -64,7 +64,7 @@
 
 字符串配置只用于 CORS 和 Ant 路径模式。路径模式与 IP 规则、限流、CORS 路由一样，按与 Spring MVC 一致的规范化路径（百分号解码、去除分号内容与重复斜杠后的应用内路径）匹配，`/%61pi/v1/auth/login` 与 `/api/v1/auth/login` 视为同一路径；请求日志同时记录规范化路径和不同于它的原始路径。空字符串表示清空相应策略，例如撤销全部接口禁用规则；请求体仍必须包含 `value` 字段。旧 `security.ip.allow-list` / `security.ip.deny-list` 会在升级启动时迁移为结构化 IP 规则并删除，不再参与请求判断。运行时配置、缓存和 IP 规则恢复接口不会被 IP 规则锁死，但仍要求对应 RBAC 权限并受独立控制面限流保护。
 
-登录防爆破已实现：在 `security.brute-force.window-seconds` 观察窗口内达到失败阈值会锁定账户，锁定时长由 `security.brute-force.lock-seconds` 控制；锁定会撤销该用户 Refresh Token，到期后下次登录自动恢复。`security.request-log.enabled` 控制 `/api/**` 的结构化请求日志（方法、路径、状态、耗时、Trace ID、客户端 IP、已认证用户 ID），绝不记录密码、令牌或请求体。限流、自动封禁触发计数和防爆破状态均使用有容量上限的 Caffeine 单实例缓存，避免恶意高基数 key 无界占用堆内存；真正的封禁规则会持久化。多实例部署仍应以 Redis 等共享存储替换计数器，否则每个实例分别计数，达到阈值的速度取决于流量分配。
+登录防爆破已实现：在 `security.brute-force.window-seconds` 观察窗口内达到失败阈值会锁定账户，锁定时长由 `security.brute-force.lock-seconds` 控制；锁定会撤销该用户 Refresh Token，到期后下次登录自动恢复。超级管理员不改账号状态（避免锁死最后一名管理员），改用同样时长的账号级退避：达到阈值后在 `lock-seconds` 内直接返回 `423 ACCOUNT_LOCKED`、不再校验密码，并记录 `LOGIN_FAILED`（reason=throttled）审计；已有会话不受影响。恢复途径为等待到期、其他管理员把该账号状态设为 `ACTIVE`（会清除退避并留下审计），或重启后用 Bootstrap 管理员重置。该退避与失败计数同为单实例内存状态，重启即清空。`security.request-log.enabled` 控制 `/api/**` 的结构化请求日志（方法、路径、状态、耗时、Trace ID、客户端 IP、已认证用户 ID），绝不记录密码、令牌或请求体。限流、自动封禁触发计数和防爆破状态均使用有容量上限的 Caffeine 单实例缓存，避免恶意高基数 key 无界占用堆内存；真正的封禁规则会持久化。多实例部署仍应以 Redis 等共享存储替换计数器，否则每个实例分别计数，达到阈值的速度取决于流量分配。
 
 为避免唯一管理入口被误锁，`SUPER_ADMIN` 不会被自动防爆破策略锁定；普通管理员和用户仍受该策略约束。
 

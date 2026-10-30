@@ -76,7 +76,7 @@ class UserAdministrationServiceTest {
     }
 
     private UserAdministrationService service() {
-        return new UserAdministrationService(users, tokens, audit, new com.yumg.starter.modules.rbac.application.SuperAdminGuard(users));
+        return new UserAdministrationService(users, tokens, audit, new com.yumg.starter.modules.rbac.application.SuperAdminGuard(users), org.mockito.Mockito.mock(com.yumg.starter.modules.security.application.BruteForceService.class));
     }
 
     private User user(String id, String username) {

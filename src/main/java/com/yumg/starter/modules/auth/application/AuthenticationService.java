@@ -40,6 +40,9 @@ public class AuthenticationService implements AuthenticationUseCase {
         user.unlockIfExpired(Instant.now());
         if (user.getStatus() == UserStatus.LOCKED) { audit.event("LOGIN_FAILED","User",user.getId(),"FAILURE","{\"reason\":\"locked\"}"); throw ApiException.accountLocked(); }
         if (user.getStatus() == UserStatus.DISABLED) { audit.event("LOGIN_FAILED","User",user.getId(),"FAILURE","{\"reason\":\"disabled\"}"); throw ApiException.accountDisabled(); }
+        // Super administrators are exempt from status locking, so they get a non-persistent backoff instead:
+        // past the failure threshold the password is not even checked until the backoff expires (#162).
+        if (user.isSuperAdmin() && bruteForce.isThrottled(username)) { audit.event("LOGIN_FAILED","User",user.getId(),"FAILURE","{\"reason\":\"throttled\"}"); throw ApiException.accountLocked(); }
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             if (bruteForce.recordFailure(username) && !user.isSuperAdmin()) { user.lock(bruteForce.lockUntil()); tokens.revokeAllForUser(user.getId()); }
             audit.event("LOGIN_FAILED","User",user.getId(),"FAILURE","{\"reason\":\"invalid_credentials\"}"); throw ApiException.invalidCredentials();
