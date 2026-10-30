@@ -122,6 +122,27 @@ class ClosetIntegrationApiTest {
         assertThat(event.getMetadata()).contains("alice").doesNotContain("correct-horse-battery", "password");
     }
 
+    @Test void newUsernamesFollowTheClosetDotRuleWhileSingleDotsStayManageable() throws Exception {
+        for (String username : java.util.List.of("..", "...", "a..b")) {
+            mvc.perform(post("/api/v1/closet/users").with(jwtAs("closet:user:write"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"username\":\"" + username + "\",\"role\":\"USER\"}"))
+                    .andExpect(status().isBadRequest());
+        }
+        server.expect(requestTo("http://closet.test/api/manage/v1/users"))
+                .andRespond(withSuccess("{\"username\":\"a.b\",\"temporaryPassword\":null}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://closet.test/api/manage/v1/users/a.b/status"))
+                .andRespond(withSuccess("{\"enabled\":false}", MediaType.APPLICATION_JSON));
+        mvc.perform(post("/api/v1/closet/users").with(jwtAs("closet:user:write"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"a.b\",\"role\":\"USER\"}"))
+                .andExpect(status().isCreated());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/closet/users/a.b/status").with(jwtAs("closet:user:write"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":false}"))
+                .andExpect(status().isOk());
+        server.verify();
+    }
+
     @Test void upstreamUnauthorizedMapsTo502AndTimeoutFailureIsAuditedAs503() throws Exception {
         server.expect(requestTo(org.hamcrest.Matchers.containsString("/api/manage/v1/users")))
                 .andRespond(withStatus(HttpStatus.UNAUTHORIZED).contentType(MediaType.APPLICATION_PROBLEM_JSON)
