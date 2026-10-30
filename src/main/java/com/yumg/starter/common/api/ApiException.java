@@ -28,6 +28,7 @@ public class ApiException extends RuntimeException {
     }
     public static ApiException invalidParameter() { return new ApiException(ApiErrorCode.INVALID_PARAMETER); }
     public static ApiException lastSuperAdminProtected() { return new ApiException(ApiErrorCode.LAST_SUPER_ADMIN_PROTECTED); }
+    public static ApiException systemRoleProtected() { return new ApiException(ApiErrorCode.SYSTEM_ROLE_PROTECTED); }
 
     public static ApiException rateLimited() {
         return new ApiException(ApiErrorCode.RATE_LIMITED);

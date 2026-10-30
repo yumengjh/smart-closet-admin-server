@@ -40,7 +40,7 @@ class SessionRevocationServiceTest {
         User user = user();
         when(users.findById(user.getId())).thenReturn(Optional.of(user));
 
-        new UserAdministrationService(users, tokens, audit).revokeSessions(user.getId());
+        new UserAdministrationService(users, tokens, audit, new com.yumg.starter.modules.rbac.application.SuperAdminGuard(users)).revokeSessions(user.getId());
 
         assertThat(user.getTokenVersion()).isEqualTo(1);
         verify(tokens).revokeAllForUser(user.getId());
