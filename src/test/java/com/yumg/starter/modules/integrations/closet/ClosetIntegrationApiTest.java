@@ -560,6 +560,73 @@ class ClosetIntegrationApiTest {
         server.verify();
     }
 
+    @Test void styleTermPermissionsAndMenuAreSeeded() {
+        for (String permission : java.util.List.of("closet:styleterms:read", "closet:styleterms:write")) assertThat(permissions.findByCode(permission)).isPresent();
+        assertThat(menus.findByCode("closet-style-terms").orElseThrow().getRequiredPermission()).isEqualTo("closet:styleterms:read");
+        assertThat(roles.findAllWithPermissions().stream().filter(role -> role.getCode().equals("SUPER_ADMIN"))
+                .findFirst().orElseThrow().getPermissions()).extracting(permission -> permission.getCode())
+                .contains("closet:styleterms:read", "closet:styleterms:write");
+    }
+
+    @Test void styleTermQueueIsSignedZeroBasedAndPermissionProtected() throws Exception {
+        mvc.perform(get("/api/v1/closet/style-terms/pending")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/closet/style-terms/pending").with(jwtAs("closet:templates:read"))).andExpect(status().isForbidden());
+        server.expect(requestTo(org.hamcrest.Matchers.containsString("/api/manage/v1/style-terms/pending?")))
+                .andExpect(request -> capture(request))
+                .andRespond(withSuccess("{\"items\":[{\"term\":\"多巴胺\",\"styles\":[\"休闲\"],\"hits\":3,\"proposers\":2}],\"total\":11,\"page\":2,\"size\":5,\"vocabulary\":[\"休闲\",\"甜美\"]}", MediaType.APPLICATION_JSON));
+        mvc.perform(get("/api/v1/closet/style-terms/pending?page=1&size=5").with(jwtAs("closet:styleterms:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.page").value(1)).andExpect(jsonPath("$.data.totalElements").value(11))
+                .andExpect(jsonPath("$.data.totalPages").value(3)).andExpect(jsonPath("$.data.items[0].term").value("多巴胺"))
+                .andExpect(jsonPath("$.data.vocabulary[1]").value("甜美"));
+        assertThat(recorded.get().rawQuery()).contains("page=2", "size=5");
+        assertThat(recorded.get().signature()).isNotBlank(); server.verify();
+        mvc.perform(get("/api/v1/closet/style-terms/pending?username=alice").with(jwtAs("closet:styleterms:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/closet/style-terms/pending?size=101").with(jwtAs("closet:styleterms:read"))).andExpect(status().isBadRequest());
+    }
+
+    @Test void styleTermApproveAndRejectNeedWritePermissionValidateAndAudit() throws Exception {
+        String body = "{\"term\":\"多巴胺\",\"proposedStyles\":[\"休闲\"],\"styles\":[\"休闲\",\"运动\"]}";
+        for (String action : java.util.List.of("approve", "reject")) {
+            String path = "/api/v1/closet/style-terms/pending/" + action;
+            mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isUnauthorized());
+            mvc.perform(post(path).with(jwtAs("closet:styleterms:read")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
+            for (String invalid : java.util.List.of("{}", "{\"term\":\"x\",\"proposedStyles\":[]}", "{\"term\":\"x\",\"proposedStyles\":[\"a\",\"b\",\"c\"]}"))
+                mvc.perform(post(path).with(jwtAs("closet:styleterms:write")).contentType(MediaType.APPLICATION_JSON).content(invalid)).andExpect(status().isBadRequest());
+        }
+        server.expect(requestTo("http://closet.test/api/manage/v1/style-terms/pending/approve")).andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("{\"term\":\"多巴胺\",\"proposedStyles\":[\"休闲\"],\"styles\":[\"休闲\",\"运动\"]}"))
+                .andRespond(withSuccess("{\"term\":\"多巴胺\",\"approved\":true,\"styles\":[\"休闲\",\"运动\"]}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://closet.test/api/manage/v1/style-terms/pending/reject")).andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("{\"term\":\"多巴胺\",\"proposedStyles\":[\"休闲\"]}", true))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_PROBLEM_JSON).body("{\"code\":\"STYLE_TERM_NOT_FOUND\",\"detail\":\"已被审核\"}"));
+        mvc.perform(post("/api/v1/closet/style-terms/pending/approve").with(jwtAs("closet:styleterms:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.approved").value(true));
+        mvc.perform(post("/api/v1/closet/style-terms/pending/reject").with(jwtAs("closet:styleterms:write")).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"term\":\"多巴胺\",\"proposedStyles\":[\"休闲\"]}")).andExpect(status().isNotFound());
+        server.verify();
+        assertThat(auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_STYLE_TERM_APPROVE")))
+                .anySatisfy(e -> { assertThat(e.getTargetId()).isEqualTo("多巴胺"); assertThat(e.getResult()).isEqualTo("SUCCESS"); assertThat(e.getMetadata()).contains("运动"); });
+        assertThat(auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_STYLE_TERM_REJECT")))
+                .anySatisfy(e -> { assertThat(e.getResult()).isEqualTo("FAILURE"); assertThat(e.getMetadata()).contains("NOT_FOUND"); });
+    }
+
+    @Test void styleTermBatchDecidesEveryItemOnItsOwn() throws Exception {
+        server.expect(requestTo("http://closet.test/api/manage/v1/style-terms/pending/approve")).andExpect(content().json("{\"term\":\"甲词\"}"))
+                .andRespond(withSuccess("{\"approved\":true}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://closet.test/api/manage/v1/style-terms/pending/approve")).andExpect(content().json("{\"term\":\"乙词\"}"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_PROBLEM_JSON).body("{\"code\":\"STYLE_TERM_NOT_FOUND\",\"detail\":\"x\"}"));
+        String body = "{\"action\":\"APPROVE\",\"items\":[{\"term\":\"甲词\",\"proposedStyles\":[\"休闲\"]},{\"term\":\"乙词\",\"proposedStyles\":[\"甜美\"]}]}";
+        mvc.perform(post("/api/v1/closet/style-terms/pending/batch").with(jwtAs("closet:styleterms:read")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/closet/style-terms/pending/batch").with(jwtAs("closet:styleterms:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.succeeded").value(1)).andExpect(jsonPath("$.data.failed").value(1))
+                .andExpect(jsonPath("$.data.results[0].ok").value(true)).andExpect(jsonPath("$.data.results[1].ok").value(false))
+                .andExpect(jsonPath("$.data.results[1].code").value("NOT_FOUND"));
+        server.verify();
+        for (String invalid : java.util.List.of("{\"action\":\"DELETE\",\"items\":[{\"term\":\"x\",\"proposedStyles\":[\"a\"]}]}", "{\"action\":\"APPROVE\",\"items\":[]}", "{\"items\":[{\"term\":\"x\",\"proposedStyles\":[\"a\"]}]}"))
+            mvc.perform(post("/api/v1/closet/style-terms/pending/batch").with(jwtAs("closet:styleterms:write")).contentType(MediaType.APPLICATION_JSON).content(invalid)).andExpect(status().isBadRequest());
+        assertThat(auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_STYLE_TERM_APPROVE") && "甲词".equals(e.getTargetId()))).isNotEmpty();
+    }
+
     private static void capture(ClientHttpRequest request) {
         try {
             recorded.set(new RecordedRequest(request.getURI().getRawPath(), request.getURI().getRawQuery(),

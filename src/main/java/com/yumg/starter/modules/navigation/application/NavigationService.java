@@ -30,7 +30,7 @@ public class NavigationService {
             "menu-management", "user-management", "rbac-management", "runtime-config",
             "ip-rule-management", "audit-log", "announcement-management",
             "account-security", "gc-management", "sql-console",
-            "closet-users", "closet-insights", "closet-dashboard", "closet-ops", "closet-exports", "closet-templates");
+            "closet-users", "closet-insights", "closet-dashboard", "closet-ops", "closet-exports", "closet-templates", "closet-style-terms");
 
     private final NavigationMenuRepository menus;
     private final PermissionRepository permissions;
