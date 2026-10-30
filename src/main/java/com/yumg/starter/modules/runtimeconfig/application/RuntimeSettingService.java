@@ -169,8 +169,10 @@ public class RuntimeSettingService implements RuntimeCacheProvider {
         Instant checkedAt = Instant.now();
         lastCheckedAt = checkedAt;
         try {
-            Map<String, String> replacement = loadValues();
+            // Read the revision before the values: values may then be newer than the label (fixed by the
+            // next refresh), but never older, so a stale snapshot cannot be marked as synced.
             long revision = currentRevision();
+            Map<String, String> replacement = loadValues();
             publish(replacement, revision);
             return status();
         } catch (RuntimeException exception) {
@@ -287,11 +289,27 @@ public class RuntimeSettingService implements RuntimeCacheProvider {
         if (value == null) throw new IllegalStateException("Runtime setting is not initialized: " + key);
         return value;
     }
+    /**
+     * Commit callbacks may run in a different order than their transactions committed. Merging only
+     * this transaction's delta into the current snapshot would let a later revision's callback mark
+     * the cache as synced while an earlier, already committed change is still missing (#168). So
+     * every callback reloads the complete settings in its still-bound persistence context: it holds
+     * this transaction's own values and revision, and every key it did not touch is read from the
+     * database, where all revisions up to this one are already committed. A callback older than the
+     * published snapshot is then fully covered and can be skipped.
+     */
     private synchronized void replaceSnapshot(Map<String, String> updates, long revision) {
         if (revision < snapshotRevision) return;
-        Map<String, String> replacement = new LinkedHashMap<>(snapshot);
-        replacement.putAll(updates);
-        publish(immutable(replacement), revision);
+        try {
+            Map<String, String> replacement = new LinkedHashMap<>(loadValues());
+            replacement.putAll(updates);
+            publish(immutable(replacement), revision);
+        } catch (RuntimeException exception) {
+            // The change is committed; keep the cache visibly out of date so the refresh scheduler retries.
+            databaseRevision = Math.max(databaseRevision, revision);
+            lastFailedAt = Instant.now();
+            lastFailureMessage = failureMessage(exception);
+        }
     }
     private void publish(Map<String, String> values, long revision) {
         Instant now = Instant.now();
