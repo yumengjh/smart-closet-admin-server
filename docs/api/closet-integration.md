@@ -80,6 +80,19 @@ start 使用 UTF-8 secret 计算 HMAC-SHA256，签名采用 base64url 无填充�
 
 前端新增组件键为 `closet-ops`、`closet-exports`、`closet-templates`，和原有两个键一起注册到路由及菜单编辑器。大屏按 refreshAfterMs 刷新，最少 30 秒；页面隐藏/退出时暂停，读取失败后由管理员点击重试。模板审核查看与写入权限分离。
 
+## 风格词审核（2026-10-31，鱼搭 #173）
+
+助手从用户对话学到的风格词先只对本人生效，管理员批准后才进入鱼搭全站词表。本平台提供审核入口；鱼搭只返回人数，不返回用户名。上游路径 `/api/manage/v1/style-terms/pending*`。
+
+| 路由（省略 `/api/v1/closet`） | 权限 | 说明 |
+| --- | --- | --- |
+| `GET /style-terms/pending` | `closet:styleterms:read` | `page`（0 起）、`size`（1–100）；按（词，映射）归并，字段 `term`、`styles`、`hits`、`proposers`、`legacy`、`firstProposedAtMs`、`lastProposedAtMs`、`sharedStyles`；响应另带 `vocabulary`（标准风格表）。 |
+| `POST /style-terms/pending/approve` | `closet:styleterms:write` | `{term, proposedStyles, styles?}`；`styles` 修正映射（至多 2 个，须在标准风格内）。词立即对全站生效，替换已有映射。 |
+| `POST /style-terms/pending/reject` | `closet:styleterms:write` | `{term, proposedStyles}`；驳回后对提出者本人也不再生效。 |
+| `POST /style-terms/pending/batch` | `closet:styleterms:write` | `{action: APPROVE\|REJECT, items: [{term, proposedStyles}]}`，至多 50 项；逐项独立决定、独立审计，返回 `succeeded`、`failed`、`results[{term, ok, code}]`；批量批准沿用助手给出的映射，要改映射请单项批准。 |
+
+审计动作 `CLOSET_STYLE_TERM_APPROVE`、`CLOSET_STYLE_TERM_REJECT`（成功与失败都记，详情含词与映射和错误码），鱼搭同步记 `STYLE_TERM_APPROVE`、`STYLE_TERM_REJECT`。菜单 `closet-style-terms`（组件键同名，权限 `closet:styleterms:read`）。上游 404 `STYLE_TERM_NOT_FOUND`（该词已被审核）转为平台 `NOT_FOUND`。
+
 ### 启动配置
 
 鱼搭设置 `CLOSET_MANAGEMENT_ENABLED=true`、`CLOSET_MANAGEMENT_KEY_ID`、`CLOSET_MANAGEMENT_SECRET`（至少 32 UTF-8 字节）；管理后端设置 `APP_CLOSET_ENABLED=true`、`APP_CLOSET_BASE_URL`、`APP_CLOSET_KEY_ID`、`APP_CLOSET_SECRET`。两端 ID 和密钥必须一致。默认仍关闭，不在代码或前端写入真实密钥。

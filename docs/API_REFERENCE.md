@@ -894,6 +894,8 @@ Actuator health 保持公开以服务容器探针；其余 Actuator 路径统一
 | `GET /exports/daily`（JSON/CSV）、`GET /exports/events` | `closet:exports:read` |
 | `GET /templates` | `closet:templates:read` |
 | `PATCH /templates/{id}` | `closet:templates:write` |
+| `GET /style-terms/pending` | `closet:styleterms:read` |
+| `POST /style-terms/pending/approve`、`POST /style-terms/pending/reject`、`POST /style-terms/pending/batch` | `closet:styleterms:write` |
 
 所有分页对外使用 0-based `PageResponse`（`items/page/size/totalElements/totalPages`），转发上游时页码加 1，返回时减 1；默认 page=0、size=20，size 范围 1–100。用户、邀请码、账号事件列表拒绝白名单以外和重复的查询参数。
 

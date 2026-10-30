@@ -30,6 +30,7 @@ public class ClosetNavigationBootstrap implements ApplicationRunner {
         seed(directory, "closet-ops", "运行监控", "/closet/ops", "closet-ops", "ri/pulse-line", 30, "closet:ops:read");
         seed(directory, "closet-exports", "数据导出", "/closet/exports", "closet-exports", "ri/download-2-line", 40, "closet:exports:read");
         seed(directory, "closet-templates", "模板审核", "/closet/templates", "closet-templates", "ri/checkbox-multiple-line", 50, "closet:templates:read");
+        seed(directory, "closet-style-terms", "风格词审核", "/closet/style-terms", "closet-style-terms", "ri/price-tag-3-line", 55, "closet:styleterms:read");
         seed(directory, "closet-users", "业务用户", "/closet/users", "closet-users", "ri/group-line", 20, "closet:user:read");
     }
     private void seed(NavigationMenu parent, String code, String title, String path, String component,
