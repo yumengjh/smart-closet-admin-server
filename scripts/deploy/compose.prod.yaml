@@ -51,7 +51,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "${ADMIN_HOST_PORT:-8081}:8080"
+      - "127.0.0.1:${ADMIN_HOST_PORT:-8081}:8080"
     volumes:
       - app-data:/app/data
       - ./keys:/run/keys:ro
