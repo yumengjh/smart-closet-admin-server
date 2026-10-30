@@ -61,6 +61,13 @@ public class TokenService {
             audit.event("REFRESH_TOKEN_REUSE_DETECTED", "RefreshSession", session.getId(), "FAILURE", "{\"action\":\"family_revoked\"}");
             throw ApiException.unauthorized();
         }
+        if (session.getTokenVersion() != user.getTokenVersion()) {
+            // Issued from a credential check that predates a password/role/status change: a late login
+            // racing a password change must not be promoted to the user's current version (#171).
+            refreshSessions.revokeFamily(session.getFamilyId(), now);
+            audit.event("REFRESH_TOKEN_STALE_VERSION", "RefreshSession", session.getId(), "FAILURE", "{\"action\":\"family_revoked\"}");
+            throw ApiException.unauthorized();
+        }
         session.consume(now);
         return issue(user, session.getFamilyId(), session.isPersistent());
     }
@@ -85,7 +92,8 @@ public class TokenService {
         Instant accessExpiry = now.plus(15, ChronoUnit.MINUTES);
         String rawRefreshToken = newRefreshToken();
         refreshSessions.save(new RefreshSession(user.getId(), familyId,
-                sha256(rawRefreshToken), now, now.plus(30, ChronoUnit.DAYS), persistent));
+                sha256(rawRefreshToken), now, now.plus(30, ChronoUnit.DAYS), persistent,
+                user.getTokenVersion()));
         JwtClaimsSet claims = JwtClaimsSet.builder().issuer("springboot-start").subject(user.getId())
                 .issuedAt(now).expiresAt(accessExpiry).id(UUID.randomUUID().toString())
                 .claim("username", user.getUsername()).claim("token_version", user.getTokenVersion())

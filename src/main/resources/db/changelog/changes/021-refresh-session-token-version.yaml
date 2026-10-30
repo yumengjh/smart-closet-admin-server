@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: 021-refresh-session-token-version
+      author: starter
+      changes:
+        # Plain ALTER keeps SQLite from rebuilding the table (Liquibase addColumn would drop the token_hash index, see 007).
+        - sql:
+            sql: alter table refresh_sessions add column token_version bigint default 0 not null
+        # Existing sessions were issued under the user's current version; keep them refreshable after upgrade.
+        - sql:
+            sql: update refresh_sessions set token_version = (select u.token_version from users u where u.id = refresh_sessions.user_id) where exists (select 1 from users u where u.id = refresh_sessions.user_id)

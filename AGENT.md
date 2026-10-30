@@ -66,7 +66,7 @@ Controller 负责 HTTP 映射、校验和权限声明，不直接编排 Reposito
 - 增删角色权限；
 - 显式撤销用户会话。
 
-实现时同时维护 `token_version` 和 Refresh Session 撤销，不要只处理其中一种 Token。
+实现时同时维护 `token_version` 和 Refresh Session 撤销，不要只处理其中一种 Token。Refresh Session 绑定签发时的 `token_version`，轮换时必须与用户当前版本比对；参与拒绝路径的内层 `@Transactional` 要与外层一致使用 `noRollbackFor = ApiException.class`，否则撤销与审计会随 rollback-only 一起丢失。
 
 生产安全边界：
 

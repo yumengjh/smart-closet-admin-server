@@ -31,17 +31,21 @@ public class RefreshSession extends BaseUuidEntity {
     private Instant revokedAt;
     @Column(name = "persistent", nullable = false)
     private boolean persistent;
+    /** User token_version at the credential check that started this family; refresh is refused once it moves. */
+    @Column(name = "token_version", nullable = false)
+    private long tokenVersion;
 
     protected RefreshSession() {}
 
     public RefreshSession(String userId, String familyId, String tokenHash, Instant issuedAt,
-                          Instant expiresAt, boolean persistent) {
+                          Instant expiresAt, boolean persistent, long tokenVersion) {
         this.userId = userId;
         this.familyId = familyId;
         this.tokenHash = tokenHash;
         this.issuedAt = issuedAt;
         this.expiresAt = expiresAt;
         this.persistent = persistent;
+        this.tokenVersion = tokenVersion;
     }
 
     public String getUserId() { return userId; }
@@ -50,6 +54,7 @@ public class RefreshSession extends BaseUuidEntity {
     public Instant getExpiresAt() { return expiresAt; }
     public Instant getRevokedAt() { return revokedAt; }
     public boolean isPersistent() { return persistent; }
+    public long getTokenVersion() { return tokenVersion; }
     public boolean isExpired(Instant now) { return !expiresAt.isAfter(now); }
     public boolean isConsumed() { return consumedAt != null; }
     public boolean isRevoked() { return revokedAt != null; }

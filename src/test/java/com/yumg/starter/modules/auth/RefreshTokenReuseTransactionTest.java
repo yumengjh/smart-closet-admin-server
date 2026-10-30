@@ -22,7 +22,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
  * Real Spring transactions across AuthenticationService and TokenService proxies: replaying a
- * consumed refresh token must commit the family revocation and its audit row (#157).
+ * consumed refresh token must commit the family revocation and its audit row (#157), and a refresh
+ * session issued from a credential check that predates a password change must not refresh (#171).
  */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:sqlite:target/refresh-token-reuse-test.db",
@@ -38,6 +39,31 @@ class RefreshTokenReuseTransactionTest {
     @Autowired private RefreshSessionRepository sessions;
     @Autowired private AuditEventRepository auditEvents;
     @Autowired private PasswordEncoder encoder;
+    @Autowired private com.yumg.starter.modules.auth.application.TokenService tokens;
+    @Autowired private com.yumg.starter.modules.users.application.UserProfileService profiles;
+
+    @Test
+    void lateLoginIssuedAfterAPasswordChangeCannotBeRefreshed() {
+        String username = "race-" + UUID.randomUUID().toString().substring(0, 8);
+        User created = users.saveAndFlush(new User(username, "Race", encoder.encode("old-password-1")));
+        // T1: the old password has been verified against this snapshot (token_version 0), then T1 pauses.
+        User verifiedSnapshot = users.findWithRolesById(created.getId()).orElseThrow();
+        // T2: password change bumps token_version and revokes every refresh session that exists right now.
+        profiles.changePassword(created.getId(),
+                new com.yumg.starter.modules.users.api.dto.ChangePasswordRequest("old-password-1", "new-password-1"));
+        assertThat(users.findById(created.getId()).orElseThrow().getTokenVersion())
+                .isGreaterThan(verifiedSnapshot.getTokenVersion());
+        // T1 resumes and issues its session after the revocation.
+        TokenResponse late = tokens.issue(verifiedSnapshot, false);
+
+        assertUnauthorized(() -> auth.refresh(late.refreshToken()));
+        assertThat(sessions.findAllByUserIdOrderByIssuedAtDesc(created.getId()))
+                .allMatch(RefreshSession::isRevoked);
+
+        TokenResponse fresh = auth.login(new LoginRequest(username, "new-password-1", false));
+        TokenResponse rotated = auth.refresh(fresh.refreshToken());
+        assertThat(auth.refresh(rotated.refreshToken()).refreshToken()).isNotBlank();
+    }
 
     @Test
     void replayedRefreshTokenRevokesItsFamilyDurablyAndLeavesOtherFamiliesAlone() {

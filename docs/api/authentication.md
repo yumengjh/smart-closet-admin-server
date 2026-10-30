@@ -39,7 +39,7 @@ JWT 包含用户 ID、用户名、令牌版本和有效权限列表。Refresh To
 
 ## 刷新、复用与登出
 
-每次刷新都会消耗旧 Refresh Token，并返回新的 Access Token 与轮换后的 HttpOnly Cookie；客户端无需、也不能读取 Refresh Token。旧 Token 被再次使用时，服务会撤销该 Token 家族并返回 `401 AUTHENTICATION_REQUIRED`。
+每次刷新都会消耗旧 Refresh Token，并返回新的 Access Token 与轮换后的 HttpOnly Cookie；客户端无需、也不能读取 Refresh Token。旧 Token 被再次使用时，服务会撤销该 Token 家族并返回 `401 AUTHENTICATION_REQUIRED`。每个 Refresh Session 还保存签发时（即本次密码校验时）的 `token_version`；刷新时与用户当前版本不一致就撤销该家族、记 `REFRESH_TOKEN_STALE_VERSION` 审计并返回 401，因此与改密并发、在撤销之后才落库的旧密码登录会话也无法刷新出新令牌。
 
 登出会撤销 Cookie 中的 Refresh Token。修改密码会撤销该用户所有 Refresh Token；管理员可撤销指定用户的全部 Refresh Session，禁用/锁定账户也会撤销其 Refresh Session。
 
