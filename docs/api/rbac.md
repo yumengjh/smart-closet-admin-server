@@ -23,7 +23,7 @@ users --< user_roles >-- roles --< role_permissions >-- permissions
 
 权限会写入新签发的 JWT；修改角色或权限后，用户应重新登录或刷新 Token。
 
-角色或权限发生变更时，受影响用户的 Refresh Session 会被撤销且 token version 递增，旧 JWT 会立即失效。系统拒绝禁用、锁定或移除最后一个 `SUPER_ADMIN`，并返回 `409 LAST_SUPER_ADMIN_PROTECTED`。
+角色或权限发生变更时，受影响用户的 Refresh Session 会被撤销且 token version 递增，旧 JWT 会立即失效。系统拒绝禁用、锁定或移除最后一个启用的 `SUPER_ADMIN`，并返回 `409 LAST_SUPER_ADMIN_PROTECTED`；该检查会对全部超级管理员行加写锁，避免并发降级各自通过。`SUPER_ADMIN` 与 `USER` 是系统角色，不论成员数都不能整体删除（`409 SYSTEM_ROLE_PROTECTED`）。
 
 ## 已实现接口
 

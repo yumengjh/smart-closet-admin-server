@@ -58,8 +58,25 @@ class UserAdministrationServiceTest {
         verify(users, never()).findAllWithRolesByIdIn(org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void disablingTheLastActiveSuperAdminIsRejectedWhenOthersAreDisabled() {
+        Role superAdmin = new Role("SUPER_ADMIN", "Super Administrator");
+        User target = user("admin-1", "admin-1");
+        target.grant(superAdmin);
+        User disabled = user("admin-2", "admin-2");
+        disabled.grant(superAdmin);
+        disabled.disable();
+        when(users.findWithRolesById("admin-1")).thenReturn(java.util.Optional.of(target));
+        when(users.lockAllByRoleCode("SUPER_ADMIN")).thenReturn(List.of(target, disabled));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service().changeStatus("admin-1", UserStatus.DISABLED))
+                .isInstanceOf(com.yumg.starter.common.api.ApiException.class);
+        assertThat(target.getStatus()).isEqualTo(UserStatus.ACTIVE);
+        verify(tokens, never()).revokeAllForUser("admin-1");
+    }
+
     private UserAdministrationService service() {
-        return new UserAdministrationService(users, tokens, audit);
+        return new UserAdministrationService(users, tokens, audit, new com.yumg.starter.modules.rbac.application.SuperAdminGuard(users), org.mockito.Mockito.mock(com.yumg.starter.modules.security.application.BruteForceService.class));
     }
 
     private User user(String id, String username) {

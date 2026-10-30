@@ -50,6 +50,6 @@ class UserProfileServiceTest {
 
     private RefreshSession session(String familyId, Instant issuedAt) {
         return new RefreshSession("user-id", familyId, familyId + issuedAt, issuedAt,
-                issuedAt.plusSeconds(60 * 60), true);
+                issuedAt.plusSeconds(60 * 60), true, 0);
     }
 }

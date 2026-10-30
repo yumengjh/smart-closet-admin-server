@@ -79,7 +79,8 @@ Authorization: Bearer <accessToken>
 | 403 | `ACCESS_DENIED` | 已认证但无所需权限。 |
 | 403 | `ACCOUNT_DISABLED` / `IP_ACCESS_DENIED` | 账号被禁用，或客户端 IP 被策略拒绝。 |
 | 409 | `CONFLICT` | 重复创建，或更新请求与当前状态冲突。 |
-| 409 | `LAST_SUPER_ADMIN_PROTECTED` | 不能移除、禁用或删除最后一个超级管理员。 |
+| 409 | `LAST_SUPER_ADMIN_PROTECTED` | 不能移除、禁用或锁定最后一个启用的超级管理员（其他超级管理员都已停用或锁定时同样拒绝）。 |
+| 409 | `SYSTEM_ROLE_PROTECTED` | 系统角色 `SUPER_ADMIN`、`USER` 不能整体删除。 |
 | 409 | `OPTIMISTIC_LOCK_CONFLICT` | 并发写入发生乐观锁冲突。 |
 | 423 | `ACCOUNT_LOCKED` | 账号临时锁定。 |
 | 429 | `RATE_LIMITED` | 触发全局或接口级限流。 |
@@ -382,11 +383,11 @@ Authorization: Bearer <accessToken>
 
 #### `DELETE /api/v1/rbac/roles/{roleCode}`
 
-删除角色，并从所有用户移除该角色。
+删除角色，并从所有用户移除该角色。系统角色 `SUPER_ADMIN` 与 `USER` 不论成员数都不能整体删除。
 
 | 权限 | `system:role:write` |
 | 成功 | `204 No Content` |
-| 特有错误 | `404 NOT_FOUND`、`409 LAST_SUPER_ADMIN_PROTECTED` |
+| 特有错误 | `404 NOT_FOUND`、`409 SYSTEM_ROLE_PROTECTED`（系统角色） |
 
 ### 5.2 权限目录
 
@@ -450,7 +451,7 @@ Authorization: Bearer <accessToken>
 
 | 权限 | `system:role:assign` |
 | 成功 | `200 OK`，空业务数据 |
-| 特有错误 | `409 LAST_SUPER_ADMIN_PROTECTED`（最后一名超级管理员） |
+| 特有错误 | `409 LAST_SUPER_ADMIN_PROTECTED`（最后一名启用的超级管理员） |
 
 ### 5.4 角色权限分配
 
@@ -533,7 +534,7 @@ Authorization: Bearer <accessToken>
 
 ### `PUT /api/v1/navigation/menus/{id}` 与 `DELETE /api/v1/navigation/menus/{id}`
 
-两者均需 `system:menu:write`。更新返回 `200 OK`，删除返回 `204 No Content`。菜单编码不可变更；删除有子菜单的条目、以及修改或删除内置条目，返回 `409 CONFLICT`。不存在的父级、权限或菜单 ID 返回 `404 NOT_FOUND`。
+两者均需 `system:menu:write`。更新返回 `200 OK`，删除返回 `204 No Content`。菜单编码不可变更；删除有子菜单的条目、以及修改或删除内置条目，返回 `409 CONFLICT`。不存在的父级、权限或菜单 ID 返回 `404 NOT_FOUND`。新增、更新、删除先对整张菜单表加写锁再校验父链，移动到自身后代或已成环的父链下返回 `409 CONFLICT`，并发互相移动不会同时通过。`GET /routes` 遇到已存在的父链环时跳过环上的菜单，不影响其他菜单。
 
 ## 6. 运行时服务治理
 

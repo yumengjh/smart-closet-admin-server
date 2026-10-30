@@ -53,7 +53,7 @@ REGISTERED 注册；LOGIN_SUCCEEDED 登录；PASSWORD_CHANGED 修改密码；PRO
 ## 6. 输入、分页与透传细节
 
 - 新增控制器、服务与种子继续受 `app.integrations.closet.enabled=true` 控制；关闭时不存在对应路由。
-- 用户名匹配 `^[A-Za-z0-9_.-]{2,80}$`；所有动态路径段经过编码。邀请码 id 最多 36 字，不接受空白 id。
+- 用户名匹配 `^[A-Za-z0-9_.-]{2,80}$`；新建账号另与鱼搭后端（smart-closet-server #164）一致，不能只由点组成或包含 `..`（`a.b` 允许，`..`、`a..b` 返回 400 且不转发）；寻址已有账号时只拒绝纯点用户名（无法作为路径段发送），旧的 `a..b` 账号仍可管理。所有动态路径段经过编码。邀请码 id 最多 36 字，不接受空白 id。
 - 用户列表白名单为 `q/status/role/sort/order/registeredVia/deactivated/page/size`；`q` 最多 80 字。保留原 `status=ENABLED|DISABLED`、`role=USER|ADMIN`、`sort=createdAt|username|lastActiveAt`、`order=asc|desc`。
 - 邀请码列表白名单为 `status/page/size`，账号事件列表白名单为 `from/to/username/action/actor/page/size`。三个列表均拒绝未知和重复参数；`page` 为 0–2147483646，默认 0；`size` 为 1–100，默认 20。转发页码加 1，回包使用 `PageResponse` 的 `items/page/size/totalElements/totalPages`。
 - `from/to` 校验为实际存在的 `YYYY-MM-DD` 日期，按上游 `Asia/Shanghai` 解释，`to` 含当天；不传日期由上游默认近 30 天。`actor` 最多 200 字，`username/action` 采用上述格式约束。

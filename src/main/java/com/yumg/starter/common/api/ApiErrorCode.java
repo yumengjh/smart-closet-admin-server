@@ -17,6 +17,7 @@ public enum ApiErrorCode {
     NOT_FOUND(HttpStatus.NOT_FOUND, "Resource not found"),
     CONFLICT(HttpStatus.CONFLICT, "The request conflicts with existing data"),
     LAST_SUPER_ADMIN_PROTECTED(HttpStatus.CONFLICT, "The last super administrator cannot be removed or disabled"),
+    SYSTEM_ROLE_PROTECTED(HttpStatus.CONFLICT, "System roles cannot be deleted"),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "Too many requests"),
     ENDPOINT_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "This endpoint is temporarily disabled"),
     REGISTRATION_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "Registration is temporarily disabled"),

@@ -36,7 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnProperty(prefix = "app.integrations.closet", name = "enabled", havingValue = "true")
 @RequestMapping("/api/v1/closet/users")
 public class ClosetUserAdministrationController {
-    private static final String USERNAME = "^[A-Za-z0-9_.-]{2,80}$";
+    private static final String USERNAME = com.yumg.starter.modules.integrations.closet.application.ClosetUsernames.EXISTING;
     private final ClosetUserAdministrationService users;
     public ClosetUserAdministrationController(ClosetUserAdministrationService users) { this.users = users; }
 

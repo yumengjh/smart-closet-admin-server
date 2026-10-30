@@ -128,6 +128,61 @@ class NavigationServiceTest {
         verify(audit).event("NAVIGATION_MENU_CREATED", "NavigationMenu", "menu-manager");
     }
 
+    @Test
+    void routesSkipMenusOnAParentCycleInsteadOfOverflowing() {
+        NavigationMenu a = directory("a", "/a", "a-id");
+        NavigationMenu b = directory("b", "/b", "b-id");
+        a.moveTo("b-id");
+        b.moveTo("a-id");
+        NavigationMenu healthy = page("allowed", "/allowed", "welcome", null, false);
+        when(menus.findAllByOrderBySortOrderAscCodeAsc()).thenReturn(List.of(a, b, healthy));
+
+        var routes = service().routes(Set.of());
+
+        assertThat(routes).extracting(route -> route.code()).containsExactly("allowed");
+    }
+
+    @Test
+    void movingUnderAnAlreadyCyclicChainIsRejectedAndTerminates() {
+        NavigationMenu a = directory("a", "/a", "a-id");
+        NavigationMenu b = directory("b", "/b", "b-id");
+        a.moveTo("b-id");
+        b.moveTo("a-id");
+        NavigationMenu target = directory("c", "/c", "c-id");
+        when(menus.findById("c-id")).thenReturn(Optional.of(target));
+        when(menus.findById("a-id")).thenReturn(Optional.of(a));
+        when(menus.findById("b-id")).thenReturn(Optional.of(b));
+        NavigationMenuRequest request = new NavigationMenuRequest("a-id", "c", "c", "/c", null, null, 0,
+                NavigationMenuType.DIRECTORY, null, true, true, false);
+
+        assertThatThrownBy(() -> service().update("c-id", request)).isInstanceOf(ApiException.class);
+        assertThat(target.getParentId()).isNull();
+    }
+
+    @Test
+    void structuralChangesTakeTheTreeLockBeforeReadingTheParentChain() {
+        NavigationMenu a = directory("a", "/a", "a-id");
+        NavigationMenu b = directory("b", "/b", "b-id");
+        b.moveTo("a-id");
+        when(menus.findById("a-id")).thenReturn(Optional.of(a));
+        when(menus.findById("b-id")).thenReturn(Optional.of(b));
+        NavigationMenuRequest moveAUnderB = new NavigationMenuRequest("b-id", "a", "a", "/a", null, null, 0,
+                NavigationMenuType.DIRECTORY, null, true, true, false);
+
+        assertThatThrownBy(() -> service().update("a-id", moveAUnderB)).isInstanceOf(ApiException.class);
+
+        var order = org.mockito.Mockito.inOrder(menus);
+        order.verify(menus).lockAllForStructureChange();
+        order.verify(menus).findById("a-id");
+    }
+
+    private NavigationMenu directory(String code, String path, String id) {
+        NavigationMenu menu = new NavigationMenu(null, code, code, path, null, null, 0,
+                NavigationMenuType.DIRECTORY, null, true, true, false, false);
+        ReflectionTestUtils.setField(menu, "id", id);
+        return menu;
+    }
+
     private NavigationService service() {
         return new NavigationService(menus, permissions, audit);
     }

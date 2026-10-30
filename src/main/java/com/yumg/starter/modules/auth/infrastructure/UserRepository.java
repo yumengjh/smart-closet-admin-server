@@ -22,7 +22,11 @@ public interface UserRepository extends JpaRepository<User, String> {
     List<String> findAllAvatarObjectIds();
 
     boolean existsByUsername(String username);
-    long countByRoles_Code(String roleCode);
+
+    /** Row-locks every member of a role; no DISTINCT because PostgreSQL rejects it with FOR UPDATE. */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u join u.roles r where r.code = :roleCode")
+    List<User> lockAllByRoleCode(@Param("roleCode") String roleCode);
     List<User> findDistinctByRoles_Code(String roleCode);
 
     @Query("""

@@ -3,6 +3,7 @@ package com.yumg.starter.config;
 import com.yumg.starter.common.api.SecurityApiErrorHandler;
 import com.yumg.starter.common.web.TraceIdFilter;
 import com.yumg.starter.common.web.PublicApiRequestMatcher;
+import com.yumg.starter.common.web.RequestPaths;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -54,7 +55,7 @@ public class SecurityConfiguration {
     @Bean
     CorsConfigurationSource corsConfigurationSource(RuntimeSettingService settings) {
         return request -> {
-            if (!request.getRequestURI().startsWith("/api/")) return null;
+            if (!RequestPaths.isApi(request)) return null;
             CorsConfiguration configuration = new CorsConfiguration();
             configuration.setAllowedOriginPatterns(csv(settings.string("security.cors.allowed-origins")));
             configuration.setAllowedMethods(csv(settings.string("security.cors.allowed-methods")));

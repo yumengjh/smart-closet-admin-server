@@ -35,3 +35,5 @@ databaseChangeLog:
       file: db/changelog/changes/019-ip-protection.yaml
   - include:
       file: db/changelog/changes/020-convert-postgres-ip-protection-instant-columns.yaml
+  - include:
+      file: db/changelog/changes/021-refresh-session-token-version.yaml

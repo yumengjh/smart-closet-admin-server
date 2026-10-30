@@ -52,7 +52,7 @@
 - `maintenance.gc.interval-minutes`
 - `maintenance.gc.max-run-seconds`
 
-服务启动时会为缺失项写入默认值，并将配置缓存为内存快照。业务请求只读取该快照，不会逐次查询配置表。配置写事务同时递增 `runtime_cache_revisions` 中对应缓存的 revision；事务成功提交后才会原子切换本机快照，回滚不会产生仅在当前进程生效的“幽灵配置”。自动任务只查询各缓存的一行 revision，发生变化才全量加载；管理员也可手动刷新全部或单个缓存。首批统一管理 `RUNTIME_SETTINGS` 与 `IP_ACCESS_RULES`。
+服务启动时会为缺失项写入默认值，并将配置缓存为内存快照。业务请求只读取该快照，不会逐次查询配置表。配置写事务同时递增 `runtime_cache_revisions` 中对应缓存的 revision；事务成功提交后才会原子切换本机快照，回滚不会产生仅在当前进程生效的“幽灵配置”。提交回调按全量重读（含本事务自身的值与 revision）发布快照，而不是把本次增量合并进当前快照；因此两次提交的回调即使逆序执行，也不会出现“revision 相同但缺了前一次已提交配置”的情况，晚到的旧 revision 回调直接跳过。回调重读失败时缓存保持“未同步”状态，交给自动刷新重试。全量加载先读 revision 再读配置值，值只可能比标记新、不会比标记旧。自动任务只查询各缓存的一行 revision，发生变化才全量加载；管理员也可手动刷新全部或单个缓存。首批统一管理 `RUNTIME_SETTINGS` 与 `IP_ACCESS_RULES`。
 
 `GET /runtime-config` 同时返回 `group`、整数上下界和 `dangerous` 元数据，后台不再维护一份容易遗漏的配置键白名单。`runtime.config-refresh.enabled` 控制全部 Provider 的自动 revision 对账，`runtime.config-refresh.interval-seconds` 可设为 10–3600 秒。即使把自动刷新关闭，调度器仍按心跳只检查 `RUNTIME_SETTINGS` 的 revision，以便其它实例能发现“重新开启自动刷新”这项修改；关闭期间不会自动重载其它 Provider。写接口提交后仍立即发布本机快照，管理员也始终可以手动刷新。直接绕过应用修改业务表不会递增 revision，应在修改后手动刷新，或同步维护对应 revision。
 
@@ -62,9 +62,9 @@
 
 本地浏览器经 8849 的 Vite 代理访问 8081 时，后端通常只看到回环来源；配置页又使用不参与自动升级的控制面桶。因此本地出现 429 但规则页没有自动记录是预期行为。完整请求顺序、规则优先级、默认阈值、安全测试步骤和部署检查参见[《IP 访问控制与自动安全防护》](ip-security-protection.md)。
 
-字符串配置只用于 CORS 和 Ant 路径模式。空字符串表示清空相应策略，例如撤销全部接口禁用规则；请求体仍必须包含 `value` 字段。旧 `security.ip.allow-list` / `security.ip.deny-list` 会在升级启动时迁移为结构化 IP 规则并删除，不再参与请求判断。运行时配置、缓存和 IP 规则恢复接口不会被 IP 规则锁死，但仍要求对应 RBAC 权限并受独立控制面限流保护。
+字符串配置只用于 CORS 和 Ant 路径模式。路径模式与 IP 规则、限流、CORS 路由一样，按与 Spring MVC 一致的规范化路径（百分号解码、去除分号内容与重复斜杠后的应用内路径）匹配，`/%61pi/v1/auth/login` 与 `/api/v1/auth/login` 视为同一路径；请求日志同时记录规范化路径和不同于它的原始路径。空字符串表示清空相应策略，例如撤销全部接口禁用规则；请求体仍必须包含 `value` 字段。旧 `security.ip.allow-list` / `security.ip.deny-list` 会在升级启动时迁移为结构化 IP 规则并删除，不再参与请求判断。运行时配置、缓存和 IP 规则恢复接口不会被 IP 规则锁死，但仍要求对应 RBAC 权限并受独立控制面限流保护。
 
-登录防爆破已实现：在 `security.brute-force.window-seconds` 观察窗口内达到失败阈值会锁定账户，锁定时长由 `security.brute-force.lock-seconds` 控制；锁定会撤销该用户 Refresh Token，到期后下次登录自动恢复。`security.request-log.enabled` 控制 `/api/**` 的结构化请求日志（方法、路径、状态、耗时、Trace ID、客户端 IP、已认证用户 ID），绝不记录密码、令牌或请求体。限流、自动封禁触发计数和防爆破状态均使用有容量上限的 Caffeine 单实例缓存，避免恶意高基数 key 无界占用堆内存；真正的封禁规则会持久化。多实例部署仍应以 Redis 等共享存储替换计数器，否则每个实例分别计数，达到阈值的速度取决于流量分配。
+登录防爆破已实现：在 `security.brute-force.window-seconds` 观察窗口内达到失败阈值会锁定账户，锁定时长由 `security.brute-force.lock-seconds` 控制；锁定会撤销该用户 Refresh Token，到期后下次登录自动恢复。超级管理员不改账号状态（避免锁死最后一名管理员），改用同样时长的账号级退避：达到阈值后在 `lock-seconds` 内直接返回 `423 ACCOUNT_LOCKED`、不再校验密码，并记录 `LOGIN_FAILED`（reason=throttled）审计；已有会话不受影响。恢复途径为等待到期、其他管理员把该账号状态设为 `ACTIVE`（会清除退避并留下审计），或重启后用 Bootstrap 管理员重置。该退避与失败计数同为单实例内存状态，重启即清空。`security.request-log.enabled` 控制 `/api/**` 的结构化请求日志（方法、路径、状态、耗时、Trace ID、客户端 IP、已认证用户 ID），绝不记录密码、令牌或请求体。限流、自动封禁触发计数和防爆破状态均使用有容量上限的 Caffeine 单实例缓存，避免恶意高基数 key 无界占用堆内存；真正的封禁规则会持久化。多实例部署仍应以 Redis 等共享存储替换计数器，否则每个实例分别计数，达到阈值的速度取决于流量分配。
 
 为避免唯一管理入口被误锁，`SUPER_ADMIN` 不会被自动防爆破策略锁定；普通管理员和用户仍受该策略约束。
 

@@ -57,7 +57,7 @@ Controller 负责 HTTP 映射、校验和权限声明，不直接编排 Reposito
 
 ## 请求与安全不变量
 
-所有 `/api/v1/**` 默认需要认证。公开接口必须显式使用 `@PublicApi`；该注解只跳过认证，Trace ID、IP 规则、接口开关和限流仍会执行。`minimalResponse = true` 只用于确实需要无信封响应的公开内容接口。
+所有 `/api/v1/**` 默认需要认证。公开接口必须显式使用 `@PublicApi`；该注解只跳过认证，Trace ID、IP 规则、接口开关和限流仍会执行。IP 规则、限流、接口开关、CORS 路由和请求日志的路径判断统一使用 `RequestPaths.normalized`（与 MVC 一致的解码规范化路径），不要再对原始 `getRequestURI()` 做 `startsWith` 或模式匹配，否则百分号编码的等价路径会绕过这些策略。`minimalResponse = true` 只用于确实需要无信封响应的公开内容接口。
 
 受保护请求使用短期 RSA JWT Access Token，Refresh Token 只通过 HttpOnly Cookie 传递并在数据库中哈希保存。以下操作必须让旧凭据失效：
 
@@ -66,7 +66,7 @@ Controller 负责 HTTP 映射、校验和权限声明，不直接编排 Reposito
 - 增删角色权限；
 - 显式撤销用户会话。
 
-实现时同时维护 `token_version` 和 Refresh Session 撤销，不要只处理其中一种 Token。
+实现时同时维护 `token_version` 和 Refresh Session 撤销，不要只处理其中一种 Token。Refresh Session 绑定签发时的 `token_version`，轮换时必须与用户当前版本比对；参与拒绝路径的内层 `@Transactional` 要与外层一致使用 `noRollbackFor = ApiException.class`，否则撤销与审计会随 rollback-only 一起丢失。
 
 生产安全边界：
 

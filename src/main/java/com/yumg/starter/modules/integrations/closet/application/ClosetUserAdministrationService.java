@@ -18,7 +18,6 @@ import java.nio.charset.StandardCharsets;
 @Service
 @ConditionalOnProperty(prefix = "app.integrations.closet", name = "enabled", havingValue = "true")
 public class ClosetUserAdministrationService {
-    private static final String USERNAME_PATTERN = "^[A-Za-z0-9_.-]{2,80}$";
     private final ClosetManagementClient client;
     private final AuditService audit;
     private final ObjectMapper mapper;
@@ -112,7 +111,7 @@ public class ClosetUserAdministrationService {
         if (value != null) query.put(key, List.of(value));
     }
     private static String segment(String value) {
-        if (value == null || !value.matches(USERNAME_PATTERN)) throw ApiException.invalidParameter();
+        if (value == null || !value.matches(ClosetUsernames.EXISTING)) throw ApiException.invalidParameter();
         return UriUtils.encodePathSegment(value, StandardCharsets.UTF_8);
     }
 }

@@ -117,4 +117,39 @@ class RuntimeSettingServiceTest {
         assertThat(service.integer("runtime.health-check.interval-seconds")).isEqualTo(90);
         assertThat(service.enabled("avatar.generator.enabled")).isFalse();
     }
+
+    @Test
+    void outOfOrderCommitCallbacksStillPublishEveryCommittedSetting() {
+        RuntimeSettingRepository repository = Mockito.mock(RuntimeSettingRepository.class);
+        RuntimeSetting registration = new RuntimeSetting("identity.registration.enabled", "BOOLEAN", "true");
+        RuntimeSetting disabled = new RuntimeSetting("security.endpoint.disabled-patterns", "STRING", "");
+        when(repository.findByKey(registration.getKey())).thenReturn(Optional.of(registration));
+        when(repository.findByKey(disabled.getKey())).thenReturn(Optional.of(disabled));
+        // The mocked "database" reflects every committed change, like a fresh query would.
+        when(repository.findAll()).thenReturn(List.of(registration, disabled));
+        RuntimeSettingService service = new RuntimeSettingService(repository);
+        service.reload();
+
+        List<TransactionSynchronization> first = capture(() ->
+                service.update("identity.registration.enabled", "false"));
+        List<TransactionSynchronization> second = capture(() ->
+                service.update("security.endpoint.disabled-patterns", "/api/v1/auth/register"));
+        // T1 committed first, but T2's callback runs first.
+        second.forEach(TransactionSynchronization::afterCommit);
+        first.forEach(TransactionSynchronization::afterCommit);
+
+        assertThat(service.enabled("identity.registration.enabled")).isFalse();
+        assertThat(service.string("security.endpoint.disabled-patterns")).isEqualTo("/api/v1/auth/register");
+        assertThat(service.status().snapshotRevision()).isEqualTo(service.status().databaseRevision());
+    }
+
+    private static List<TransactionSynchronization> capture(Runnable transaction) {
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            transaction.run();
+            return List.copyOf(TransactionSynchronizationManager.getSynchronizations());
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
 }
