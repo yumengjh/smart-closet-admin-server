@@ -42,7 +42,13 @@ public class TokenService {
         return issue(user, UUID.randomUUID().toString(), persistent);
     }
 
-    @Transactional
+    /**
+     * Rejections here persist security state (family revocation, reuse audit) before throwing.
+     * The rollback rule must match {@link AuthenticationService#refresh}: a default inner
+     * {@code @Transactional} would mark the shared transaction rollback-only on the
+     * {@link ApiException}, and the outer commit would then discard the revocation (#157).
+     */
+    @Transactional(noRollbackFor = ApiException.class)
     public TokenResponse rotate(User user, String rawRefreshToken) {
         Instant now = Instant.now();
         RefreshSession session = refreshSessions.findByTokenHash(sha256(rawRefreshToken))
