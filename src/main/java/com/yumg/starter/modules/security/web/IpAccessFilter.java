@@ -3,6 +3,7 @@ package com.yumg.starter.modules.security.web;
 import com.yumg.starter.common.api.ApiErrorCode;
 import com.yumg.starter.common.api.ApiErrorWriter;
 import com.yumg.starter.common.web.ClientIpResolver;
+import com.yumg.starter.common.web.RequestPaths;
 import com.yumg.starter.modules.security.application.IpAccessRuleService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -29,14 +30,14 @@ public class IpAccessFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith("/api/")
+        return !RequestPaths.isApi(request)
                 || HttpMethod.OPTIONS.matches(request.getMethod());
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-        if (isRuntimeRecoveryEndpoint(request.getRequestURI())) {
+        if (isRuntimeRecoveryEndpoint(RequestPaths.normalized(request))) {
             chain.doFilter(request, response);
             return;
         }
@@ -49,8 +50,8 @@ public class IpAccessFilter extends OncePerRequestFilter {
     }
 
     private boolean isRuntimeRecoveryEndpoint(String path) {
-        return path.startsWith("/api/v1/system/runtime-config")
-                || path.startsWith("/api/v1/system/runtime-caches")
-                || path.startsWith("/api/v1/system/ip-access-rules");
+        return RequestPaths.isUnder(path, "/api/v1/system/runtime-config")
+                || RequestPaths.isUnder(path, "/api/v1/system/runtime-caches")
+                || RequestPaths.isUnder(path, "/api/v1/system/ip-access-rules");
     }
 }

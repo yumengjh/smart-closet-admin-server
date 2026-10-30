@@ -57,7 +57,7 @@ Controller 负责 HTTP 映射、校验和权限声明，不直接编排 Reposito
 
 ## 请求与安全不变量
 
-所有 `/api/v1/**` 默认需要认证。公开接口必须显式使用 `@PublicApi`；该注解只跳过认证，Trace ID、IP 规则、接口开关和限流仍会执行。`minimalResponse = true` 只用于确实需要无信封响应的公开内容接口。
+所有 `/api/v1/**` 默认需要认证。公开接口必须显式使用 `@PublicApi`；该注解只跳过认证，Trace ID、IP 规则、接口开关和限流仍会执行。IP 规则、限流、接口开关、CORS 路由和请求日志的路径判断统一使用 `RequestPaths.normalized`（与 MVC 一致的解码规范化路径），不要再对原始 `getRequestURI()` 做 `startsWith` 或模式匹配，否则百分号编码的等价路径会绕过这些策略。`minimalResponse = true` 只用于确实需要无信封响应的公开内容接口。
 
 受保护请求使用短期 RSA JWT Access Token，Refresh Token 只通过 HttpOnly Cookie 传递并在数据库中哈希保存。以下操作必须让旧凭据失效：
 

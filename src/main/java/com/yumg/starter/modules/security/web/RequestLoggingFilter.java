@@ -15,6 +15,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import com.yumg.starter.common.web.ClientIpResolver;
+import com.yumg.starter.common.web.RequestPaths;
 
 @Component
 public class RequestLoggingFilter extends OncePerRequestFilter {
@@ -24,7 +25,7 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
     public RequestLoggingFilter(RuntimeSettingService settings, ClientIpResolver clientIp) {
         this.settings = settings; this.clientIp = clientIp;
     }
-    @Override protected boolean shouldNotFilter(HttpServletRequest request) { return !request.getRequestURI().startsWith("/api/"); }
+    @Override protected boolean shouldNotFilter(HttpServletRequest request) { return !RequestPaths.isApi(request); }
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
         long started = System.nanoTime();
         try { chain.doFilter(request, response); }
@@ -32,7 +33,10 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             if (settings.enabled("security.request-log.enabled")) {
                 Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
                 String user = authentication == null || !authentication.isAuthenticated() ? null : authentication.getName();
-                log.info("request method={} path={} status={} durationMs={} traceId={} userId={} clientIp={}", request.getMethod(), request.getRequestURI(), response.getStatus(), (System.nanoTime()-started)/1_000_000, MDC.get(TraceIdFilter.TRACE_ID_MDC_KEY), user, clientIp.resolve(request));
+                String path = RequestPaths.normalized(request);
+                String rawPath = request.getRequestURI();
+                // Log the path the handler actually matched; keep the raw form only when it differs so encoded variants stay traceable.
+                log.info("request method={} path={} rawPath={} status={} durationMs={} traceId={} userId={} clientIp={}", request.getMethod(), path, rawPath.equals(path) ? "-" : rawPath, response.getStatus(), (System.nanoTime()-started)/1_000_000, MDC.get(TraceIdFilter.TRACE_ID_MDC_KEY), user, clientIp.resolve(request));
             }
         }
     }

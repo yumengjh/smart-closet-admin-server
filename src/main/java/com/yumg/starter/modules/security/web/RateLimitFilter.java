@@ -3,6 +3,7 @@ package com.yumg.starter.modules.security.web;
 import com.yumg.starter.common.api.ApiErrorCode;
 import com.yumg.starter.common.api.ApiErrorWriter;
 import com.yumg.starter.common.web.ClientIpResolver;
+import com.yumg.starter.common.web.RequestPaths;
 import com.yumg.starter.modules.runtimeconfig.application.RuntimeSettingService;
 import com.yumg.starter.modules.security.application.EndpointRateLimitPolicy;
 import com.yumg.starter.modules.security.application.IpAbuseTracker;
@@ -39,7 +40,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith("/api/")
+        return !RequestPaths.isApi(request)
                 || HttpMethod.OPTIONS.matches(request.getMethod());
     }
 
@@ -47,7 +48,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
         String ip = clientIp.resolve(request);
-        String path = request.getRequestURI();
+        String path = RequestPaths.normalized(request);
         if (isControlPlane(path)) {
             RateLimitDecision control = limits.evaluate("control:" + ip,
                     settings.integer("security.control-plane.rate-limit.capacity"),
@@ -89,9 +90,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private boolean isControlPlane(String path) {
-        return path.startsWith("/api/v1/system/runtime-config")
-                || path.startsWith("/api/v1/system/runtime-caches")
-                || path.startsWith("/api/v1/system/runtime-checks")
-                || path.startsWith("/api/v1/system/ip-access-rules");
+        return RequestPaths.isUnder(path, "/api/v1/system/runtime-config")
+                || RequestPaths.isUnder(path, "/api/v1/system/runtime-caches")
+                || RequestPaths.isUnder(path, "/api/v1/system/runtime-checks")
+                || RequestPaths.isUnder(path, "/api/v1/system/ip-access-rules");
     }
 }
