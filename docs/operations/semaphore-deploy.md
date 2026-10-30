@@ -36,9 +36,8 @@ PostgreSQL data and avatar files live in the compose volumes `postgres-data` and
 
 ## Reverse proxy and CORS
 
-The container publishes `ADMIN_HOST_PORT` on the host. The admin site (`https://yuda-admin.yumg.cn`, another host) calls
-this service directly at `https://yuda-admin-server.yumg.cn`: proxy that domain to `http://127.0.0.1:<port>` (or the
-host's address) and restrict the port to the proxy in the firewall. Credentialed CORS must allow the site origin:
+The container publishes `ADMIN_HOST_PORT` on the host's loopback only (`127.0.0.1`), so the plain-HTTP port is never reachable from outside and every request passes the reverse proxy. The admin site (`https://yuda-admin.yumg.cn`, another host) calls
+this service directly at `https://yuda-admin-server.yumg.cn`: proxy that domain to `http://127.0.0.1:<port>`. Credentialed CORS must allow the site origin:
 `APP_SECURITY_CORS_ALLOWED_ORIGINS=https://yuda-admin.yumg.cn` seeds a new database (`ADMIN_ALLOWED_ORIGINS` on the first
 deployment); on an existing database change it through the runtime-config API. The refresh cookie is `SameSite=Strict` and
 `Secure`, which works because both names are under `yumg.cn` and served over HTTPS.
