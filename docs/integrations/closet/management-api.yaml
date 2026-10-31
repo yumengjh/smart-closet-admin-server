@@ -1,3 +1,7 @@
+# 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/management-api.yaml
+# source-commit: 7f90917dbdc5fc335c88f26a6f5397bdbdeecbd9
+# source-sha256: 33647a85f45684234dff5ffd462c814ccb0d35f88c78964c8be4b2feaeae6957
+# 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
   title: Smart Closet Management API
@@ -30,6 +34,8 @@ tags:
     description: 数仓出口：按天宽表与去标识明细事件
   - name: templates
     description: 搭配模板审核
+  - name: style-terms
+    description: 助手学到的风格词审核（不含用户名，只给提出人数）
 paths:
   /users:
     get:
@@ -356,6 +362,43 @@ paths:
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
+  /users/{username}/token-budget:
+    parameters: [ { $ref: '#/components/parameters/Username' } ]
+    get:
+      tags: [users]
+      operationId: getUserTokenBudget
+      description: 助手 token 日预算与当日用量（输入加输出 token，北京时间自然日）。限额超出后，用户发起的助手消息返回 429 `AGENT_TOKEN_BUDGET_EXCEEDED`。
+      responses:
+        '200':
+          description: 今日 token 预算
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenBudget' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    put:
+      tags: [users]
+      operationId: updateUserTokenBudget
+      description: '`dailyTokenLimit` 为 `null` 表示恢复默认限额（`CLOSET_AGENT_USER_TOKEN_DAILY_LIMIT`，默认 3000000；默认值为 0 表示不设上限）。覆盖值立即生效。'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [dailyTokenLimit]
+              properties:
+                dailyTokenLimit: { type: [integer, 'null'], format: int64, minimum: 1, maximum: 1000000000 }
+      responses:
+        '200':
+          description: 已更新
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenBudget' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
   /registration:
     get:
       tags: [registration]
@@ -505,7 +548,7 @@ paths:
     get:
       tags: [users]
       operationId: listAccountEvents
-      description: 全站账号事件（注册、登录成功、改密码、改资料、退出设备、注销、鱼搭管理员与管理接口操作），新的在前，保留 180 天。
+      description: 全站账号事件（注册、登录成功与失败、锁定、越权拒绝、邀请码、改密码、改资料、退出设备、注销、鱼搭管理员与管理接口操作），新的在前，保留期由 closet.audit.retention-days 配置（默认 180 天）。
       parameters:
         - $ref: '#/components/parameters/From'
         - $ref: '#/components/parameters/To'
@@ -537,6 +580,54 @@ paths:
                   page: { type: integer }
                   size: { type: integer }
         '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /security-audit:
+    get:
+      tags: [users]
+      operationId: listSecurityAudit
+      description: >-
+        统一安全审计时间线，新的在前：合并账号事件（含登录失败、锁定、越权拒绝、邀请码、助手危险操作）、管理接口操作日志与模型调用明细
+        （model_usage 与 generation_attempt：谁、何时、哪个模型、什么用途、成功 / 失败 / UNKNOWN，不含提示词与内容）。
+        只读运维出口；明细含用户名，接入方不得转入大屏或数仓。登录失败的 subject 是登录名的单向键（~ 加 16 位十六进制，服务端密钥 HMAC），按 username 筛选时同时匹配该键（含旧版无密钥键）。
+      parameters:
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - { name: username, in: query, schema: { type: string, pattern: '^[A-Za-z0-9_.-]{2,80}$' } }
+        - { name: category, in: query, schema: { type: string, enum: [AUTH, ACCESS, ACCOUNT, INVITE, ASSISTANT, MANAGEMENT, MODEL] } }
+        - { name: type, in: query, description: '事件类型原文，如 LOGIN_FAILED、MODEL_CALL、MODEL_ATTEMPT 或管理操作名', schema: { type: string, pattern: '^[A-Za-z0-9_]{1,64}$' } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: 安全审计事件分页
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, page, size]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/SecurityAuditItem' }
+                  total: { type: integer, format: int64 }
+                  page: { type: integer }
+                  size: { type: integer }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /security-audit/integrity:
+    get:
+      tags: [users]
+      operationId: checkSecurityAuditIntegrity
+      description: >-
+        防篡改校验：先封存尚未封存的已结束日（按北京时间），再重算每日摘要链（account_event 与 management_operation_log 的当日记录的 SHA-256，
+        并链接前一日摘要），保留期内的日子同时重算记录本身。status 为 INTACT（完整）、TAMPERED（problems 指出被改动的日期与类型）或 EMPTY（尚无已封存的日子）。
+        摘要永久保留，超过保留期的日子只校验摘要链（expiredDays）。
+      responses:
+        '200':
+          description: 校验结果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SecurityAuditIntegrity' }
         '401': { $ref: '#/components/responses/Problem' }
   /insights/overview:
     get:
@@ -658,6 +749,18 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OpsStatus' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /ops/assistant-token-budget:
+    get:
+      tags: [ops]
+      operationId: opsAssistantTokenBudget
+      description: 助手 token 预算总览（只读）：全站今日用量与限额、账号默认限额。限额来自部署配置，不能通过接口修改；单个账号的覆盖值见 `/users/{username}/token-budget`。
+      responses:
+        '200':
+          description: 全站 token 预算
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SiteTokenBudget' }
         '401': { $ref: '#/components/responses/Problem' }
   /ops/tasks:
     get:
@@ -798,6 +901,60 @@ paths:
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
+  /style-terms/pending:
+    get:
+      tags: [style-terms]
+      operationId: listPendingStyleTerms
+      description: 待审核的风格词，按（词，映射）归并；提出次数多的在前。不返回用户名，只给提出人数。
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: 待审核风格词分页，附标准风格表（批准时可改映射）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PendingStyleTermPage' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /style-terms/pending/approve:
+    post:
+      tags: [style-terms]
+      operationId: approveStyleTerm
+      description: 批准该词在该映射下的全部待审核提案（不分提出人）：词进入全站词表，替换已有映射，同映射的其他提案一并关闭。记操作日志 STYLE_TERM_APPROVE。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StyleTermApprove' }
+      responses:
+        '200':
+          description: 已批准
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StyleTermReviewResult' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /style-terms/pending/reject:
+    post:
+      tags: [style-terms]
+      operationId: rejectStyleTerm
+      description: 驳回该词在该映射下的全部待审核提案：不进全站词表，对提出者本人也不再生效。记操作日志 STYLE_TERM_REJECT。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StyleTermReject' }
+      responses:
+        '200':
+          description: 已驳回
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StyleTermReviewResult' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
 components:
   securitySchemes:
     closetHmac:
@@ -862,8 +1019,9 @@ components:
       enum: [USER, ADMIN]
     OptionalPassword:
       type: [string, 'null']
+      description: 至少 12 个字符，且 UTF-8 编码后不超过 72 字节（BCrypt 上限；汉字通常 3 字节、表情符号 4 字节），超出返回 400 VALIDATION_FAILED，不截断。
       minLength: 12
-      maxLength: 200
+      maxLength: 72
     Problem:
       type: object
       required: [type, title, status, code]
@@ -945,7 +1103,7 @@ components:
       additionalProperties: false
       required: [username, role]
       properties:
-        username: { type: string, pattern: '^[A-Za-z0-9_.-]{2,80}$' }
+        username: { type: string, pattern: '^(?!.*\.\.)[A-Za-z0-9_.-]{2,80}$', description: 新用户名不能包含连续的点（如 `..`），否则无法作为路径段寻址；已有账号的查询仍按路径参数的旧规则匹配 }
         role: { $ref: '#/components/schemas/Role' }
         password: { $ref: '#/components/schemas/OptionalPassword' }
     CredentialResult:
@@ -990,7 +1148,41 @@ components:
         actor: { type: string, description: '操作者：用户名本人、鱼搭管理员用户名或 manage:{keyId}[:{X-Operator}]' }
         action:
           type: string
-          description: REGISTERED、LOGIN_SUCCEEDED、PASSWORD_CHANGED、PROFILE_UPDATED、SESSIONS_REVOKED、DEACTIVATED、ADMIN_*（鱼搭内管理员）、MANAGE_*（管理接口）
+          description: REGISTERED、LOGIN_SUCCEEDED、LOGIN_FAILED / LOGIN_LOCKED / PASSWORD_CONFIRM_FAILED / PORTABLE_LOGIN_FAILED（username 为登录名的单向键 ~xxxxxxxxxxxxxxxx，不含口令、IP、UA）、ACCESS_DENIED / CSRF_REJECTED / MANAGE_AUTH_REJECTED（detail 为方法、路径模板、角色）、INVITE_CREATED / INVITE_REVOKED / INVITE_USED / INVITE_REJECTED（只含邀请码 id）、PASSWORD_CHANGED、PROFILE_UPDATED、SESSIONS_REVOKED、DEACTIVATED、ADMIN_*（鱼搭内管理员）、MANAGE_*（管理接口）、AGENT_COMMAND（助手触发的危险操作：批量或单件回收、修改个人资料、删除基准人物或 OOTD、记忆维护；detail 含 event、kind、命令 id、会话与请求 id，不含内容）
+        detail: { type: [string, 'null'] }
+    SecurityAuditIntegrity:
+      type: object
+      required: [status, sealedDays, verifiedDays, expiredDays, unsealedDays, problems]
+      properties:
+        status: { type: string, enum: [INTACT, TAMPERED, EMPTY] }
+        sealedDays: { type: integer }
+        verifiedDays: { type: integer, description: '保留期内、记录与摘要都已核对的天数' }
+        expiredDays: { type: integer, description: '记录已按保留期清理、只核对摘要链的天数' }
+        unsealedDays: { type: integer, description: '最后封存日之后、尚未封存的已结束日数' }
+        latestDay: { type: [string, 'null'], format: date }
+        latestDigest: { type: [string, 'null'] }
+        problems:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            required: [day, kind, message]
+            properties:
+              day: { type: string, format: date }
+              kind: { type: string, enum: [ROWS_MODIFIED, CHAIN_BROKEN, DIGEST_ALTERED] }
+              message: { type: string }
+    SecurityAuditItem:
+      type: object
+      required: [id, occurredAtMs, category, source, type, subject, actor]
+      properties:
+        id: { type: string }
+        occurredAtMs: { type: integer, format: int64 }
+        category: { type: string, enum: [AUTH, ACCESS, ACCOUNT, INVITE, ASSISTANT, MANAGEMENT, MODEL] }
+        source: { type: string, enum: [ACCOUNT_EVENT, MANAGEMENT_LOG, MODEL_USAGE, GENERATION_ATTEMPT] }
+        type: { type: string }
+        subject: { type: string, description: '事件所涉账号；登录失败为 ~ 加 16 位单向键；无账号时为 -' }
+        actor: { type: string }
+        result: { type: [string, 'null'], description: '管理操作 SUCCESS / FAILURE；模型调用 OK / UNKNOWN（令牌用量缺失）/ FAILED / CANCELLED，生成尝试为其状态' }
         detail: { type: [string, 'null'] }
     Invite:
       type: object
@@ -1027,6 +1219,31 @@ components:
       properties:
         image: { $ref: '#/components/schemas/QuotaItem' }
         agent: { $ref: '#/components/schemas/QuotaItem' }
+        resetAtMs: { type: integer, format: int64 }
+    TokenBudget:
+      type: object
+      required: [limit, used, overridden, defaultLimit, resetAtMs]
+      properties:
+        limit: { type: integer, format: int64, description: 当前生效的日限额；0 表示不设上限 }
+        used: { type: integer, format: int64, description: 今日已用 token（输入加输出，未知按 0） }
+        overridden: { type: boolean }
+        defaultLimit: { type: integer, format: int64 }
+        resetAtMs: { type: integer, format: int64 }
+    SiteTokenBudget:
+      type: object
+      required: [site, userDefault, resetAtMs]
+      properties:
+        site:
+          type: object
+          required: [limit, used]
+          properties:
+            limit: { type: integer, format: int64, description: 全站日限额；0 表示不设上限 }
+            used: { type: integer, format: int64 }
+        userDefault:
+          type: object
+          required: [limit]
+          properties:
+            limit: { type: integer, format: int64 }
         resetAtMs: { type: integer, format: int64 }
     Scope:
       type: object
@@ -1103,6 +1320,8 @@ components:
         favoriteCount: { type: integer }
         wearingConfirmedCount: { type: integer }
         mappingVersion: { type: string }
+        styles: { type: array, items: { $ref: '#/components/schemas/KeyCount' }, description: 风格标签前 12 项（1.2） }
+        genderFits: { type: array, items: { $ref: '#/components/schemas/KeyCount' }, description: 男款 / 女款 / 中性（1.2） }
     GarmentRef:
       type: object
       required: [garmentId, owner, family, createdAtMs]
@@ -1273,7 +1492,7 @@ components:
         size: { type: integer }
     DashboardSnapshot:
       type: object
-      required: [generatedAtMs, refreshAfterMs, tiles, hourly, daily, distributions, ops]
+      required: [generatedAtMs, refreshAfterMs, tiles, hourly, daily, distributions, ops, growth, heatmap, feed]
       properties:
         generatedAtMs: { type: integer }
         refreshAfterMs: { type: integer }
@@ -1298,8 +1517,34 @@ components:
             modelTokensToday: { type: integer }
         hourly: { type: object, description: 近 24 个整点（含当前小时）, properties: { hours: { type: array, items: { type: string } }, series: { type: array, items: { type: object } } } }
         daily: { type: object, description: 近 30 天, properties: { days: { type: array, items: { type: string, format: date } }, series: { type: array, items: { type: object } } } }
-        distributions: { type: object }
+        distributions:
+          type: object
+          description: categories、colors、seasons、recommendationSources7d；1.2 增加 styles、genderFits、closetSizes（按已入柜衣物数分档的用户数，含 0 件）、registeredVia、aiFeatures30d（近 30 天按功能的模型调用次数与 Token）
+          additionalProperties: true
         ops: { type: object, properties: { status: { type: string }, issues: { type: integer }, queueBacklog: { type: integer }, failed24h: { type: integer } } }
+        growth:
+          type: object
+          description: 近 30 天每日新增用户与当日结束时的累计用户（1.2）
+          properties:
+            days: { type: array, items: { type: string, format: date } }
+            newUsers: { type: array, items: { type: integer } }
+            cumulative: { type: array, items: { type: integer } }
+        heatmap:
+          type: object
+          description: 近 28 天有记录的操作按星期（1=周一）× 小时（0–23，北京时间）计数（1.2）
+          properties:
+            days: { type: integer }
+            cells: { type: array, items: { type: array, items: { type: integer }, minItems: 3, maxItems: 3 }, description: '[weekday, hour, count]' }
+        feed:
+          type: array
+          description: 全站最新 20 条动态，去标识：只有类型、时间和衣物大类（或注册来源），不含用户名、衣物名称或图片（1.2）
+          items:
+            type: object
+            required: [atMs, kind]
+            properties:
+              atMs: { type: integer }
+              kind: { type: string, enum: [GARMENT_ADDED, OUTFIT_SAVED, WEAR_LOGGED, RECOMMENDATION_LIKED, USER_REGISTERED] }
+              label: { type: [string, 'null'], description: GARMENT_ADDED 为衣物大类键；USER_REGISTERED 为注册来源 }
     DailyExport:
       type: object
       required: [from, to, columns, rows]
@@ -1350,6 +1595,49 @@ components:
         validUntil: { type: [string, 'null'], format: date }
         reference: { type: string }
         slots: { type: array, items: { type: object } }
+    PendingStyleTerm:
+      type: object
+      required: [term, styles, hits, proposers, legacy, firstProposedAtMs, lastProposedAtMs, sharedStyles]
+      properties:
+        term: { type: string, description: 归一化后的风格词 }
+        styles: { type: array, items: { type: string }, maxItems: 2, description: 助手给出的映射（标准风格） }
+        hits: { type: integer, description: 提出次数合计 }
+        proposers: { type: integer, description: 提出该映射的不同用户数（不含迁移遗留条目） }
+        legacy: { type: boolean, description: 含迁移前无归属的遗留条目 }
+        firstProposedAtMs: { type: integer, format: int64 }
+        lastProposedAtMs: { type: integer, format: int64 }
+        sharedStyles: { type: [array, 'null'], items: { type: string }, description: 全站词表里该词已有的映射；批准会替换它 }
+    PendingStyleTermPage:
+      type: object
+      required: [items, total, page, size, vocabulary]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/PendingStyleTerm' } }
+        total: { type: integer }
+        page: { type: integer }
+        size: { type: integer }
+        vocabulary: { type: array, items: { type: string }, description: 标准风格表 }
+    StyleTermApprove:
+      type: object
+      additionalProperties: false
+      required: [term, proposedStyles]
+      properties:
+        term: { type: string, minLength: 1, maxLength: 40 }
+        proposedStyles: { type: array, minItems: 1, maxItems: 2, items: { type: string, maxLength: 20 }, description: 列表里该项的映射，用来定位提案 }
+        styles: { type: array, maxItems: 2, items: { type: string, maxLength: 20 }, description: 修正后的映射（须在标准风格内）；缺省沿用 proposedStyles }
+    StyleTermReject:
+      type: object
+      additionalProperties: false
+      required: [term, proposedStyles]
+      properties:
+        term: { type: string, minLength: 1, maxLength: 40 }
+        proposedStyles: { type: array, minItems: 1, maxItems: 2, items: { type: string, maxLength: 20 } }
+    StyleTermReviewResult:
+      type: object
+      required: [term, approved, styles]
+      properties:
+        term: { type: string }
+        approved: { type: boolean }
+        styles: { type: array, items: { type: string } }
     TemplateList:
       type: object
       required: [version, maxBonus, active, items]
