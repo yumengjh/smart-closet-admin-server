@@ -1,6 +1,6 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/management-api.yaml
-# source-commit: 7f90917dbdc5fc335c88f26a6f5397bdbdeecbd9
-# source-sha256: 33647a85f45684234dff5ffd462c814ccb0d35f88c78964c8be4b2feaeae6957
+# source-commit: 32ee4def0d93cb2a3091accf2d8dfba1b26ceac8
+# source-sha256: 0cd7017ba767ee5639a3b3a15d872e36f9d587e7a251747a1df490b4e24e0e48
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
@@ -170,7 +170,6 @@ paths:
               additionalProperties: false
               properties:
                 password: { $ref: '#/components/schemas/OptionalPassword' }
-        displayName: { type: [string, 'null'], maxLength: 40 }
       responses:
         '200':
           description: 已重置
@@ -1106,6 +1105,7 @@ components:
         username: { type: string, pattern: '^(?!.*\.\.)[A-Za-z0-9_.-]{2,80}$', description: 新用户名不能包含连续的点（如 `..`），否则无法作为路径段寻址；已有账号的查询仍按路径参数的旧规则匹配 }
         role: { $ref: '#/components/schemas/Role' }
         password: { $ref: '#/components/schemas/OptionalPassword' }
+        displayName: { type: [string, 'null'], maxLength: 40, description: 昵称，可省略；首尾空白会去掉，空白视为未设置，最多 40 个字符（按 Unicode 字符计），不得含控制字符，否则返回 400 VALIDATION_FAILED }
     CredentialResult:
       type: object
       required: [username, temporaryPassword]
