@@ -92,6 +92,15 @@ public class ClosetUserAdministrationService {
         return audited("CLOSET_USER_QUOTA_CHANGED", username, Map.of("username", username),
                 () -> client.put("/users/" + segment(username) + "/quota", body));
     }
+    public JsonNode tokenBudget(String username) { return client.get("/users/" + segment(username) + "/token-budget", Map.of()); }
+    /** {@code null} restores the closet default; the key is always sent because the contract requires it. */
+    public JsonNode updateTokenBudget(String username, Long dailyTokenLimit) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("dailyTokenLimit", dailyTokenLimit);
+        return audited("CLOSET_USER_TOKEN_BUDGET_CHANGED", username, Map.<String, Object>of("username", username,
+                        "dailyTokenLimit", dailyTokenLimit == null ? "DEFAULT" : dailyTokenLimit),
+                () -> client.put("/users/" + segment(username) + "/token-budget", body));
+    }
 
     private <T> T audited(String action, String target, Map<String, Object> metadata, Supplier<T> operation) {
         try {

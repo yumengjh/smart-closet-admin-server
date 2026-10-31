@@ -882,14 +882,15 @@ Actuator health 保持公开以服务容器探针；其余 Actuator 路径统一
 | `GET /users`、`GET /users/{username}` | `closet:user:read` |
 | `POST /users`、`PATCH /users/{username}/status`、`PATCH /users/{username}/role`、`PATCH /users/{username}/profile` | `closet:user:write` |
 | `POST /users/{username}/password-reset` | `closet:user:reset-password` |
-| `GET /users/{username}/sessions`、`GET /users/{username}/portable-links`、`GET /users/{username}/quota`、`GET /users/{username}/login-lock`、`GET /users/{username}/events` | `closet:user:read` |
+| `GET /users/{username}/sessions`、`GET /users/{username}/portable-links`、`GET /users/{username}/quota`、`GET /users/{username}/token-budget`、`GET /users/{username}/login-lock`、`GET /users/{username}/events` | `closet:user:read` |
 | `DELETE /users/{username}/sessions`、`DELETE /users/{username}/sessions/{sessionRef}`、`DELETE /users/{username}/portable-links/{linkId}`、`DELETE /users/{username}/login-lock` | `closet:user:write` |
-| `PUT /users/{username}/quota` | `closet:quota:write` |
+| `PUT /users/{username}/quota`、`PUT /users/{username}/token-budget` | `closet:quota:write` |
 | `GET /registration`、`GET /invites`、`GET /invites/{id}` | `closet:registration:read` |
 | `PUT /registration`、`POST /invites`、`PATCH /invites/{id}`、`DELETE /invites/{id}` | `closet:registration:write` |
 | `GET /account-events` | `closet:user:read` |
+| `GET /security-audit`、`GET /security-audit/integrity` | `closet:security:read` |
 | `GET /insights/{overview,wardrobe,usage,trends,recommendations,ai}` | `closet:insights:read` |
-| `GET /ops/status`、`GET /ops/tasks`、`GET /ops/operation-log` | `closet:ops:read` |
+| `GET /ops/status`、`GET /ops/assistant-token-budget`、`GET /ops/tasks`、`GET /ops/operation-log` | `closet:ops:read` |
 | `GET /dashboard/snapshot` | `closet:dashboard:read` |
 | `GET /exports/daily`（JSON/CSV）、`GET /exports/events` | `closet:exports:read` |
 | `GET /templates` | `closet:templates:read` |
@@ -897,7 +898,7 @@ Actuator health 保持公开以服务容器探针；其余 Actuator 路径统一
 | `GET /style-terms/pending` | `closet:styleterms:read` |
 | `POST /style-terms/pending/approve`、`POST /style-terms/pending/reject`、`POST /style-terms/pending/batch` | `closet:styleterms:write` |
 
-所有分页对外使用 0-based `PageResponse`（`items/page/size/totalElements/totalPages`），转发上游时页码加 1，返回时减 1；默认 page=0、size=20，size 范围 1–100。用户、邀请码、账号事件列表拒绝白名单以外和重复的查询参数。
+所有分页对外使用 0-based `PageResponse`（`items/page/size/totalElements/totalPages`），转发上游时页码加 1，返回时减 1；默认 page=0、size=20，size 范围 1–100。用户、邀请码、账号事件、安全审计列表拒绝白名单以外和重复的查询参数。
 
 1.2 用户列表新增 `registeredVia=ADMIN|INVITE|OPEN`、`deactivated=true|false`，排序新增 `sort=lastLoginAt`；创建新增可选 `displayName`（最多 40 字）。列表/详情原样保留 `displayName/registeredVia/lastLoginAtMs/deactivatedAtMs`，详情另有 `inviteId/loginLock`。
 

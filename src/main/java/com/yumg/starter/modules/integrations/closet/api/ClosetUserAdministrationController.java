@@ -9,6 +9,7 @@ import com.yumg.starter.modules.integrations.closet.api.dto.ClosetPasswordResetR
 import com.yumg.starter.modules.integrations.closet.api.dto.ClosetQuotaRequest;
 import com.yumg.starter.modules.integrations.closet.api.dto.ClosetRoleRequest;
 import com.yumg.starter.modules.integrations.closet.api.dto.ClosetStatusRequest;
+import com.yumg.starter.modules.integrations.closet.api.dto.ClosetTokenBudgetRequest;
 import com.yumg.starter.modules.integrations.closet.application.ClosetUserAdministrationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -109,5 +110,12 @@ public class ClosetUserAdministrationController {
     public JsonNode quota(@PathVariable @Pattern(regexp = USERNAME) String username,
                           @Valid @RequestBody ClosetQuotaRequest request) {
         return users.updateQuota(username, request);
+    }
+    @GetMapping("/{username}/token-budget") @PreAuthorize("hasAuthority('closet:user:read')")
+    public JsonNode tokenBudget(@PathVariable @Pattern(regexp = USERNAME) String username) { return users.tokenBudget(username); }
+    @PutMapping("/{username}/token-budget") @PreAuthorize("hasAuthority('closet:quota:write')")
+    public JsonNode tokenBudget(@PathVariable @Pattern(regexp = USERNAME) String username,
+                                @Valid @RequestBody ClosetTokenBudgetRequest request) {
+        return users.updateTokenBudget(username, request.dailyTokenLimit());
     }
 }
