@@ -35,7 +35,7 @@ APP_CLOSET_READ_TIMEOUT=10s
 | `PUT /{username}/quota` | `closet:quota:write` | 设置额度；`null` 表示恢复默认，数值范围 0–1000。 |
 | `GET /api/v1/closet/insights/{overview,wardrobe,usage,trends}` | `closet:insights:read` | 仅转发明确列出的洞察路由与各路由允许的查询参数；趋势 `metric` 可重复。 |
 
-SUPER_ADMIN 在集成启用时获得十二项 `closet:*` 权限。导航包含“鱼搭业务”目录及衣柜洞察、业务用户、注册与邀请、账号审计、运行监控、数据导出、模板审核七个页面；业务大屏作为平台首页，不再有独立菜单（启动时会清理早期种入的 `closet-dashboard` 菜单）。关闭开关不会删除数据库里已种入的菜单，避免覆盖管理员调整；关闭后可在菜单管理中隐藏或删除该目录。
+SUPER_ADMIN 在集成启用时获得全部 `closet:*` 权限（种子见 `ClosetPermissionBootstrap`）。导航包含“鱼搭业务”目录及衣柜洞察、业务用户、注册与邀请、账号审计、安全审计、运行监控、数据导出、模板审核、风格词审核等页面；业务大屏作为平台首页，不再有独立菜单（启动时会清理早期种入的 `closet-dashboard` 菜单）。关闭开关不会删除数据库里已种入的菜单，避免覆盖管理员调整；关闭后可在菜单管理中隐藏或删除该目录。
 
 ## 签名与追踪
 
@@ -92,6 +92,20 @@ start 使用 UTF-8 secret 计算 HMAC-SHA256，签名采用 base64url 无填充�
 | `POST /style-terms/pending/batch` | `closet:styleterms:write` | `{action: APPROVE\|REJECT, items: [{term, proposedStyles}]}`，至多 50 项；逐项独立决定、独立审计，返回 `succeeded`、`failed`、`results[{term, ok, code}]`；批量批准沿用助手给出的映射，要改映射请单项批准。 |
 
 审计动作 `CLOSET_STYLE_TERM_APPROVE`、`CLOSET_STYLE_TERM_REJECT`（成功与失败都记，详情含词与映射和错误码），鱼搭同步记 `STYLE_TERM_APPROVE`、`STYLE_TERM_REJECT`。菜单 `closet-style-terms`（组件键同名，权限 `closet:styleterms:read`）。上游 404 `STYLE_TERM_NOT_FOUND`（该词已被审核）转为平台 `NOT_FOUND`。
+
+## 安全审计与助手 token 预算（2026-10-31，鱼搭 #181）
+
+接入契约里此前未接的操作。安全审计明细含用户名，只在具备 `closet:security:read` 的管理页面展示，不进大屏与数仓出口；字段按契约原样透传，不增加字段。
+
+| 路由（省略 `/api/v1/closet`） | 权限 | 说明 |
+| --- | --- | --- |
+| `GET /security-audit` | `closet:security:read` | 统一安全审计时间线。参数白名单 `from`、`to`（YYYY-MM-DD）、`username`、`category`（AUTH/ACCESS/ACCOUNT/INVITE/ASSISTANT/MANAGEMENT/MODEL）、`type`（`^[A-Za-z0-9_]{1,64}$`）、`page`（0 起）、`size`（1–100），不可重复。 |
+| `GET /security-audit/integrity` | `closet:security:read` | 防篡改校验。上游会先封存已结束日再校验，因此本平台记录 `CLOSET_SECURITY_AUDIT_INTEGRITY_CHECKED`，元数据只含校验结论 `status`（失败时为错误码）。 |
+| `GET /ops/assistant-token-budget` | `closet:ops:read` | 全站助手 token 今日用量与限额、账号默认限额；只读，限额来自鱼搭部署配置。 |
+| `GET /users/{username}/token-budget` | `closet:user:read` | 单个账号今日 token 预算与用量。 |
+| `PUT /users/{username}/token-budget` | `closet:quota:write` | 体 `{dailyTokenLimit}`，1–1000000000，`null` 恢复默认；总是带该键转发。审计 `CLOSET_USER_TOKEN_BUDGET_CHANGED`（用户名与新限额，恢复默认记 `DEFAULT`）。 |
+
+新增权限 `closet:security:read`（授予 SUPER_ADMIN），菜单 `closet-security-audit`（安全审计，`/closet/security-audit`，组件键同名）。`GET /invites` 早已接入，本次只补登记到契约快照测试的已用操作清单。组件键白名单同时补上此前遗漏的 `closet-registration`、`closet-account-events`。
 
 ### 启动配置
 

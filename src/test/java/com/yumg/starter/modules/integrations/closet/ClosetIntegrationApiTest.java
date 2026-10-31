@@ -659,6 +659,94 @@ class ClosetIntegrationApiTest {
         assertThat(auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_STYLE_TERM_APPROVE") && "甲词".equals(e.getTargetId()))).isNotEmpty();
     }
 
+    @Test void securityAuditPermissionAndMenuAreSeeded() {
+        assertThat(permissions.findByCode("closet:security:read")).isPresent();
+        var menu = menus.findByCode("closet-security-audit").orElseThrow();
+        assertThat(menu.getRoutePath()).isEqualTo("/closet/security-audit");
+        assertThat(menu.getComponentKey()).isEqualTo("closet-security-audit");
+        assertThat(menu.getRequiredPermission()).isEqualTo("closet:security:read");
+        assertThat(roles.findAllWithPermissions().stream().filter(role -> role.getCode().equals("SUPER_ADMIN"))
+                .findFirst().orElseThrow().getPermissions()).extracting(permission -> permission.getCode())
+                .contains("closet:security:read");
+    }
+
+    @Test void securityAuditIsZeroBasedWhitelistedAndKeepsContractFields() throws Exception {
+        mvc.perform(get("/api/v1/closet/security-audit")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/closet/security-audit").with(jwtAs("closet:user:read"))).andExpect(status().isForbidden());
+        server.expect(requestTo(org.hamcrest.Matchers.containsString("/api/manage/v1/security-audit?")))
+                .andExpect(request -> capture(request))
+                .andRespond(withSuccess("{\"items\":[{\"id\":\"ae-1\",\"occurredAtMs\":1,\"category\":\"AUTH\",\"source\":\"ACCOUNT_EVENT\","
+                        + "\"type\":\"LOGIN_FAILED\",\"subject\":\"~0123456789abcdef\",\"actor\":\"-\",\"result\":null,\"detail\":null}],"
+                        + "\"total\":41,\"page\":3,\"size\":20}", MediaType.APPLICATION_JSON));
+        mvc.perform(get("/api/v1/closet/security-audit?page=2&from=2026-10-01&to=2026-10-31&username=alice&category=AUTH&type=LOGIN_FAILED")
+                        .with(jwtAs("closet:security:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.page").value(2))
+                .andExpect(jsonPath("$.data.totalElements").value(41)).andExpect(jsonPath("$.data.totalPages").value(3))
+                .andExpect(jsonPath("$.data.items[0].subject").value("~0123456789abcdef"))
+                .andExpect(jsonPath("$.data.items[0].source").value("ACCOUNT_EVENT"));
+        server.verify();
+        assertThat(recorded.get().rawQuery()).contains("page=3", "size=20", "category=AUTH", "type=LOGIN_FAILED", "username=alice");
+        assertThat(recorded.get().signature()).isNotBlank();
+        for (String query : java.util.List.of("category=OTHER", "type=bad-type", "username=x", "from=2026-02-30",
+                "unexpected=1", "category=AUTH&category=MODEL", "size=101", "page=-1"))
+            mvc.perform(get("/api/v1/closet/security-audit?" + query).with(jwtAs("closet:security:read"))).andExpect(status().isBadRequest());
+    }
+
+    @Test void integrityCheckIsSignedPermissionProtectedAndAuditedWithStatusOnly() throws Exception {
+        mvc.perform(get("/api/v1/closet/security-audit/integrity").with(jwtAs("closet:ops:read"))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/closet/security-audit/integrity?x=1").with(jwtAs("closet:security:read"))).andExpect(status().isBadRequest());
+        server.expect(requestTo("http://closet.test/api/manage/v1/security-audit/integrity"))
+                .andExpect(request -> capture(request))
+                .andRespond(withSuccess("{\"status\":\"TAMPERED\",\"sealedDays\":3,\"verifiedDays\":3,\"expiredDays\":0,\"unsealedDays\":0,"
+                        + "\"latestDay\":\"2026-10-30\",\"latestDigest\":\"abc\",\"problems\":[{\"day\":\"2026-10-29\",\"kind\":\"ROWS_MODIFIED\",\"message\":\"secret-detail\"}]}",
+                        MediaType.APPLICATION_JSON));
+        mvc.perform(get("/api/v1/closet/security-audit/integrity").with(jwtAs("closet:security:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("TAMPERED"))
+                .andExpect(jsonPath("$.data.problems[0].kind").value("ROWS_MODIFIED"));
+        server.verify();
+        assertThat(recorded.get().signature()).isNotBlank();
+        assertThat(auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_SECURITY_AUDIT_INTEGRITY_CHECKED")))
+                .anySatisfy(e -> { assertThat(e.getResult()).isEqualTo("SUCCESS"); assertThat(e.getMetadata()).contains("TAMPERED").doesNotContain("secret-detail"); });
+    }
+
+    @Test void assistantTokenBudgetOverviewIsAnOpsRead() throws Exception {
+        mvc.perform(get("/api/v1/closet/ops/assistant-token-budget").with(jwtAs("closet:user:read"))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/closet/ops/assistant-token-budget?x=1").with(jwtAs("closet:ops:read"))).andExpect(status().isBadRequest());
+        server.expect(requestTo("http://closet.test/api/manage/v1/ops/assistant-token-budget"))
+                .andRespond(withSuccess("{\"site\":{\"limit\":0,\"used\":12},\"userDefault\":{\"limit\":3000000},\"resetAtMs\":9}", MediaType.APPLICATION_JSON));
+        mvc.perform(get("/api/v1/closet/ops/assistant-token-budget").with(jwtAs("closet:ops:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.site.used").value(12))
+                .andExpect(jsonPath("$.data.userDefault.limit").value(3000000));
+        server.verify();
+    }
+
+    @Test void userTokenBudgetReadsWithUserReadAndWritesWithQuotaWriteAlwaysSendingTheKey() throws Exception {
+        String root = "http://closet.test/api/manage/v1/users/alice/token-budget";
+        String budget = "{\"limit\":500,\"used\":3,\"overridden\":true,\"defaultLimit\":3000000,\"resetAtMs\":9}";
+        mvc.perform(get("/api/v1/closet/users/alice/token-budget").with(jwtAs("closet:ops:read"))).andExpect(status().isForbidden());
+        mvc.perform(request(HttpMethod.PUT, "/api/v1/closet/users/alice/token-budget").with(jwtAs("closet:user:write"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"dailyTokenLimit\":500}")).andExpect(status().isForbidden());
+        for (String invalid : java.util.List.of("{\"dailyTokenLimit\":0}", "{\"dailyTokenLimit\":1000000001}"))
+            mvc.perform(request(HttpMethod.PUT, "/api/v1/closet/users/alice/token-budget").with(jwtAs("closet:quota:write"))
+                    .contentType(MediaType.APPLICATION_JSON).content(invalid)).andExpect(status().isBadRequest());
+        server.expect(requestTo(root)).andExpect(method(HttpMethod.GET)).andRespond(withSuccess(budget, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(root)).andExpect(method(HttpMethod.PUT)).andExpect(content().json("{\"dailyTokenLimit\":500}", true))
+                .andRespond(withSuccess(budget, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(root)).andExpect(method(HttpMethod.PUT)).andExpect(content().string("{\"dailyTokenLimit\":null}"))
+                .andRespond(withSuccess(budget.replace("true", "false"), MediaType.APPLICATION_JSON));
+        mvc.perform(get("/api/v1/closet/users/alice/token-budget").with(jwtAs("closet:user:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.limit").value(500));
+        mvc.perform(request(HttpMethod.PUT, "/api/v1/closet/users/alice/token-budget").with(jwtAs("closet:quota:write"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"dailyTokenLimit\":500}")).andExpect(status().isOk());
+        mvc.perform(request(HttpMethod.PUT, "/api/v1/closet/users/alice/token-budget").with(jwtAs("closet:quota:write"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"dailyTokenLimit\":null}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.overridden").value(false));
+        server.verify();
+        var changes = auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_USER_TOKEN_BUDGET_CHANGED")).toList();
+        assertThat(changes).anySatisfy(e -> assertThat(e.getMetadata()).contains("alice", "500"))
+                .anySatisfy(e -> assertThat(e.getMetadata()).contains("DEFAULT"));
+    }
+
     private static void capture(ClientHttpRequest request) {
         try {
             recorded.set(new RecordedRequest(request.getURI().getRawPath(), request.getURI().getRawQuery(),

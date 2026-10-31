@@ -20,16 +20,19 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 @ConditionalOnProperty(prefix = "app.integrations.closet", name = "enabled", havingValue = "true")
 public class ClosetManagementService {
-    private static final Map<String, Set<String>> QUERIES = Map.of(
-            "/invites", Set.of("status", "page", "size"),
-            "/account-events", Set.of("from", "to", "username", "action", "actor", "page", "size"),
-            "/ops/status", Set.of(),
-            "/ops/tasks", Set.of("status", "kind", "page", "size"),
-            "/ops/operation-log", Set.of("from", "to", "action", "targetUsername", "page", "size"),
-            "/dashboard/snapshot", Set.of(),
-            "/exports/daily", Set.of("from", "to", "format"),
-            "/exports/events", Set.of("cursor", "since", "limit", "types"),
-            "/templates", Set.of());
+    private static final Map<String, Set<String>> QUERIES = Map.ofEntries(
+            Map.entry("/invites", Set.of("status", "page", "size")),
+            Map.entry("/account-events", Set.of("from", "to", "username", "action", "actor", "page", "size")),
+            Map.entry("/ops/status", Set.of()),
+            Map.entry("/ops/assistant-token-budget", Set.of()),
+            Map.entry("/security-audit", Set.of("from", "to", "username", "category", "type", "page", "size")),
+            Map.entry("/security-audit/integrity", Set.of()),
+            Map.entry("/ops/tasks", Set.of("status", "kind", "page", "size")),
+            Map.entry("/ops/operation-log", Set.of("from", "to", "action", "targetUsername", "page", "size")),
+            Map.entry("/dashboard/snapshot", Set.of()),
+            Map.entry("/exports/daily", Set.of("from", "to", "format")),
+            Map.entry("/exports/events", Set.of("cursor", "since", "limit", "types")),
+            Map.entry("/templates", Set.of()));
     private final ClosetManagementClient client;
     private final AuditService audit;
     private final ObjectMapper mapper;
@@ -55,6 +58,23 @@ public class ClosetManagementService {
         return new PageResponse<>(items, result.path("page").asInt(page + 1) - 1, responseSize, total,
                 (int) ((total + responseSize - 1) / responseSize));
     }
+    /**
+     * The closet seals finished days before verifying, so this read changes upstream state; the platform audits the
+     * check and its verdict (status only, never problem details).
+     */
+    public JsonNode integrity(Map<String, List<String>> query) {
+        validate("/security-audit/integrity", query);
+        try {
+            var result = client.get("/security-audit/integrity", query);
+            audit.event("CLOSET_SECURITY_AUDIT_INTEGRITY_CHECKED", "ClosetSecurityAudit", "integrity", "SUCCESS",
+                    mapper.writeValueAsString(Map.of("status", result.path("status").asText())));
+            return result;
+        } catch (ApiException e) {
+            audit.event("CLOSET_SECURITY_AUDIT_INTEGRITY_CHECKED", "ClosetSecurityAudit", "integrity", "FAILURE",
+                    mapper.writeValueAsString(Map.of("code", e.error().name())));
+            throw e;
+        }
+    }
     public byte[] dailyCsv(Map<String, List<String>> query) {
         validate("/exports/daily", query);
         return client.getBytes("/exports/daily", query);
@@ -79,13 +99,15 @@ public class ClosetManagementService {
         Set<String> allowed = QUERIES.get(path);
         if (allowed == null) throw ApiException.notFound();
         if (query.keySet().stream().anyMatch(key -> !allowed.contains(key))) throw ApiException.invalidParameter();
-        if (path.equals("/invites") || path.equals("/account-events")) {
+        if (path.equals("/invites") || path.equals("/account-events") || path.equals("/security-audit")) {
             if (query.values().stream().anyMatch(values -> values.size() != 1)) throw ApiException.invalidParameter();
             if (path.equals("/invites")) {
                 matches(query, "status", "^(ACTIVE|USED_UP|EXPIRED|REVOKED)$");
             } else {
                 matches(query, "username", "^[A-Za-z0-9_.-]{2,80}$");
                 matches(query, "action", "^[A-Z_]{1,48}$");
+                matches(query, "category", "^(AUTH|ACCESS|ACCOUNT|INVITE|ASSISTANT|MANAGEMENT|MODEL)$");
+                matches(query, "type", "^[A-Za-z0-9_]{1,64}$");
                 if (query.containsKey("actor") && query.get("actor").getFirst().length() > 200) throw ApiException.invalidParameter();
                 for (String key : List.of("from", "to")) {
                     if (query.containsKey(key)) {
