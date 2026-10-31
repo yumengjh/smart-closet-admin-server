@@ -1,6 +1,6 @@
 # 鱼搭管理接口 1.2：账号控制代理契约
 
-上游：鱼搭 `/api/manage/v1`。唯一事实源为鱼搭仓库 `docs/management-api.yaml`（OpenAPI 3.1，接口版本 1.2.0），说明见该仓库 `docs/MANAGEMENT_API.md` 第 1、5、15 节。本目录的 [management-api.yaml](management-api.yaml) 是 2026-10-20 的只读契约副本；本次未修改鱼搭仓库。
+上游：鱼搭 `/api/manage/v1`。唯一事实源为鱼搭仓库 `docs/management-api.yaml`（OpenAPI 3.1，接口版本 1.2.0），说明见该仓库 `docs/MANAGEMENT_API.md` 第 1、5、15 节。本目录的 [management-api.yaml](management-api.yaml) 是只读契约快照（2026-10-31 起按来源提交同步，见 [集成说明](../../api/closet-integration.md)）；本次未修改鱼搭仓库。
 
 本文整理账号控制代理契约及上游字段约束，全部路由均省略后台前缀 `/api/v1/closet`。1.2 新增 13 个操作，总计 39 个（CSV 为 daily 同一路由的另一响应格式）。部署与签名见 [集成说明](../../api/closet-integration.md)。
 

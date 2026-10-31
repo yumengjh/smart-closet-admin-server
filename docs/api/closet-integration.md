@@ -2,7 +2,7 @@
 
 此模块将本管理平台适配为鱼搭 `/api/manage/v1` 的 HMAC 客户端。开关默认为关闭；关闭时控制器、权限/菜单种子、RestClient 与运行检查均不注册。
 
-上游契约与接入说明由鱼搭仓库（`smart-closet-server`）维护：`docs/management-api.yaml`（OpenAPI 契约）、`docs/MANAGEMENT_API.md`（签名、示例与错误排查）、`docs/DEPLOYMENT_TOPOLOGY.md`（部署拓扑与密钥配对）。本仓库 `docs/integrations/closet/` 下保存的是开发时的契约快照。
+上游契约与接入说明由鱼搭仓库（`smart-closet-server`）维护：`docs/management-api.yaml`（OpenAPI 契约）、`docs/MANAGEMENT_API.md`（签名、示例与错误排查）、`docs/DEPLOYMENT_TOPOLOGY.md`（部署拓扑与密钥配对）。本仓库 `docs/integrations/closet/management-api.yaml` 是契约源的逐字快照（头部 4 行记录来源提交与 sha256），请勿手改：鱼搭契约变化后运行 `scripts/sync-closet-contract.sh [鱼搭仓库路径]` 同步，`--check` 只比对。`ClosetContractSnapshotTest` 随 `mvn verify` 运行：校验快照未被手改、本服务调用的上游操作都在快照里；能读到契约源（同级 `../smart-closet-server` 或 `CLOSET_CONTRACT_SOURCE`）时逐字节比对，CI 读不到私有鱼搭仓库时跳过这一项。新增上游调用须登记到该测试的 `USED` 列表。
 
 ## 启用
 
