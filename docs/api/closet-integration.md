@@ -29,7 +29,7 @@ APP_CLOSET_READ_TIMEOUT=10s
 | --- | --- | --- |
 | `GET /api/v1/closet/users`、`GET /{username}` | `closet:user:read` | 列表、详情；start 的 `page` 从 0 起，转发时加 1，响应转换为 `PageResponse`。 |
 | `POST /api/v1/closet/users`、`PATCH /{username}/status`、`PATCH /{username}/role` | `closet:user:write` | 创建用户、启停、改角色。 |
-| `POST /api/v1/closet/users/{username}/password-reset` | `closet:user:reset-password` | 重置密码。 |
+| `POST /api/v1/closet/users/{username}/password-reset` | `closet:user:reset-password` | 重置密码。创建用户与重置密码的 `password` 可省略（生成临时密码），填写时与鱼搭一致：至少 12 个字符、UTF-8 编码后不超过 72 字节，在 start 侧先校验并返回鱼搭同款提示。 |
 | `GET /{username}/sessions`、`GET /{username}/portable-links`、`GET /{username}/quota` | `closet:user:read` | 查询用户会话、便携链接和额度。 |
 | `DELETE /{username}/sessions`、`DELETE /{username}/portable-links/{linkId}` | `closet:user:write` | 强制下线、吊销便携链接。 |
 | `PUT /{username}/quota` | `closet:quota:write` | 设置额度；`null` 表示恢复默认，数值范围 0–1000。 |

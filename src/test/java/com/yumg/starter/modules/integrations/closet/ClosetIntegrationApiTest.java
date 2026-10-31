@@ -180,6 +180,38 @@ class ClosetIntegrationApiTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /** Issue #181: passwords follow the closet rule, 12 characters to 72 UTF-8 bytes, with the closet's own messages. */
+    @Test void passwordsAreLimitedTo72Utf8BytesLikeTheCloset() throws Exception {
+        String tooLong = "密码不能超过 72 字节（英文、数字和符号各占 1 字节，汉字通常占 3 字节，表情符号占 4 字节）。";
+        for (String password : java.util.List.of("a".repeat(73), "汉".repeat(25), "😀".repeat(19))) {
+            mvc.perform(post("/api/v1/closet/users").with(jwtAs("closet:user:write")).contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"username\":\"long-pass\",\"role\":\"USER\",\"password\":\"" + password + "\"}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.violations[0].field").value("password"))
+                    .andExpect(jsonPath("$.violations[0].message").value(tooLong));
+            mvc.perform(post("/api/v1/closet/users/alice/password-reset").with(jwtAs("closet:user:reset-password"))
+                            .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"" + password + "\"}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.violations[0].message").value(tooLong));
+        }
+        mvc.perform(post("/api/v1/closet/users/alice/password-reset").with(jwtAs("closet:user:reset-password"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"" + "汉".repeat(11) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.violations[0].message").value("密码至少需要 12 个字符。"));
+
+        server.expect(requestTo("http://closet.test/api/manage/v1/users"))
+                .andRespond(withSuccess("{\"username\":\"long-pass\",\"temporaryPassword\":null}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://closet.test/api/manage/v1/users/alice/password-reset"))
+                .andRespond(withSuccess("{\"username\":\"alice\",\"temporaryPassword\":null}", MediaType.APPLICATION_JSON));
+        mvc.perform(post("/api/v1/closet/users").with(jwtAs("closet:user:write")).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"long-pass\",\"role\":\"USER\",\"password\":\"" + "汉".repeat(24) + "\"}"))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/v1/closet/users/alice/password-reset").with(jwtAs("closet:user:reset-password"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"" + "😀".repeat(18) + "\"}"))
+                .andExpect(status().isOk());
+        server.verify();
+    }
+
     @Test void forwardsTheRemainingUserOperationsWithTheConfiguredAuthorities() throws Exception {
         String root = "http://closet.test/api/manage/v1/users/alice";
         server.expect(requestTo(root)).andRespond(withSuccess("{\"username\":\"alice\"}", MediaType.APPLICATION_JSON));
