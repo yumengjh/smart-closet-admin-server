@@ -759,4 +759,162 @@ class ClosetIntegrationApiTest {
                 .authorities(() -> authority);
     }
     private record RecordedRequest(String path, String rawQuery, String method, String body, String keyId, String signature) {}
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> tryOnOperations() {
+        return java.util.stream.Stream.of(
+                org.junit.jupiter.params.provider.Arguments.of("GET", "/settings", "read", "settings", ""),
+                org.junit.jupiter.params.provider.Arguments.of("PUT", "/settings", "write", "updateSettings", "{\"revision\":4,\"value\":{\"mode\":\"FOLLOW_USER\",\"defaultEnabled\":false,\"dailySeconds\":180,\"dailyPoints\":1800,\"totalPoints\":3000,\"sessionSeconds\":180,\"startupSeconds\":30,\"firstFrameSeconds\":20,\"queueSeconds\":60,\"offerSeconds\":10,\"recordingSeconds\":60,\"recordingBytes\":104857600,\"storageBytes\":1073741824,\"accountConcurrency\":1,\"accountGuardPoints\":60}}"),
+                org.junit.jupiter.params.provider.Arguments.of("POST", "/settings/reset", "write", "resetSettings", "{\"revision\":4}"),
+                org.junit.jupiter.params.provider.Arguments.of("GET", "/users/alice/policy", "read", "userPolicy", ""),
+                org.junit.jupiter.params.provider.Arguments.of("PUT", "/users/alice/policy", "write", "updateUserPolicy", "{\"accessMode\":\"INHERIT\",\"dailySeconds\":null,\"startupFailureLimit\":0}"),
+                org.junit.jupiter.params.provider.Arguments.of("GET", "/users/alice/usage", "read", "userUsage", ""),
+                org.junit.jupiter.params.provider.Arguments.of("POST", "/users/alice/startup-failures/reset", "write", "resetStartupFailures", ""),
+                org.junit.jupiter.params.provider.Arguments.of("GET", "/accounts", "read", "accounts", ""),
+                org.junit.jupiter.params.provider.Arguments.of("POST", "/accounts", "credentials", "registerAccount", "{\"name\":\"integration-account\",\"environment\":\"china\",\"apiKey\":\"uk-testsecret12345\"}"),
+                org.junit.jupiter.params.provider.Arguments.of("GET", "/accounts/12345678-1234-4234-8234-123456789abc", "read", "account", ""),
+                org.junit.jupiter.params.provider.Arguments.of("PATCH", "/accounts/12345678-1234-4234-8234-123456789abc", "write", "updateAccount", "{\"name\":\"renamed\",\"accepting\":false,\"weight\":2,\"concurrencyLimit\":1}"),
+                org.junit.jupiter.params.provider.Arguments.of("POST", "/accounts/12345678-1234-4234-8234-123456789abc/credentials", "credentials", "rotateCredentials", "{\"name\":\"integration-account\",\"environment\":\"china\",\"apiKey\":\"uk-testsecret12345\"}"),
+                org.junit.jupiter.params.provider.Arguments.of("DELETE", "/accounts/12345678-1234-4234-8234-123456789abc/credentials/12345678-1234-4234-8234-123456789abc", "credentials", "removeCredential", ""),
+                org.junit.jupiter.params.provider.Arguments.of("POST", "/accounts/12345678-1234-4234-8234-123456789abc/probe", "probe", "probeAccount", ""),
+                org.junit.jupiter.params.provider.Arguments.of("POST", "/accounts/12345678-1234-4234-8234-123456789abc/budget", "budget", "updateBudget", "{\"budgetPoints\":3000}"),
+                org.junit.jupiter.params.provider.Arguments.of("GET", "/pool", "read", "pool", ""),
+                org.junit.jupiter.params.provider.Arguments.of("GET", "/reference-source", "read", "referenceSource", ""),
+                org.junit.jupiter.params.provider.Arguments.of("GET", "/usage", "read", "usage", ""),
+                org.junit.jupiter.params.provider.Arguments.of("GET", "/sessions", "read", "sessions", ""),
+                org.junit.jupiter.params.provider.Arguments.of("GET", "/sessions/12345678-1234-4234-8234-123456789abc", "read", "session", ""),
+                org.junit.jupiter.params.provider.Arguments.of("POST", "/sessions/12345678-1234-4234-8234-123456789abc/stop", "stop", "stopSession", ""),
+                org.junit.jupiter.params.provider.Arguments.of("POST", "/accounts/12345678-1234-4234-8234-123456789abc/stop-sessions", "stop", "stopAccountSessions", ""));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("tryOnOperations")
+    void tryOnRoutesEnforcePermissionsAndForwardSignedRequests(String method, String path, String permission,
+            String operation, String body) throws Exception {
+        String endpoint = "/api/v1/closet/tryon" + path;
+        var httpMethod = HttpMethod.valueOf(method);
+        mvc.perform(request(httpMethod, endpoint).with(jwtAs("system:user:read"))
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
+        server.expect(requestTo("http://closet.test/api/manage/v1/tryon" + path))
+                .andExpect(method(httpMethod)).andExpect(request -> capture(request))
+                .andExpect(request -> {
+                    assertThat(request.getHeaders().getFirst("X-Closet-Signature")).isNotBlank();
+                    assertThat(request.getHeaders().getFirst("X-Operator")).isNotBlank();
+                })
+                .andExpect(content().string(body))
+                .andRespond(withSuccess("{\"forwarded\":true}", MediaType.APPLICATION_JSON));
+        mvc.perform(request(httpMethod, endpoint).with(jwtAs("closet:tryon:" + permission))
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.forwarded").value(true));
+        server.verify();
+        if (!method.equals("GET")) {
+            String action = "CLOSET_TRYON_" + operation.replaceAll("([a-z])([A-Z])", "$1_$2").toUpperCase(java.util.Locale.ROOT);
+            assertThat(auditEvents.findAll().stream().filter(event -> event.getAction().equals(action)
+                    && event.getResult().equals("SUCCESS")).toList()).isNotEmpty()
+                    .allSatisfy(event -> assertThat(event.getMetadata()).isNull());
+        }
+    }
+
+    @Test void tryOnValidationRejectsUnknownMissingAndOutOfRangeFieldsBeforeAnyUpstreamCall() throws Exception {
+        for (String body : java.util.List.of("{}", "{\"revision\":-1,\"extra\":true}")) {
+            mvc.perform(post("/api/v1/closet/tryon/settings/reset").with(jwtAs("closet:tryon:write"))
+                    .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
+        }
+        for (String body : java.util.List.of(
+                "{\"accessMode\":\"INHERIT\",\"dailySeconds\":-1}",
+                "{\"accessMode\":\"INHERIT\",\"dailySeconds\":null,\"startupFailureLimit\":1000}",
+                "{\"accessMode\":\"ALL\",\"dailySeconds\":null}")) {
+            mvc.perform(request(HttpMethod.PUT, "/api/v1/closet/tryon/users/alice/policy").with(jwtAs("closet:tryon:write"))
+                    .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
+        }
+        mvc.perform(get("/api/v1/closet/tryon/accounts?unknown=value").with(jwtAs("closet:tryon:read")))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/closet/tryon/accounts/invalid").with(jwtAs("closet:tryon:read")))
+                .andExpect(status().isBadRequest());
+        server.verify();
+    }
+
+    @Test void tryOnStaleRevisionAndCredentialFailuresKeepStatusAndNeverExposeProviderDetails() throws Exception {
+        String id = "12345678-1234-4234-8234-123456789abc";
+        server.expect(requestTo("http://closet.test/api/manage/v1/tryon/settings/reset"))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                    .body("{\"code\":\"TRYON_REVISION_CONFLICT\",\"detail\":\"private-provider-value\"}"));
+        server.expect(requestTo("http://closet.test/api/manage/v1/tryon/accounts/" + id + "/credentials"))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                    .body("{\"code\":\"TRYON_ACCOUNT_MISMATCH\",\"detail\":\"uk-testsecret12345\"}"));
+        mvc.perform(post("/api/v1/closet/tryon/settings/reset").with(jwtAs("closet:tryon:write"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"revision\":4}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONFLICT"));
+        var response = mvc.perform(post("/api/v1/closet/tryon/accounts/" + id + "/credentials")
+                .with(jwtAs("closet:tryon:credentials")).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"运营账户\",\"environment\":\"china\",\"apiKey\":\"uk-testsecret12345\"}"))
+                .andExpect(status().isConflict()).andReturn().getResponse().getContentAsString();
+        assertThat(response).doesNotContain("uk-testsecret12345");
+        assertThat(auditEvents.findAll().stream().filter(event -> event.getAction().equals("CLOSET_TRYON_ROTATE_CREDENTIALS")
+                && event.getResult().equals("FAILURE")).toList()).isNotEmpty()
+                .allSatisfy(event -> assertThat(event.getMetadata()).contains("CONFLICT").doesNotContain("uk-", "apiKey"));
+        server.verify();
+    }
+
+    @Test void tryOnSettingsValidateTheCrossFieldStartupDeadline() throws Exception {
+        mvc.perform(request(HttpMethod.PUT, "/api/v1/closet/tryon/settings").with(jwtAs("closet:tryon:write"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"revision\":4,\"value\":{\"mode\":\"FOLLOW_USER\",\"defaultEnabled\":false,\"dailySeconds\":180,\"dailyPoints\":1800,\"totalPoints\":3000,\"sessionSeconds\":180,\"startupSeconds\":30,\"firstFrameSeconds\":31,\"queueSeconds\":60,\"offerSeconds\":10,\"recordingSeconds\":60,\"recordingBytes\":104857600,\"storageBytes\":1073741824,\"accountConcurrency\":1,\"accountGuardPoints\":60}}"))
+                .andExpect(status().isBadRequest());
+        assertThat(permissions.findByCode("closet:tryon:credentials")).isPresent();
+        assertThat(menus.findByCode("closet-tryon")).isPresent();
+        server.verify();
+    }
+
+    @Test void tryOnNormalizesH2AndPostgresSqlRowsWithoutChangingDiagnosticPayloads() throws Exception {
+        server.expect(requestTo("http://closet.test/api/manage/v1/tryon/usage"))
+                .andRespond(withSuccess("[{\"QUOTA_DAY\":\"2026-11-04T16:00:00.000Z\",\"SESSIONS\":2,\"CONSUMED_POINTS\":5,\"RESERVED_POINTS\":0,\"USER_SECONDS\":0}]", MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://closet.test/api/manage/v1/tryon/accounts"))
+                .andRespond(withSuccess("[{\"id\":\"account\",\"credentials\":[{\"ID\":\"credential\",\"MASKED_KEY\":\"uk-…demo\",\"ACTIVE\":0,\"CREATED_AT_MS\":1}]}]", MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://closet.test/api/manage/v1/tryon/pool"))
+                .andRespond(withSuccess("{\"accounts\":[{\"credentials\":[{\"id\":\"credential\",\"masked_key\":\"uk-…demo\",\"active\":0}]}]}", MediaType.APPLICATION_JSON));
+        mvc.perform(get("/api/v1/closet/tryon/usage").with(jwtAs("closet:tryon:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].quota_day").value("2026-11-05"))
+                .andExpect(jsonPath("$.data[0].sessions").value(2)).andExpect(jsonPath("$.data[0].consumed_points").value(5));
+        mvc.perform(get("/api/v1/closet/tryon/accounts").with(jwtAs("closet:tryon:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].credentials[0].id").value("credential"))
+                .andExpect(jsonPath("$.data[0].credentials[0].masked_key").value("uk-…demo"))
+                .andExpect(jsonPath("$.data[0].credentials[0].ID").doesNotExist());
+        mvc.perform(get("/api/v1/closet/tryon/pool").with(jwtAs("closet:tryon:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.accounts[0].credentials[0].masked_key").value("uk-…demo"));
+        server.verify();
+    }
+
+    @Test void everyUpstreamContractOperationHasAnActualGatewayMapping() throws Exception {
+        var mapping = context.getBean("requestMappingHandlerMapping", org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping.class);
+        var actual = new java.util.TreeSet<String>();
+        for (var info : mapping.getHandlerMethods().keySet()) {
+            for (String path : info.getPatternValues()) {
+                if (!path.startsWith("/api/v1/closet")) continue;
+                String relative = path.substring("/api/v1/closet".length());
+                // Platform batch review is an extension implemented with individual upstream operations.
+                if (relative.equals("/style-terms/pending/batch")) continue;
+                for (var method : info.getMethodsCondition().getMethods()) {
+                    actual.add(method.name() + " " + relative.replaceAll("\\{[^}]+}", "{}"));
+                }
+            }
+        }
+        var expected = ClosetContractSnapshotTest.operations(java.nio.file.Files.readString(
+                java.nio.file.Path.of("docs/integrations/closet/management-api.yaml"))).stream()
+                .map(operation -> operation.replaceAll("\\{[^}]+}", "{}")).collect(java.util.stream.Collectors.toSet());
+        // Six insight reports deliberately share one whitelisted dynamic mapping. Exercise every declared report.
+        if (actual.remove("GET /insights/{}")) {
+            var reports = expected.stream().filter(operation -> operation.startsWith("GET /insights/")).sorted().toList();
+            for (String operation : reports) {
+                String path = operation.substring("GET ".length());
+                server.expect(requestTo("http://closet.test/api/manage/v1" + path))
+                        .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+            }
+            for (String operation : reports) {
+                String path = operation.substring("GET ".length());
+                mvc.perform(get("/api/v1/closet" + path).with(jwtAs("closet:insights:read"))).andExpect(status().isOk());
+                actual.add(operation);
+            }
+            server.verify();
+        }
+        assertThat(actual).hasSize(69).containsExactlyInAnyOrderElementsOf(expected);
+    }
+
 }

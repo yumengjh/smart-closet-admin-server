@@ -127,3 +127,7 @@ start 使用 UTF-8 secret 计算 HMAC-SHA256，签名采用 base64url 无填充�
 新增 `closet:registration:read/write` 授予 SUPER_ADMIN；菜单 `closet-registration`（注册与邀请）与 `closet-account-events`（账号审计）位于鱼搭业务目录。菜单组件键是前端接入约定，本次仅修改管理后端，未实现前端页面。
 
 邀请码创建仅在当前响应透传一次性 `code`，成功审计只保存返回的 `id`；失败审计只保存目标 id 和稳定错误码，不保存请求/响应内容。邀请码 PATCH 只转发非 null 字段，空备注仍保留以清除原值；至少提供一个字段，有效期须在现在之后 90 天内，`maxUses` 不低于已用次数由上游判断。所有路径参数按单个路径段编码。
+
+## 2026-11-05 全量同步与实时试穿
+
+当前 69 个上游操作均有管理网关入口，新增实时试穿 22 个操作、6 个独立权限与 `closet-tryon` 菜单。完整路径、权限、完整替换、版本冲突、凭证保护、诊断及 SQL 字段归一化见 [管理接口覆盖清单](../closet-management-coverage.md)。配置仍沿用原 `APP_CLOSET_ENABLED`、HMAC 密钥与源服务地址，不需增加公网入口。

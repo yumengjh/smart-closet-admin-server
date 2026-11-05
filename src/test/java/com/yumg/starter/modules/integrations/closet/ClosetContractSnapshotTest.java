@@ -53,7 +53,29 @@ class ClosetContractSnapshotTest {
             "GET /ops/status", "GET /ops/assistant-token-budget", "GET /ops/tasks", "GET /ops/operation-log",
             "GET /dashboard/snapshot", "GET /exports/daily", "GET /exports/events",
             "GET /templates", "PATCH /templates/{id}",
-            "GET /style-terms/pending", "POST /style-terms/pending/approve", "POST /style-terms/pending/reject");
+            "GET /style-terms/pending", "POST /style-terms/pending/approve", "POST /style-terms/pending/reject",
+            "GET /tryon/settings",
+            "PUT /tryon/settings",
+            "POST /tryon/settings/reset",
+            "GET /tryon/users/{username}/policy",
+            "PUT /tryon/users/{username}/policy",
+            "GET /tryon/users/{username}/usage",
+            "POST /tryon/users/{username}/startup-failures/reset",
+            "GET /tryon/accounts",
+            "POST /tryon/accounts",
+            "GET /tryon/accounts/{id}",
+            "PATCH /tryon/accounts/{id}",
+            "POST /tryon/accounts/{id}/credentials",
+            "DELETE /tryon/accounts/{id}/credentials/{credentialId}",
+            "POST /tryon/accounts/{id}/probe",
+            "POST /tryon/accounts/{id}/budget",
+            "GET /tryon/pool",
+            "GET /tryon/reference-source",
+            "GET /tryon/usage",
+            "GET /tryon/sessions",
+            "GET /tryon/sessions/{id}",
+            "POST /tryon/sessions/{id}/stop",
+            "POST /tryon/accounts/{id}/stop-sessions");
 
     @Test void snapshotBodyMatchesRecordedHash() throws Exception {
         byte[] all = Files.readAllBytes(SNAPSHOT);
@@ -67,7 +89,7 @@ class ClosetContractSnapshotTest {
 
     @Test void everyCalledOperationExistsInSnapshot() throws Exception {
         Set<String> contract = operations(new String(body(Files.readAllBytes(SNAPSHOT)), StandardCharsets.UTF_8));
-        assertThat(contract).as("upstream operations used by the admin service").containsAll(USED);
+        assertThat(contract).as("upstream operations used by the admin service").containsExactlyInAnyOrderElementsOf(USED);
     }
 
     @Test void snapshotEqualsSourceWhenAvailable() throws Exception {
@@ -106,7 +128,7 @@ class ClosetContractSnapshotTest {
             if (!line.isEmpty() && !Character.isWhitespace(line.charAt(0))) break;
             Matcher p = Pattern.compile("^  (/\\S*):\\s*$").matcher(line);
             if (p.matches()) { path = p.group(1); continue; }
-            Matcher m = Pattern.compile("^    (get|put|post|patch|delete):\\s*$").matcher(line);
+            Matcher m = Pattern.compile("^    (get|put|post|patch|delete):(?:\\s.*)?$").matcher(line);
             if (m.matches() && path != null) result.add(m.group(1).toUpperCase() + " " + path);
         }
         return result;

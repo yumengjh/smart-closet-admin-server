@@ -20,6 +20,20 @@ public class ClosetProblemTranslator {
         JsonNode problem = parse(exception.getResponseBodyAsString());
         String code = problem.path("code").asText("");
         String detail = problem.path("detail").asText("");
+        if (code.startsWith("TRYON_")) {
+            // Preserve control-plane failures instead of turning stale revisions or missing sessions into HTTP 400.
+            ApiErrorCode mapped = switch (status.value()) {
+                case 404 -> ApiErrorCode.NOT_FOUND;
+                case 409 -> ApiErrorCode.CONFLICT;
+                case 429 -> ApiErrorCode.RATE_LIMITED;
+                default -> status.is5xxServerError() ? ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE : ApiErrorCode.INVALID_PARAMETER;
+            };
+            // Provider details may contain sensitive data; only known revision guidance is exposed.
+            String message = "TRYON_REVISION_CONFLICT".equals(code)
+                    ? "试穿设置已变化，请刷新后重新编辑并保存。"
+                    : mapped.message();
+            return ApiException.fromUpstream(mapped, message, List.of());
+        }
         if (status.is5xxServerError()) return ApiException.closetServiceUnavailable();
         if (status.value() == 401 || code.startsWith("MANAGEMENT_")) return ApiException.closetIntegrationMisconfigured();
         if (status.value() == 400 && "VALIDATION_FAILED".equals(code)) {

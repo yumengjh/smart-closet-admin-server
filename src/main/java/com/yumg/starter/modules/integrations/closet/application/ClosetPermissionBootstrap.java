@@ -32,7 +32,13 @@ public class ClosetPermissionBootstrap implements ApplicationRunner {
             new PermissionSeed("closet:templates:read", "查看鱼搭搭配模板"),
             new PermissionSeed("closet:templates:write", "审核鱼搭搭配模板"),
             new PermissionSeed("closet:styleterms:read", "查看鱼搭助手学到的待审核风格词"),
-            new PermissionSeed("closet:styleterms:write", "批准或驳回鱼搭助手学到的风格词"));
+            new PermissionSeed("closet:styleterms:write", "批准或驳回鱼搭助手学到的风格词"),
+            new PermissionSeed("closet:tryon:read", "查看实时试穿设置、策略、账户、用量与会话诊断"),
+            new PermissionSeed("closet:tryon:write", "修改试穿设置、用户策略和账户调度，重置启动失败保护"),
+            new PermissionSeed("closet:tryon:credentials", "登记运营账户、轮换和停用永久凭证"),
+            new PermissionSeed("closet:tryon:probe", "探测运营账户余额与健康"),
+            new PermissionSeed("closet:tryon:budget", "调整运营账户累计支出授权"),
+            new PermissionSeed("closet:tryon:stop", "紧急停止试穿会话或账户全部会话"));
     private final PermissionRepository permissions;
     private final RoleRepository roles;
     public ClosetPermissionBootstrap(PermissionRepository permissions, RoleRepository roles) {
