@@ -1,6 +1,6 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/management-api.yaml
-# source-commit: 5109722d4de5f86b5a8240478da8eba16ab3ee88
-# source-sha256: e849302dc710255cf508c2dfd6f6003c814937382b00e1f149684065f83c81db
+# source-commit: c2239b0e1d8971a55e324123b4015c165f8da504
+# source-sha256: 71c382c031228fd068898abe8f493e819b9690704fa51c6627393a3abc8ab2a0
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
@@ -42,11 +42,11 @@ paths:
       tags: [users]
       operationId: listUsers
       parameters:
-        - { name: q, in: query, description: 用户名或昵称包含（忽略大小写）, schema: { type: string, maxLength: 80 } }
+        - { name: q, in: query, description: '用户名或昵称包含（忽略大小写）', schema: { type: string, maxLength: 80 } }
         - { name: status, in: query, schema: { type: string, enum: [ENABLED, DISABLED] } }
         - { name: role, in: query, schema: { $ref: '#/components/schemas/Role' } }
         - { name: registeredVia, in: query, schema: { type: string, enum: [ADMIN, INVITE, OPEN] } }
-        - { name: deactivated, in: query, description: true 只看自助注销的账号，false 排除, schema: { type: boolean } }
+        - { name: deactivated, in: query, description: 'true 只看自助注销的账号，false 排除', schema: { type: boolean } }
         - { name: sort, in: query, schema: { type: string, enum: [createdAt, username, lastActiveAt, lastLoginAt], default: createdAt } }
         - { name: order, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
         - $ref: '#/components/parameters/Page'
@@ -229,7 +229,7 @@ paths:
               additionalProperties: false
               required: [displayName]
               properties:
-                displayName: { type: string, maxLength: 40, description: 空串清除昵称 }
+                displayName: { type: string, maxLength: 40, description: '空串清除昵称' }
       responses:
         '200':
           description: 已更新
@@ -253,7 +253,7 @@ paths:
       operationId: revokeUserSession
       description: 退出单个会话，`sessionRef` 取自 GET /users/{username}/sessions。
       responses:
-        '204': { description: 已退出 }
+        '204': { description: '已退出' }
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
   /users/{username}/login-lock:
@@ -321,7 +321,7 @@ paths:
       tags: [users]
       operationId: revokeUserPortableLink
       responses:
-        '204': { description: 已吊销 }
+        '204': { description: '已吊销' }
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
   /users/{username}/quota:
@@ -540,7 +540,7 @@ paths:
       tags: [registration]
       operationId: revokeInvite
       responses:
-        '204': { description: 已撤销（重复撤销仍为 204） }
+        '204': { description: '已撤销（重复撤销仍为 204）' }
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
   /account-events:
@@ -844,7 +844,7 @@ paths:
         只返回 watermarkMs（当前时间−5 秒）之前的事件。用户只以 userKey（HMAC-SHA256(盐, 用户名) 前 16 位）出现。
       parameters:
         - { name: cursor, in: query, schema: { type: string, maxLength: 200 } }
-        - { name: since, in: query, description: 起始毫秒时间戳（含），与 cursor 二选一, schema: { type: integer, format: int64, minimum: 0 } }
+        - { name: since, in: query, description: '起始毫秒时间戳（含），与 cursor 二选一', schema: { type: integer, format: int64, minimum: 0 } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 500 } }
         - name: types
           in: query
@@ -955,15 +955,15 @@ paths:
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
   /tryon/settings:
-    get: {"summary": "查询试穿设置", "operationId": "tryonGetSettings", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}}
-    put: {"summary": "更新试穿设置", "operationId": "tryonPutSettings", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}, "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnSettingsChange"}}}}}
+    get: {"summary": '查询试穿设置', "operationId": "tryonGetSettings", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}}
+    put: {"summary": '更新试穿设置', "operationId": "tryonPutSettings", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnSettingsChange"}}}}}
   /tryon/settings/reset:
-    post: {"summary": "恢复试穿初始设置", "operationId": "tryonPostSettingsReset", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}, "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnReset"}}}}}
+    post: {"summary": '恢复试穿初始设置', "operationId": "tryonPostSettingsReset", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnReset"}}}}}
   /tryon/users/{username}/policy:
-    get: {"summary": "查询用户试穿策略", "operationId": "tryonGetUsersUsernamePolicy", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "username", "in": "path", "required": true, "schema": {"type": "string"}}]}
-    put: {"summary": "更新用户试穿策略", "operationId": "tryonPutUsersUsernamePolicy", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "username", "in": "path", "required": true, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnUserPolicy"}}}}}
+    get: {"summary": '查询用户试穿策略', "operationId": "tryonGetUsersUsernamePolicy", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "username", "in": "path", "required": true, "schema": {"type": "string"}}]}
+    put: {"summary": '更新用户试穿策略', "operationId": "tryonPutUsersUsernamePolicy", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "username", "in": "path", "required": true, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnUserPolicy"}}}}}
   /tryon/users/{username}/usage:
-    get: {"summary": "查询用户试穿用量", "operationId": "tryonGetUsersUsernameUsage", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "username", "in": "path", "required": true, "schema": {"type": "string"}}]}
+    get: {"summary": '查询用户试穿用量', "operationId": "tryonGetUsersUsernameUsage", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "username", "in": "path", "required": true, "schema": {"type": "string"}}]}
   /tryon/users/{username}/startup-failures/reset:
     post:
       summary: 解除指定用户的启动失败重试保护
@@ -972,37 +972,37 @@ paths:
       parameters:
         - {name: username, in: path, required: true, schema: {type: string, maxLength: 160}}
       responses:
-        '200': {description: 重置时间与启动失败保护状态, content: {application/json: {schema: {type: object}}}}
+        '200': {description: '重置时间与启动失败保护状态', content: {application/json: {schema: {type: object}}}}
         '400': {$ref: '#/components/responses/Problem'}
         '401': {$ref: '#/components/responses/Problem'}
   /tryon/accounts:
-    get: {"summary": "查询运营账户", "operationId": "tryonGetAccounts", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}}
-    post: {"summary": "登记账户与永久凭证", "operationId": "tryonPostAccounts", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}, "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnCredentialInput"}}}}}
+    get: {"summary": '查询运营账户', "operationId": "tryonGetAccounts", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}}
+    post: {"summary": '登记账户与永久凭证', "operationId": "tryonPostAccounts", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnCredentialInput"}}}}}
   /tryon/accounts/{id}:
-    get: {"summary": "查询账户概况", "operationId": "tryonGetAccountsId", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
-    patch: {"summary": "调整账户调度", "operationId": "tryonPatchAccountsId", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnAccountChange"}}}}}
+    get: {"summary": '查询账户概况', "operationId": "tryonGetAccountsId", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
+    patch: {"summary": '调整账户调度', "operationId": "tryonPatchAccountsId", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnAccountChange"}}}}}
   /tryon/accounts/{id}/credentials:
-    post: {"summary": "轮换同账户永久凭证", "operationId": "tryonPostAccountsIdCredentials", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnCredentialInput"}}}}}
+    post: {"summary": '轮换同账户永久凭证', "operationId": "tryonPostAccountsIdCredentials", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnCredentialInput"}}}}}
   /tryon/accounts/{id}/credentials/{credentialId}:
-    delete: {"summary": "停用未被在途引用的凭证", "operationId": "tryonDeleteAccountsIdCredentialsCredentialid", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "credentialId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
+    delete: {"summary": '停用未被在途引用的凭证', "operationId": "tryonDeleteAccountsIdCredentialsCredentialid", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "credentialId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
   /tryon/accounts/{id}/probe:
-    post: {"summary": "只读探测余额与授权", "operationId": "tryonPostAccountsIdProbe", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
+    post: {"summary": '只读探测余额与授权', "operationId": "tryonPostAccountsIdProbe", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
   /tryon/accounts/{id}/budget:
-    post: {"summary": "更新本地累计支出授权", "operationId": "tryonPostAccountsIdBudget", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnBudgetChange"}}}}}
+    post: {"summary": '更新本地累计支出授权', "operationId": "tryonPostAccountsIdBudget", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnBudgetChange"}}}}}
   /tryon/pool:
-    get: {"summary": "查询总池可用池和并发", "operationId": "tryonGetPool", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}}
+    get: {"summary": '查询总池可用池和并发', "operationId": "tryonGetPool", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}}
   /tryon/reference-source:
-    get: {"summary": "查询试穿参考图来源（试穿专用存储桶、本站公网站点或仅限本地开发的 XMax 存储）与各状态参考图记录数", "operationId": "tryonGetReferenceSource", "responses": {"200": {"description": "来源、devOnly、桶主机名/桶名/前缀或站点 origin、地址有效期与记录计数；不含访问密钥、令牌或图片地址", "content": {"application/json": {"schema": {}}}}}}
+    get: {"summary": '查询试穿参考图来源（试穿专用存储桶、本站公网站点或仅限本地开发的 XMax 存储）与各状态参考图记录数', "operationId": "tryonGetReferenceSource", "responses": {"200": {"description": '来源、devOnly、桶主机名/桶名/前缀或站点 origin、地址有效期与记录计数；不含访问密钥、令牌或图片地址', "content": {"application/json": {"schema": {}}}}}}
   /tryon/usage:
-    get: {"summary": "查询试穿成本汇总", "operationId": "tryonGetUsage", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}}
+    get: {"summary": '查询试穿成本汇总', "operationId": "tryonGetUsage", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}}
   /tryon/sessions:
-    get: {"summary": "查询会话与待回收记录", "operationId": "tryonGetSessions", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}}
+    get: {"summary": '查询会话与待回收记录', "operationId": "tryonGetSessions", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}}
   /tryon/sessions/{id}:
-    get: {"summary": "查询单次会话", "operationId": "tryonGetSessionsId", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
+    get: {"summary": '查询单次会话', "operationId": "tryonGetSessionsId", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
   /tryon/sessions/{id}/stop:
-    post: {"summary": "紧急停止单次会话", "operationId": "tryonPostSessionsIdStop", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
+    post: {"summary": '紧急停止单次会话', "operationId": "tryonPostSessionsIdStop", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
   /tryon/accounts/{id}/stop-sessions:
-    post: {"summary": "紧急停止账户在途会话", "operationId": "tryonPostAccountsIdStopSessions", "responses": {"200": {"description": "操作结果；不含永久密钥与私人媒体内容", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
+    post: {"summary": '紧急停止账户在途会话', "operationId": "tryonPostAccountsIdStopSessions", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
 components:
   securitySchemes:
     closetHmac:
@@ -1065,7 +1065,7 @@ components:
     TryOnSettingsValue: {"type": "object", "additionalProperties": false, "required": ["mode", "defaultEnabled", "dailySeconds", "dailyPoints", "totalPoints", "sessionSeconds", "startupSeconds", "firstFrameSeconds", "queueSeconds", "offerSeconds", "recordingSeconds", "recordingBytes", "storageBytes", "accountConcurrency", "accountGuardPoints"], "properties": {"mode": {"type": "string", "enum": ["FORCE_OFF", "FORCE_ON", "FOLLOW_USER"]}, "defaultEnabled": {"type": "boolean"}, "dailySeconds": {"type": "integer", "minimum": 0, "maximum": 86400}, "dailyPoints": {"type": "integer", "minimum": 0, "maximum": 1000000000}, "totalPoints": {"type": "integer", "minimum": 0, "maximum": 1000000000000}, "sessionSeconds": {"type": "integer", "minimum": 1, "maximum": 3600}, "startupSeconds": {"type": "integer", "minimum": 1, "maximum": 120}, "firstFrameSeconds": {"type": "integer", "minimum": 1, "maximum": 120}, "queueSeconds": {"type": "integer", "minimum": 1, "maximum": 600}, "offerSeconds": {"type": "integer", "minimum": 1, "maximum": 60}, "recordingSeconds": {"type": "integer", "minimum": 1, "maximum": 600}, "recordingBytes": {"type": "integer", "minimum": 1024, "maximum": 536870912}, "storageBytes": {"type": "integer", "minimum": 0, "maximum": 1099511627776}, "accountConcurrency": {"type": "integer", "minimum": 1, "maximum": 100}, "accountGuardPoints": {"type": "integer", "minimum": 0, "maximum": 3600}}}
     TryOnSettingsChange: {"type": "object", "additionalProperties": false, "required": ["revision", "value"], "properties": {"revision": {"type": "integer", "minimum": 0}, "value": {"$ref": "#/components/schemas/TryOnSettingsValue"}}}
     TryOnReset: {"type": "object", "additionalProperties": false, "required": ["revision"], "properties": {"revision": {"type": "integer", "minimum": 0}}}
-    TryOnUserPolicy: {"type": "object", "additionalProperties": false, "required": ["accessMode", "dailySeconds"], "properties": {"accessMode": {"type": "string", "enum": ["INHERIT", "ENABLED", "DISABLED"]}, "dailySeconds": {"type": ["integer", "null"], "minimum": 0, "maximum": 86400}, "startupFailureLimit": {"type": ["integer", "null"], "minimum": 0, "maximum": 999, "description": "每日有费用的首帧前失败上限；null 或省略继承默认 3，0 关闭该用户次数限制。PUT 为完整替换。"}}}
+    TryOnUserPolicy: {"type": "object", "additionalProperties": false, "required": ["accessMode", "dailySeconds"], "properties": {"accessMode": {"type": "string", "enum": ["INHERIT", "ENABLED", "DISABLED"]}, "dailySeconds": {"type": ["integer", "null"], "minimum": 0, "maximum": 86400}, "startupFailureLimit": {"type": ["integer", "null"], "minimum": 0, "maximum": 999, "description": '每日有费用的首帧前失败上限；null 或省略继承默认 3，0 关闭该用户次数限制。PUT 为完整替换。'}}}
     TryOnCredentialInput: {"type": "object", "additionalProperties": false, "required": ["name", "environment", "apiKey"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 80}, "environment": {"type": "string", "enum": ["china", "global"]}, "apiKey": {"type": "string", "writeOnly": true, "pattern": "^uk-[A-Za-z0-9_-]{8,500}$"}}}
     TryOnAccountChange: {"type": "object", "additionalProperties": false, "required": ["name", "accepting", "weight", "concurrencyLimit"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 80}, "accepting": {"type": "boolean"}, "weight": {"type": "integer", "minimum": 1, "maximum": 100}, "concurrencyLimit": {"type": "integer", "minimum": 1, "maximum": 100}}}
     TryOnBudgetChange: {"type": "object", "additionalProperties": false, "required": ["budgetPoints"], "properties": {"budgetPoints": {"type": "integer", "minimum": 0, "maximum": 1000000000000}}}
@@ -1109,14 +1109,14 @@ components:
         enabled: { type: boolean }
         mustChangePassword: { type: boolean }
         createdAtMs: { type: integer, format: int64 }
-        lastActiveAtMs: { type: [integer, 'null'], format: int64, description: 未过期会话最近访问时间，近似值 }
+        lastActiveAtMs: { type: [integer, 'null'], format: int64, description: '未过期会话最近访问时间，近似值' }
         activeSessionCount: { type: integer }
-        garmentCount: { type: integer, description: 仅 ACTIVE }
+        garmentCount: { type: integer, description: '仅 ACTIVE' }
         outfitCount: { type: integer }
-        displayName: { type: [string, 'null'], description: 昵称，未设置为 null }
-        registeredVia: { type: string, enum: [ADMIN, INVITE, OPEN], description: 账号来源 }
-        lastLoginAtMs: { type: [integer, 'null'], format: int64, description: 最近一次密码登录或注册时间 }
-        deactivatedAtMs: { type: [integer, 'null'], format: int64, description: 用户自助注销时间；重新启用后清空 }
+        displayName: { type: [string, 'null'], description: '昵称，未设置为 null' }
+        registeredVia: { type: string, enum: [ADMIN, INVITE, OPEN], description: '账号来源' }
+        lastLoginAtMs: { type: [integer, 'null'], format: int64, description: '最近一次密码登录或注册时间' }
+        deactivatedAtMs: { type: [integer, 'null'], format: int64, description: '用户自助注销时间；重新启用后清空' }
     UserPage:
       type: object
       required: [items, total, page, size]
@@ -1147,21 +1147,21 @@ components:
         hasWearerProfile: { type: boolean }
         activePortableLinkCount: { type: integer }
         quota: { $ref: '#/components/schemas/Quota' }
-        inviteId: { type: [string, 'null'], description: 注册时使用的邀请码 id }
+        inviteId: { type: [string, 'null'], description: '注册时使用的邀请码 id' }
         loginLock: { $ref: '#/components/schemas/LoginLock' }
-        displayName: { type: [string, 'null'], description: 昵称，未设置为 null }
-        registeredVia: { type: string, enum: [ADMIN, INVITE, OPEN], description: 账号来源 }
-        lastLoginAtMs: { type: [integer, 'null'], format: int64, description: 最近一次密码登录或注册时间 }
-        deactivatedAtMs: { type: [integer, 'null'], format: int64, description: 用户自助注销时间；重新启用后清空 }
+        displayName: { type: [string, 'null'], description: '昵称，未设置为 null' }
+        registeredVia: { type: string, enum: [ADMIN, INVITE, OPEN], description: '账号来源' }
+        lastLoginAtMs: { type: [integer, 'null'], format: int64, description: '最近一次密码登录或注册时间' }
+        deactivatedAtMs: { type: [integer, 'null'], format: int64, description: '用户自助注销时间；重新启用后清空' }
     CreateUserRequest:
       type: object
       additionalProperties: false
       required: [username, role]
       properties:
-        username: { type: string, pattern: '^(?!.*\.\.)[A-Za-z0-9_.-]{2,80}$', description: 新用户名不能包含连续的点（如 `..`），否则无法作为路径段寻址；已有账号的查询仍按路径参数的旧规则匹配 }
+        username: { type: string, pattern: '^(?!.*\.\.)[A-Za-z0-9_.-]{2,80}$', description: '新用户名不能包含连续的点（如 `..`），否则无法作为路径段寻址；已有账号的查询仍按路径参数的旧规则匹配' }
         role: { $ref: '#/components/schemas/Role' }
         password: { $ref: '#/components/schemas/OptionalPassword' }
-        displayName: { type: [string, 'null'], maxLength: 40, description: 昵称，可省略；首尾空白会去掉，空白视为未设置，最多 40 个字符（按 Unicode 字符计），不得含控制字符，否则返回 400 VALIDATION_FAILED }
+        displayName: { type: [string, 'null'], maxLength: 40, description: '昵称，可省略；首尾空白会去掉，空白视为未设置，最多 40 个字符（按 Unicode 字符计），不得含控制字符，否则返回 400 VALIDATION_FAILED' }
     CredentialResult:
       type: object
       required: [username, temporaryPassword]
@@ -1174,7 +1174,7 @@ components:
       type: object
       required: [sessionRef, createdAtMs, lastAccessAtMs, expiresAtMs, portable]
       properties:
-        sessionRef: { type: string, description: 不可逆引用，不能用于登录 }
+        sessionRef: { type: string, description: '不可逆引用，不能用于登录' }
         createdAtMs: { type: integer, format: int64 }
         lastAccessAtMs: { type: integer, format: int64 }
         expiresAtMs: { type: integer, format: int64 }
@@ -1184,14 +1184,14 @@ components:
       required: [locked, recentFailures, retryAfterSeconds]
       properties:
         locked: { type: boolean }
-        recentFailures: { type: integer, description: 15 分钟内失败次数 }
-        retryAfterSeconds: { type: integer, description: 锁定剩余秒数，未锁定为 0 }
+        recentFailures: { type: integer, description: '15 分钟内失败次数' }
+        retryAfterSeconds: { type: integer, description: '锁定剩余秒数，未锁定为 0' }
     RegistrationState:
       type: object
       required: [mode, configuredMode, overridden, activeInviteCount]
       properties:
-        mode: { type: string, enum: [CLOSED, INVITE, OPEN], description: 当前生效模式 }
-        configuredMode: { type: string, enum: [CLOSED, INVITE, OPEN], description: 部署配置 CLOSET_REGISTRATION }
+        mode: { type: string, enum: [CLOSED, INVITE, OPEN], description: '当前生效模式' }
+        configuredMode: { type: string, enum: [CLOSED, INVITE, OPEN], description: '部署配置 CLOSET_REGISTRATION' }
         overridden: { type: boolean }
         updatedBy: { type: [string, 'null'] }
         updatedAtMs: { type: [integer, 'null'], format: int64 }
@@ -1280,8 +1280,8 @@ components:
       type: object
       required: [limit, used, overridden, defaultLimit, resetAtMs]
       properties:
-        limit: { type: integer, format: int64, description: 当前生效的日限额；0 表示不设上限 }
-        used: { type: integer, format: int64, description: 今日已用 token（输入加输出，未知按 0） }
+        limit: { type: integer, format: int64, description: '当前生效的日限额；0 表示不设上限' }
+        used: { type: integer, format: int64, description: '今日已用 token（输入加输出，未知按 0）' }
         overridden: { type: boolean }
         defaultLimit: { type: integer, format: int64 }
         resetAtMs: { type: integer, format: int64 }
@@ -1293,7 +1293,7 @@ components:
           type: object
           required: [limit, used]
           properties:
-            limit: { type: integer, format: int64, description: 全站日限额；0 表示不设上限 }
+            limit: { type: integer, format: int64, description: '全站日限额；0 表示不设上限' }
             used: { type: integer, format: int64 }
         userDefault:
           type: object
@@ -1330,7 +1330,7 @@ components:
             draft: { type: integer }
             createdInRange: { type: integer }
             adoptedInRange: { type: integer }
-            adoptionRate: { type: [number, 'null'], description: 区间内创建且当前为 ACTIVE 的比例；无创建时为 null }
+            adoptionRate: { type: [number, 'null'], description: '区间内创建且当前为 ACTIVE 的比例；无创建时为 null' }
         outfits:
           type: object
           required: [total, createdInRange]
@@ -1369,15 +1369,15 @@ components:
         scope: { $ref: '#/components/schemas/Scope' }
         totalActive: { type: integer }
         categories: { type: array, items: { $ref: '#/components/schemas/KeyCount' } }
-        colors: { type: array, items: { $ref: '#/components/schemas/KeyCount' }, description: 前 20 项，其余并入“其他” }
+        colors: { type: array, items: { $ref: '#/components/schemas/KeyCount' }, description: '前 20 项，其余并入“其他”' }
         seasons: { type: array, items: { $ref: '#/components/schemas/KeyCount' } }
         unknownCategoryCount: { type: integer }
         unknownSeasonCount: { type: integer }
         favoriteCount: { type: integer }
         wearingConfirmedCount: { type: integer }
         mappingVersion: { type: string }
-        styles: { type: array, items: { $ref: '#/components/schemas/KeyCount' }, description: 风格标签前 12 项（1.2） }
-        genderFits: { type: array, items: { $ref: '#/components/schemas/KeyCount' }, description: 男款 / 女款 / 中性（1.2） }
+        styles: { type: array, items: { $ref: '#/components/schemas/KeyCount' }, description: '风格标签前 12 项（1.2）' }
+        genderFits: { type: array, items: { $ref: '#/components/schemas/KeyCount' }, description: '男款 / 女款 / 中性（1.2）' }
     GarmentRef:
       type: object
       required: [garmentId, owner, family, createdAtMs]
@@ -1452,7 +1452,7 @@ components:
         openedInWorkspace: { type: integer }
         wornWithin3Days: { type: integer }
         swaps: { type: integer }
-        users: { type: integer, description: 范围内收到过推荐的用户数 }
+        users: { type: integer, description: '范围内收到过推荐的用户数' }
         bySource: { type: array, items: { allOf: [{ $ref: '#/components/schemas/AdoptionRow' }, { type: object, properties: { source: { type: string, description: 'PAGE 推荐区 / AGENT 助手 / INSPIRATION 今日灵感 / SWAP / MORE' } } }] } }
         byRank: { type: array, items: { allOf: [{ $ref: '#/components/schemas/AdoptionRow' }, { type: object, properties: { rank: { type: integer } } }] } }
         templates: { type: array, items: { allOf: [{ $ref: '#/components/schemas/AdoptionRow' }, { type: object, properties: { template: { type: string } } }] } }
@@ -1472,7 +1472,7 @@ components:
               calls: { type: integer }
               inputTokens: { type: integer }
               outputTokens: { type: integer }
-              unknownUsage: { type: integer, description: 上游未返回用量的调用次数 }
+              unknownUsage: { type: integer, description: '上游未返回用量的调用次数' }
         totals: { type: object, properties: { calls: { type: integer }, inputTokens: { type: integer }, outputTokens: { type: integer } } }
         imageUnits: { type: integer }
         agentMessages: { type: integer }
@@ -1517,7 +1517,7 @@ components:
               pool: { type: string }
               priority: { type: integer }
               waitReason: { type: [string, 'null'] }
-              errorMessage: { type: [string, 'null'], description: 截断到 300 字 }
+              errorMessage: { type: [string, 'null'], description: '截断到 300 字' }
               attempts: { type: integer }
               createdAtMs: { type: integer }
               updatedAtMs: { type: integer }
@@ -1560,7 +1560,7 @@ components:
             activeToday: { type: integer }
             active7d: { type: integer }
             active30d: { type: integer }
-            onlineNow: { type: integer, description: 近 5 分钟有请求的登录用户 }
+            onlineNow: { type: integer, description: '近 5 分钟有请求的登录用户' }
             garmentsActive: { type: integer }
             garmentsToday: { type: integer }
             outfitsTotal: { type: integer }
@@ -1571,8 +1571,8 @@ components:
             agentMessagesToday: { type: integer }
             imageUnitsToday: { type: integer }
             modelTokensToday: { type: integer }
-        hourly: { type: object, description: 近 24 个整点（含当前小时）, properties: { hours: { type: array, items: { type: string } }, series: { type: array, items: { type: object } } } }
-        daily: { type: object, description: 近 30 天, properties: { days: { type: array, items: { type: string, format: date } }, series: { type: array, items: { type: object } } } }
+        hourly: { type: object, description: '近 24 个整点（含当前小时）', properties: { hours: { type: array, items: { type: string } }, series: { type: array, items: { type: object } } } }
+        daily: { type: object, description: '近 30 天', properties: { days: { type: array, items: { type: string, format: date } }, series: { type: array, items: { type: object } } } }
         distributions:
           type: object
           description: categories、colors、seasons、recommendationSources7d；1.2 增加 styles、genderFits、closetSizes（按已入柜衣物数分档的用户数，含 0 件）、registeredVia、aiFeatures30d（近 30 天按功能的模型调用次数与 Token）
@@ -1600,7 +1600,7 @@ components:
             properties:
               atMs: { type: integer }
               kind: { type: string, enum: [GARMENT_ADDED, OUTFIT_SAVED, WEAR_LOGGED, RECOMMENDATION_LIKED, USER_REGISTERED] }
-              label: { type: [string, 'null'], description: GARMENT_ADDED 为衣物大类键；USER_REGISTERED 为注册来源 }
+              label: { type: [string, 'null'], description: 'GARMENT_ADDED 为衣物大类键；USER_REGISTERED 为注册来源' }
     DailyExport:
       type: object
       required: [from, to, columns, rows]
@@ -1655,14 +1655,14 @@ components:
       type: object
       required: [term, styles, hits, proposers, legacy, firstProposedAtMs, lastProposedAtMs, sharedStyles]
       properties:
-        term: { type: string, description: 归一化后的风格词 }
-        styles: { type: array, items: { type: string }, maxItems: 2, description: 助手给出的映射（标准风格） }
-        hits: { type: integer, description: 提出次数合计 }
-        proposers: { type: integer, description: 提出该映射的不同用户数（不含迁移遗留条目） }
-        legacy: { type: boolean, description: 含迁移前无归属的遗留条目 }
+        term: { type: string, description: '归一化后的风格词' }
+        styles: { type: array, items: { type: string }, maxItems: 2, description: '助手给出的映射（标准风格）' }
+        hits: { type: integer, description: '提出次数合计' }
+        proposers: { type: integer, description: '提出该映射的不同用户数（不含迁移遗留条目）' }
+        legacy: { type: boolean, description: '含迁移前无归属的遗留条目' }
         firstProposedAtMs: { type: integer, format: int64 }
         lastProposedAtMs: { type: integer, format: int64 }
-        sharedStyles: { type: [array, 'null'], items: { type: string }, description: 全站词表里该词已有的映射；批准会替换它 }
+        sharedStyles: { type: [array, 'null'], items: { type: string }, description: '全站词表里该词已有的映射；批准会替换它' }
     PendingStyleTermPage:
       type: object
       required: [items, total, page, size, vocabulary]
@@ -1671,15 +1671,15 @@ components:
         total: { type: integer }
         page: { type: integer }
         size: { type: integer }
-        vocabulary: { type: array, items: { type: string }, description: 标准风格表 }
+        vocabulary: { type: array, items: { type: string }, description: '标准风格表' }
     StyleTermApprove:
       type: object
       additionalProperties: false
       required: [term, proposedStyles]
       properties:
         term: { type: string, minLength: 1, maxLength: 40 }
-        proposedStyles: { type: array, minItems: 1, maxItems: 2, items: { type: string, maxLength: 20 }, description: 列表里该项的映射，用来定位提案 }
-        styles: { type: array, maxItems: 2, items: { type: string, maxLength: 20 }, description: 修正后的映射（须在标准风格内）；缺省沿用 proposedStyles }
+        proposedStyles: { type: array, minItems: 1, maxItems: 2, items: { type: string, maxLength: 20 }, description: '列表里该项的映射，用来定位提案' }
+        styles: { type: array, maxItems: 2, items: { type: string, maxLength: 20 }, description: '修正后的映射（须在标准风格内）；缺省沿用 proposedStyles' }
     StyleTermReject:
       type: object
       additionalProperties: false

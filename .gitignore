@@ -9,3 +9,6 @@ data/*
 *.iml
 *.log
 .DS_Store
+
+# Generated, potentially sensitive local security analysis.
+/security-reports/
