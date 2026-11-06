@@ -68,10 +68,10 @@
 ### Task 3: Safe dynamic route loading
 
 **Files:**
-- Modify: `/Users/yaopinxin/project/GitHub/springboot-admin/src/api/routes.ts`
-- Modify: `/Users/yaopinxin/project/GitHub/springboot-admin/src/router/utils.ts`
-- Modify: `/Users/yaopinxin/project/GitHub/springboot-admin/src/store/modules/user.ts`
-- Modify: `/Users/yaopinxin/project/GitHub/springboot-admin/src/router/index.ts`
+- Modify: `../GitHub/springboot-admin/src/api/routes.ts`
+- Modify: `../GitHub/springboot-admin/src/router/utils.ts`
+- Modify: `../GitHub/springboot-admin/src/store/modules/user.ts`
+- Modify: `../GitHub/springboot-admin/src/router/index.ts`
 
 **Interfaces:**
 - `getAsyncRoutes(): Promise<ApiResponse<NavigationRoute[]>>` reads `/navigation/routes`.
@@ -85,9 +85,9 @@
 ### Task 4: Menu administration page
 
 **Files:**
-- Create: `/Users/yaopinxin/project/GitHub/springboot-admin/src/views/system/menu/index.vue`
-- Create: `/Users/yaopinxin/project/GitHub/springboot-admin/src/api/navigation.ts`
-- Modify: `/Users/yaopinxin/project/GitHub/springboot-admin/src/router/utils.ts` component registry
+- Create: `../GitHub/springboot-admin/src/views/system/menu/index.vue`
+- Create: `../GitHub/springboot-admin/src/api/navigation.ts`
+- Modify: `../GitHub/springboot-admin/src/router/utils.ts` component registry
 
 **Interfaces:**
 - `listMenus`, `createMenu`, `updateMenu`, `deleteMenu` consume the menu CRUD endpoints.
