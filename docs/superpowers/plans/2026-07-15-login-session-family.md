@@ -69,9 +69,9 @@ Expected: PASS.
 ### Task 2: Replace token-record UI with session-family UI
 
 **Files:**
-- Modify: `/Users/yaopinxin/project/GitHub/springboot-admin/src/api/user.ts`
-- Modify: `/Users/yaopinxin/project/GitHub/springboot-admin/src/views/account/security/index.vue`
-- Modify: `/Users/yaopinxin/project/GitHub/springboot-admin/scripts/avatar-session-menu.test.mjs`
+- Modify: `../GitHub/springboot-admin/src/api/user.ts`
+- Modify: `../GitHub/springboot-admin/src/views/account/security/index.vue`
+- Modify: `../GitHub/springboot-admin/scripts/avatar-session-menu.test.mjs`
 
 **Interfaces:**
 - Consumes: `Session { firstIssuedAt, lastActiveAt, expiresAt, status }`.

@@ -6,7 +6,7 @@
 # This service has its own settings, which never reuse the closet's DEPLOY_DIR:
 #   ADMIN_DEPLOY_DIR   directory on the server (default /opt/smart-closet-admin)
 #   ADMIN_HOST_PORT    host port published for the reverse proxy (default 8081)
-#   ADMIN_ALLOWED_ORIGINS  CORS origin seeded into a new database (default https://yuda-admin.yumg.cn)
+#   ADMIN_ALLOWED_ORIGINS  CORS origin seeded into a new database; set it before the first deployment (an existing .env is kept)
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -29,4 +29,4 @@ trap cleanup EXIT
 ~/remote "rm -rf '$DEST' && mkdir -p '$DEST' && chmod 700 '$DEST'"
 ~/upload scripts/deploy/remote-deploy.sh scripts/deploy/compose.prod.yaml "$DEPLOY_SSH_USER@$DEPLOY_SSH_HOST:$DEST/"
 
-printf '%s' "$GHCR_TOKEN" | ~/remote "IMAGE_TAG=$(printf %q "$tag") GHCR_USER=$(printf %q "$GHCR_USER") ADMIN_DEPLOY_DIR=$(printf %q "${ADMIN_DEPLOY_DIR:-/opt/smart-closet-admin}") ADMIN_HOST_PORT=$(printf %q "${ADMIN_HOST_PORT:-8081}") ADMIN_ALLOWED_ORIGINS=$(printf %q "${ADMIN_ALLOWED_ORIGINS:-https://yuda-admin.yumg.cn}") bash '$DEST/remote-deploy.sh'"
+printf '%s' "$GHCR_TOKEN" | ~/remote "IMAGE_TAG=$(printf %q "$tag") GHCR_USER=$(printf %q "$GHCR_USER") ADMIN_DEPLOY_DIR=$(printf %q "${ADMIN_DEPLOY_DIR:-/opt/smart-closet-admin}") ADMIN_HOST_PORT=$(printf %q "${ADMIN_HOST_PORT:-8081}") ADMIN_ALLOWED_ORIGINS=$(printf %q "${ADMIN_ALLOWED_ORIGINS:-}") bash '$DEST/remote-deploy.sh'"

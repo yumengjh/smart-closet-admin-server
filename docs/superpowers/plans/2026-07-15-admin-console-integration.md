@@ -33,8 +33,8 @@
 - Modify: `src/main/java/com/yumg/starter/modules/navigation/application/NavigationService.java`
 - Modify: `src/main/java/com/yumg/starter/modules/navigation/application/NavigationBootstrap.java`
 - Modify: `src/test/java/com/yumg/starter/modules/navigation/application/NavigationServiceTest.java`
-- Modify: `/Users/yaopinxin/project/GitHub/springboot-admin/src/router/utils.ts`
-- Modify: `/Users/yaopinxin/project/GitHub/springboot-admin/scripts/router-conversion.test.mjs`
+- Modify: `../GitHub/springboot-admin/src/router/utils.ts`
+- Modify: `../GitHub/springboot-admin/scripts/router-conversion.test.mjs`
 
 **Interfaces:**
 - Accept component keys: `user-management`, `rbac-management`, `runtime-config`, `ip-rule-management`, `audit-log`, `announcement-management`, `account-security`.
@@ -63,13 +63,13 @@
 **Status: completed**
 
 **Files:**
-- Create: `/Users/yaopinxin/project/GitHub/springboot-admin/src/api/admin-users.ts`
-- Create: `/Users/yaopinxin/project/GitHub/springboot-admin/src/api/rbac.ts`
-- Create: `/Users/yaopinxin/project/GitHub/springboot-admin/src/api/runtime-config.ts`
-- Create: `/Users/yaopinxin/project/GitHub/springboot-admin/src/api/security.ts`
-- Create: `/Users/yaopinxin/project/GitHub/springboot-admin/src/api/announcements.ts`
-- Create: `/Users/yaopinxin/project/GitHub/springboot-admin/src/composables/useCurrentPermissions.ts`
-- Test: `/Users/yaopinxin/project/GitHub/springboot-admin/scripts/permission-composable.test.mjs`
+- Create: `../GitHub/springboot-admin/src/api/admin-users.ts`
+- Create: `../GitHub/springboot-admin/src/api/rbac.ts`
+- Create: `../GitHub/springboot-admin/src/api/runtime-config.ts`
+- Create: `../GitHub/springboot-admin/src/api/security.ts`
+- Create: `../GitHub/springboot-admin/src/api/announcements.ts`
+- Create: `../GitHub/springboot-admin/src/composables/useCurrentPermissions.ts`
+- Test: `../GitHub/springboot-admin/scripts/permission-composable.test.mjs`
 
 **Interfaces:**
 - Every API client consumes `ApiResponse<T>` from `src/api/user.ts` and calls `http.request` with relative `/api/v1` paths.
@@ -96,9 +96,9 @@ export function useCurrentPermissions() {
 **Status: completed**
 
 **Files:**
-- Create: `/Users/yaopinxin/project/GitHub/springboot-admin/src/views/system/users/index.vue`
-- Create: `/Users/yaopinxin/project/GitHub/springboot-admin/src/views/system/rbac/index.vue`
-- Test: `/Users/yaopinxin/project/GitHub/springboot-admin/scripts/admin-page-contract.test.mjs`
+- Create: `../GitHub/springboot-admin/src/views/system/users/index.vue`
+- Create: `../GitHub/springboot-admin/src/views/system/rbac/index.vue`
+- Test: `../GitHub/springboot-admin/scripts/admin-page-contract.test.mjs`
 
 **Interfaces:**
 - User page calls `listUsers({q,status,page,size})`, `getAdminUser(id)`, `updateUserStatus`, `revokeUserSessions`, `assignUserRole`, `removeUserRole`.
@@ -122,10 +122,10 @@ export const rolePayload = (code: string, displayName: string) => ({ code, displ
 **Status: completed**
 
 **Files:**
-- Create: `/Users/yaopinxin/project/GitHub/springboot-admin/src/views/system/config/index.vue`
-- Create: `/Users/yaopinxin/project/GitHub/springboot-admin/src/views/system/ip-rules/index.vue`
-- Create: `/Users/yaopinxin/project/GitHub/springboot-admin/src/views/system/audit/index.vue`
-- Test: `/Users/yaopinxin/project/GitHub/springboot-admin/scripts/runtime-config-contract.test.mjs`
+- Create: `../GitHub/springboot-admin/src/views/system/config/index.vue`
+- Create: `../GitHub/springboot-admin/src/views/system/ip-rules/index.vue`
+- Create: `../GitHub/springboot-admin/src/views/system/audit/index.vue`
+- Test: `../GitHub/springboot-admin/scripts/runtime-config-contract.test.mjs`
 
 **Interfaces:**
 - Runtime page reads all settings once and groups keys into `security`、`rateLimit`、`cors`、`endpointPolicy`、`ipPolicy`、`identity`.
@@ -157,10 +157,10 @@ export const settingGroups = {
 **Status: completed**
 
 **Files:**
-- Create: `/Users/yaopinxin/project/GitHub/springboot-admin/src/views/content/announcements/index.vue`
-- Create: `/Users/yaopinxin/project/GitHub/springboot-admin/src/views/account/security/index.vue`
-- Modify: `/Users/yaopinxin/project/GitHub/springboot-admin/src/views/welcome/index.vue`
-- Test: `/Users/yaopinxin/project/GitHub/springboot-admin/scripts/announcement-contract.test.mjs`
+- Create: `../GitHub/springboot-admin/src/views/content/announcements/index.vue`
+- Create: `../GitHub/springboot-admin/src/views/account/security/index.vue`
+- Modify: `../GitHub/springboot-admin/src/views/welcome/index.vue`
+- Test: `../GitHub/springboot-admin/scripts/announcement-contract.test.mjs`
 
 **Interfaces:**
 - Announcement form payload is `{title, content}`; publication calls `setAnnouncementPublication(id, published)`.

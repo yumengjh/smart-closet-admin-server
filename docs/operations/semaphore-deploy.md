@@ -19,7 +19,7 @@ Uses the organization secret `deploy` that smart-closet-server already has (same
 | --- | --- | --- |
 | `ADMIN_DEPLOY_DIR` | `/opt/smart-closet-admin` | Directory on the host (never the closet's `DEPLOY_DIR`) |
 | `ADMIN_HOST_PORT` | `8081` | Host port published for the reverse proxy; deployment stops if another process holds it |
-| `ADMIN_ALLOWED_ORIGINS` | `https://yuda-admin.yumg.cn` | CORS origin seeded into `.env` on the first deployment |
+| `ADMIN_ALLOWED_ORIGINS` | none (set before the first deployment, e.g. `https://admin.example.com`) | CORS origin seeded into `.env` on the first deployment |
 
 ## What the server keeps
 
@@ -36,11 +36,11 @@ PostgreSQL data and avatar files live in the compose volumes `postgres-data` and
 
 ## Reverse proxy and CORS
 
-The container publishes `ADMIN_HOST_PORT` on the host's loopback only (`127.0.0.1`), so the plain-HTTP port is never reachable from outside and every request passes the reverse proxy. The admin site (`https://yuda-admin.yumg.cn`, another host) calls
-this service directly at `https://yuda-admin-server.yumg.cn`: proxy that domain to `http://127.0.0.1:<port>`. Credentialed CORS must allow the site origin:
-`APP_SECURITY_CORS_ALLOWED_ORIGINS=https://yuda-admin.yumg.cn` seeds a new database (`ADMIN_ALLOWED_ORIGINS` on the first
+The container publishes `ADMIN_HOST_PORT` on the host's loopback only (`127.0.0.1`), so the plain-HTTP port is never reachable from outside and every request passes the reverse proxy. The admin site (`https://admin.example.com`, another host) calls
+this service directly at `https://admin-api.example.com`: proxy that domain to `http://127.0.0.1:<port>`. Credentialed CORS must allow the site origin:
+`APP_SECURITY_CORS_ALLOWED_ORIGINS=https://admin.example.com` seeds a new database (`ADMIN_ALLOWED_ORIGINS` on the first
 deployment); on an existing database change it through the runtime-config API. The refresh cookie is `SameSite=Strict` and
-`Secure`, which works because both names are under `yumg.cn` and served over HTTPS.
+`Secure`, which works because both names are under the same parent domain and served over HTTPS.
 
 ## Fish Closet integration
 
