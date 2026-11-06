@@ -3,6 +3,8 @@ name: CI
 on:
   pull_request:
   push:
+    branches: ["**"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,39 +17,19 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Reject committed secrets
-        shell: bash
-        run: |
-          set -euo pipefail
-          while IFS= read -r -d '' file; do
-            if grep -nE -- '-----BEGIN ([A-Z ]+ )?PRIVATE KEY-----' "$file"; then
-              echo "Private-key block found in tracked configuration: $file" >&2
-              exit 1
-            fi
-            if grep -nEi -- '^[[:space:]]*[a-z0-9_.-]*jwt[._-]?(secret|key)?[[:space:]]*[:=][[:space:]]*[^$[:space:]{]' "$file"; then
-              echo "Raw JWT secret found in tracked configuration: $file" >&2
-              exit 1
-            fi
-            if grep -nEi -- '^[[:space:]]*[a-z0-9_.-]*(password|passwd|pwd)[[:space:]]*[:=][[:space:]]*[^$[:space:]{]' "$file"; then
-              echo "Populated password assignment found in tracked configuration: $file" >&2
-              exit 1
-            fi
-          done < <(git ls-files -z -- '*.yml' '*.yaml' '*.properties' '*.toml' '*.json' '*.env' '*.pem')
-
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          distribution: temurin
-          java-version: "21"
-          cache: maven
+          fetch-depth: 0
+
+      - name: Security scans
+        uses: ./.github/actions/security
 
       - name: Verify
         run: ./mvnw --batch-mode verify
 
       - name: Upload test reports
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: test-reports-${{ github.run_id }}
           path: |

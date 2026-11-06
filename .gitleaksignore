@@ -1,0 +1,5 @@
+# Reviewed for #138: exact immutable historical fingerprints only.
+# Fixed HMAC secret declared in an isolated integration test's Spring test properties.
+8ea1ec4e51c0b67dc3a358102fd7c17516876f35:src/test/java/com/yumg/starter/modules/integrations/closet/ClosetIntegrationApiTest.java:generic-api-key:44
+# Local DiceBear image name in an old operational note; not authentication material.
+b4e2278aa6953d20fe54412cb88c2567b01d0bf7:findings.md:generic-api-key:27
