@@ -44,7 +44,7 @@ class ClosetDisabledTest {
         Class<?>[] gated = { ClosetUserAdministrationController.class, ClosetInsightController.class,
                 ClosetRegistrationController.class, ClosetRegistrationService.class, ClosetManagementController.class, ClosetUserAdministrationService.class, ClosetInsightService.class,
                 ClosetManagementService.class, ClosetPermissionBootstrap.class, ClosetNavigationBootstrap.class,
-                ClosetTryOnController.class, ClosetTryOnService.class, ClosetIntegrationConfiguration.class };
+                ClosetBillingController.class, ClosetBillingService.class, ClosetTryOnController.class, ClosetTryOnService.class, ClosetIntegrationConfiguration.class };
         new ApplicationContextRunner().withUserConfiguration(gated).run(context -> {
             assertThat(context).hasNotFailed();
             for (Class<?> type : gated) assertThat(context).doesNotHaveBean(type);
@@ -57,6 +57,16 @@ class ClosetDisabledTest {
         var mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         mvc.perform(request(HttpMethod.valueOf(method), "/api/v1/closet/tryon" + path)
                 .with(jwt().authorities(() -> "closet:tryon:" + permission))
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNotFound());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("com.yumg.starter.modules.integrations.closet.ClosetIntegrationApiTest#billingOperations")
+    void disabledBillingRoutesDoNotExist(String method, String path, String query, String body, int expectedStatus) throws Exception {
+        var mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+        mvc.perform(request(HttpMethod.valueOf(method), "/api/v1/closet" + path + query)
+                .with(jwt().authorities(() -> "closet:billing:read", () -> "closet:billing:write"))
                 .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isNotFound());
     }

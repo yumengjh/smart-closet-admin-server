@@ -34,6 +34,10 @@ public class ClosetProblemTranslator {
                     : mapped.message();
             return ApiException.fromUpstream(mapped, message, List.of());
         }
+        if (java.util.Set.of("TIER_NOT_FOUND", "BATCH_NOT_FOUND", "ENTITLEMENT_NOT_FOUND", "PRODUCT_NOT_FOUND", "ORDER_NOT_FOUND").contains(code)
+                && status.value() == 404) return ApiException.fromUpstream(ApiErrorCode.NOT_FOUND, detail, List.of());
+        if (status.value() == 409 && !"LAST_ADMIN_PROTECTED".equals(code)) return ApiException.fromUpstream(ApiErrorCode.CONFLICT, detail, List.of());
+        if (status.value() == 429) return ApiException.fromUpstream(ApiErrorCode.RATE_LIMITED, detail, List.of());
         if (status.is5xxServerError()) return ApiException.closetServiceUnavailable();
         if (status.value() == 401 || code.startsWith("MANAGEMENT_")) return ApiException.closetIntegrationMisconfigured();
         if (status.value() == 400 && "VALIDATION_FAILED".equals(code)) {

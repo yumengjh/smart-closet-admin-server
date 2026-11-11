@@ -1,16 +1,17 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/management-api.yaml
-# source-commit: c2239b0e1d8971a55e324123b4015c165f8da504
-# source-sha256: 71c382c031228fd068898abe8f493e819b9690704fa51c6627393a3abc8ab2a0
+# source-commit: 682983124070b333217b61f059c08249036a98a5
+# source-sha256: 25a3cb3396b5483b341f0d78e99c34266294d06d17eab82e92e6b12e95f14176
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
   title: Smart Closet Management API
-  version: 1.2.0
+  version: 1.5.0
   description: |
     鱼搭中立管理接口。默认关闭（`closet.management.enabled=false`），开启后供任意宿主平台以服务身份调用。
     设计说明见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md`；1.1（运维、KPI、大屏与数据出口、模板审核）见
     `docs/design/2026-10-09-管理接口二期：运维、KPI与大屏数据设计.md`；1.2（注册、邀请码、账号事件与资料字段）见
-    `docs/design/2026-10-19-用户账号：注册、资料与管理设计.md`。
+    `docs/design/2026-10-19-用户账号：注册、资料与管理设计.md`；1.3（收费：开关、档位与价格、成本、利润、兑换码、权益与点数）见
+    `docs/design/2026-11-10-收费与权益设计.md`。
 
     认证：每个请求都必须携带 HMAC 签名头（见 `components.securitySchemes.closetHmac`）。
     时间字段均为 Unix 毫秒，字段名以 `AtMs` 结尾；日期参数为 `YYYY-MM-DD`，按 Asia/Shanghai 解释，`to` 含当天。
@@ -34,6 +35,8 @@ tags:
     description: 数仓出口：按天宽表与去标识明细事件
   - name: templates
     description: 搭配模板审核
+  - name: billing
+    description: 收费：运行时开关、档位与点数价格、上游成本、利润报表、兑换码批次、用户权益与点数。用户只以 userKey 出现；不提供退款、重试或支付密钥接口
   - name: style-terms
     description: 助手学到的风格词审核（不含用户名，只给提出人数）
 paths:
@@ -820,7 +823,7 @@ paths:
     get:
       tags: [exports]
       operationId: exportDaily
-      description: 按天宽表，最长 366 天。format=csv 时返回带表头的 UTF-8 CSV。
+      description: '按天宽表，最长 366 天。1.5 追加 billing 聚合列；CSV 中该列为按 RFC 4180 转义的 JSON，原有列顺序与数值不变。'
       parameters:
         - $ref: '#/components/parameters/From'
         - $ref: '#/components/parameters/To'
@@ -841,6 +844,7 @@ paths:
       operationId: exportEvents
       description: |
         去标识明细事件，按 (atMs, type, id) 排序，用 nextCursor 增量拉取；同一游标重复拉取结果一致。
+        billing_order 从持久状态时间戳导出 CREATED、PAID、FULFILLED、CLOSED、DISPUTED，FAILED 从 AMOUNT_MISMATCH 支付事件导出；id 为 orderId:status，首次接入可补拉历史。billing_ledger 为只追加点数流水。
         只返回 watermarkMs（当前时间−5 秒）之前的事件。用户只以 userKey（HMAC-SHA256(盐, 用户名) 前 16 位）出现。
       parameters:
         - { name: cursor, in: query, schema: { type: string, maxLength: 200 } }
@@ -955,15 +959,15 @@ paths:
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
   /tryon/settings:
-    get: {"summary": '查询试穿设置', "operationId": "tryonGetSettings", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}}
-    put: {"summary": '更新试穿设置', "operationId": "tryonPutSettings", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnSettingsChange"}}}}}
+    get: {"summary": "\u67e5\u8be2\u8bd5\u7a7f\u8bbe\u7f6e", "operationId": "tryonGetSettings", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}}
+    put: {"summary": "\u66f4\u65b0\u8bd5\u7a7f\u8bbe\u7f6e", "operationId": "tryonPutSettings", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}, "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnSettingsChange"}}}}}
   /tryon/settings/reset:
-    post: {"summary": '恢复试穿初始设置', "operationId": "tryonPostSettingsReset", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnReset"}}}}}
+    post: {"summary": "\u6062\u590d\u8bd5\u7a7f\u521d\u59cb\u8bbe\u7f6e", "operationId": "tryonPostSettingsReset", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}, "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnReset"}}}}}
   /tryon/users/{username}/policy:
-    get: {"summary": '查询用户试穿策略', "operationId": "tryonGetUsersUsernamePolicy", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "username", "in": "path", "required": true, "schema": {"type": "string"}}]}
-    put: {"summary": '更新用户试穿策略', "operationId": "tryonPutUsersUsernamePolicy", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "username", "in": "path", "required": true, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnUserPolicy"}}}}}
+    get: {"summary": "\u67e5\u8be2\u7528\u6237\u8bd5\u7a7f\u7b56\u7565", "operationId": "tryonGetUsersUsernamePolicy", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "username", "in": "path", "required": true, "schema": {"type": "string"}}]}
+    put: {"summary": "\u66f4\u65b0\u7528\u6237\u8bd5\u7a7f\u7b56\u7565", "operationId": "tryonPutUsersUsernamePolicy", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "username", "in": "path", "required": true, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnUserPolicy"}}}}}
   /tryon/users/{username}/usage:
-    get: {"summary": '查询用户试穿用量', "operationId": "tryonGetUsersUsernameUsage", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "username", "in": "path", "required": true, "schema": {"type": "string"}}]}
+    get: {"summary": "\u67e5\u8be2\u7528\u6237\u8bd5\u7a7f\u7528\u91cf", "operationId": "tryonGetUsersUsernameUsage", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "username", "in": "path", "required": true, "schema": {"type": "string"}}]}
   /tryon/users/{username}/startup-failures/reset:
     post:
       summary: 解除指定用户的启动失败重试保护
@@ -976,33 +980,362 @@ paths:
         '400': {$ref: '#/components/responses/Problem'}
         '401': {$ref: '#/components/responses/Problem'}
   /tryon/accounts:
-    get: {"summary": '查询运营账户', "operationId": "tryonGetAccounts", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}}
-    post: {"summary": '登记账户与永久凭证', "operationId": "tryonPostAccounts", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnCredentialInput"}}}}}
+    get: {"summary": "\u67e5\u8be2\u8fd0\u8425\u8d26\u6237", "operationId": "tryonGetAccounts", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}}
+    post: {"summary": "\u767b\u8bb0\u8d26\u6237\u4e0e\u6c38\u4e45\u51ed\u8bc1", "operationId": "tryonPostAccounts", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}, "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnCredentialInput"}}}}}
   /tryon/accounts/{id}:
-    get: {"summary": '查询账户概况', "operationId": "tryonGetAccountsId", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
-    patch: {"summary": '调整账户调度', "operationId": "tryonPatchAccountsId", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnAccountChange"}}}}}
+    get: {"summary": "\u67e5\u8be2\u8d26\u6237\u6982\u51b5", "operationId": "tryonGetAccountsId", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
+    patch: {"summary": "\u8c03\u6574\u8d26\u6237\u8c03\u5ea6", "operationId": "tryonPatchAccountsId", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnAccountChange"}}}}}
   /tryon/accounts/{id}/credentials:
-    post: {"summary": '轮换同账户永久凭证', "operationId": "tryonPostAccountsIdCredentials", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnCredentialInput"}}}}}
+    post: {"summary": "\u8f6e\u6362\u540c\u8d26\u6237\u6c38\u4e45\u51ed\u8bc1", "operationId": "tryonPostAccountsIdCredentials", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnCredentialInput"}}}}}
   /tryon/accounts/{id}/credentials/{credentialId}:
-    delete: {"summary": '停用未被在途引用的凭证', "operationId": "tryonDeleteAccountsIdCredentialsCredentialid", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "credentialId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
+    delete: {"summary": "\u505c\u7528\u672a\u88ab\u5728\u9014\u5f15\u7528\u7684\u51ed\u8bc1", "operationId": "tryonDeleteAccountsIdCredentialsCredentialid", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}, {"name": "credentialId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
   /tryon/accounts/{id}/probe:
-    post: {"summary": '只读探测余额与授权', "operationId": "tryonPostAccountsIdProbe", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
+    post: {"summary": "\u53ea\u8bfb\u63a2\u6d4b\u4f59\u989d\u4e0e\u6388\u6743", "operationId": "tryonPostAccountsIdProbe", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
   /tryon/accounts/{id}/budget:
-    post: {"summary": '更新本地累计支出授权', "operationId": "tryonPostAccountsIdBudget", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnBudgetChange"}}}}}
+    post: {"summary": "\u66f4\u65b0\u672c\u5730\u7d2f\u8ba1\u652f\u51fa\u6388\u6743", "operationId": "tryonPostAccountsIdBudget", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnBudgetChange"}}}}}
   /tryon/pool:
-    get: {"summary": '查询总池可用池和并发', "operationId": "tryonGetPool", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}}
+    get: {"summary": "\u67e5\u8be2\u603b\u6c60\u53ef\u7528\u6c60\u548c\u5e76\u53d1", "operationId": "tryonGetPool", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}}
   /tryon/reference-source:
-    get: {"summary": '查询试穿参考图来源（试穿专用存储桶、本站公网站点或仅限本地开发的 XMax 存储）与各状态参考图记录数', "operationId": "tryonGetReferenceSource", "responses": {"200": {"description": '来源、devOnly、桶主机名/桶名/前缀或站点 origin、地址有效期与记录计数；不含访问密钥、令牌或图片地址', "content": {"application/json": {"schema": {}}}}}}
+    get: {"summary": "\u67e5\u8be2\u8bd5\u7a7f\u53c2\u8003\u56fe\u6765\u6e90\uff08\u8bd5\u7a7f\u4e13\u7528\u5b58\u50a8\u6876\u3001\u672c\u7ad9\u516c\u7f51\u7ad9\u70b9\u6216\u4ec5\u9650\u672c\u5730\u5f00\u53d1\u7684 XMax \u5b58\u50a8\uff09\u4e0e\u5404\u72b6\u6001\u53c2\u8003\u56fe\u8bb0\u5f55\u6570", "operationId": "tryonGetReferenceSource", "responses": {"200": {"description": "\u6765\u6e90\u3001devOnly\u3001\u6876\u4e3b\u673a\u540d/\u6876\u540d/\u524d\u7f00\u6216\u7ad9\u70b9 origin\u3001\u5730\u5740\u6709\u6548\u671f\u4e0e\u8bb0\u5f55\u8ba1\u6570\uff1b\u4e0d\u542b\u8bbf\u95ee\u5bc6\u94a5\u3001\u4ee4\u724c\u6216\u56fe\u7247\u5730\u5740", "content": {"application/json": {"schema": {}}}}}}
   /tryon/usage:
-    get: {"summary": '查询试穿成本汇总', "operationId": "tryonGetUsage", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}}
+    get: {"summary": "\u67e5\u8be2\u8bd5\u7a7f\u6210\u672c\u6c47\u603b", "operationId": "tryonGetUsage", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}}
   /tryon/sessions:
-    get: {"summary": '查询会话与待回收记录', "operationId": "tryonGetSessions", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}}
+    get: {"summary": "\u67e5\u8be2\u4f1a\u8bdd\u4e0e\u5f85\u56de\u6536\u8bb0\u5f55", "operationId": "tryonGetSessions", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}}
   /tryon/sessions/{id}:
-    get: {"summary": '查询单次会话', "operationId": "tryonGetSessionsId", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
+    get: {"summary": "\u67e5\u8be2\u5355\u6b21\u4f1a\u8bdd", "operationId": "tryonGetSessionsId", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
   /tryon/sessions/{id}/stop:
-    post: {"summary": '紧急停止单次会话', "operationId": "tryonPostSessionsIdStop", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
+    post: {"summary": "\u7d27\u6025\u505c\u6b62\u5355\u6b21\u4f1a\u8bdd", "operationId": "tryonPostSessionsIdStop", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
   /tryon/accounts/{id}/stop-sessions:
-    post: {"summary": '紧急停止账户在途会话', "operationId": "tryonPostAccountsIdStopSessions", "responses": {"200": {"description": '操作结果；不含永久密钥与私人媒体内容', "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
+    post: {"summary": "\u7d27\u6025\u505c\u6b62\u8d26\u6237\u5728\u9014\u4f1a\u8bdd", "operationId": "tryonPostAccountsIdStopSessions", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}]}
+  /billing/settings:
+    get:
+      tags: [billing]
+      operationId: getBillingSettings
+      description: 生效值 = 管理覆盖值（若有）否则部署配置（`CLOSET_BILLING_*`）。总开关关闭时所有路径回到收费前的行为，余额与权益不受影响。
+      responses:
+        '200': { description: '开关状态', content: { application/json: { schema: { $ref: '#/components/schemas/BillingSettingsView' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+    put:
+      tags: [billing]
+      operationId: setBillingSettings
+      description: 完整替换全部覆盖；字段为 null 或缺省则该开关回到部署配置，全部缺省即恢复默认。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                enabled: { type: [boolean, 'null'] }
+                tryonEnabled: { type: [boolean, 'null'] }
+                imageEnabled: { type: [boolean, 'null'] }
+                agentEnabled: { type: [boolean, 'null'] }
+                showPrices: { type: [boolean, 'null'] }
+      responses:
+        '200': { description: '修改后的状态', content: { application/json: { schema: { $ref: '#/components/schemas/BillingSettingsView' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /billing/tiers:
+    get:
+      tags: [billing]
+      operationId: listBillingTiers
+      description: 能力档位、当前映射模型与当前点数单价（千分点/单位；无价格表示该档位不按点数收费）。
+      responses:
+        '200': { description: '档位', content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/BillingTier' } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+  /billing/tiers/{tier}:
+    parameters: [ { name: tier, in: path, required: true, schema: { type: string, pattern: '^[a-z]+\.[a-z]+$' } } ]
+    put:
+      tags: [billing]
+      operationId: changeBillingTier
+      description: 追加模型和/或点数价格的新版本，自 `effectiveFromMs`（默认现在）起生效；历史消费保留当时的版本。至少提供 model、milliPointsPerUnit 之一。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                model: { type: string, minLength: 1, maxLength: 80 }
+                milliPointsPerUnit: { type: integer, minimum: 0, maximum: 1000000000 }
+                effectiveFromMs: { type: integer }
+      responses:
+        '200': { description: '修改后的档位', content: { application/json: { schema: { $ref: '#/components/schemas/BillingTier' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /billing/cost-rates:
+    get:
+      tags: [billing]
+      operationId: listBillingCostRates
+      parameters:
+        - { name: model, in: query, schema: { type: string, maxLength: 80 } }
+      responses:
+        '200': { description: '成本版本，新的在前', content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/BillingCostRate' } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [billing]
+      operationId: addBillingCostRate
+      description: 追加一个上游成本版本，不覆盖旧版本。金额为币种的百万分之一（5600 = 0.0056 元）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [model, unit, amountMicro, currency]
+              properties:
+                model: { type: string, minLength: 1, maxLength: 80 }
+                unit: { type: string, enum: [PER_IMAGE, PER_MTOK_IN, PER_MTOK_OUT, PER_SECOND] }
+                amountMicro: { type: integer, minimum: 0 }
+                currency: { type: string, minLength: 1, maxLength: 8 }
+                effectiveFromMs: { type: integer }
+                note: { type: string, maxLength: 200 }
+      responses:
+        '201': { description: '已追加', content: { application/json: { schema: { $ref: '#/components/schemas/BillingCostRate' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /billing/margin:
+    get:
+      tags: [billing]
+      operationId: getBillingMargin
+      description: 按档位 × 天（Asia/Shanghai）× 币种的收入、成本、免费用量成本、失败成本、利润与毛利率，及未消耗点数负债。口径见设计文档第 13 节。币种不同的行不给利润。
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        '200': { description: '利润报表', content: { application/json: { schema: { $ref: '#/components/schemas/BillingMarginReport' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /billing/margin/alerts:
+    get:
+      tags: [billing]
+      operationId: listBillingMarginAlerts
+      description: 各档位点数价格相对上游成本的告警（NO_PRICE、NO_COST、BELOW_COST、LOW_MARGIN、OK）。只告警，不改价。
+      responses:
+        '200': { description: '告警', content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/BillingAlert' } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+  /billing/margin/explain:
+    get:
+      tags: [billing]
+      operationId: explainBillingMargin
+      description: 列出范围内每次用量及其使用的成本版本，保证报表里每个数都能复算。用户只以 userKey 出现。
+      parameters:
+        - { name: tier, in: query, required: true, schema: { type: string, pattern: '^[a-z]+\.[a-z]+$' } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        '200': { description: '用量明细', content: { application/json: { schema: { type: object } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /billing/products:
+    get:
+      tags: [billing]
+      operationId: listBillingProducts
+      description: '全部商品（含已下架），金额为币种最小单位（分、cent），各币种分开。'
+      responses:
+        '200': { description: '商品', content: { application/json: { schema: { type: array, items: { type: object } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [billing]
+      operationId: createBillingProduct
+      description: '新建商品：POINTS（点数包）只含点数，SUBSCRIPTION（订阅）只含权益天数与额度，二选一不混。'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [kind, name, currency, priceMinor]
+              properties:
+                kind: { type: string, enum: [POINTS, SUBSCRIPTION] }
+                name: { type: string, minLength: 1, maxLength: 120 }
+                currency: { type: string, pattern: '^[A-Z]{3}$' }
+                priceMinor: { type: integer, minimum: 1, maximum: 100000000 }
+                points: { type: integer, minimum: 0, maximum: 10000000 }
+                entDays: { type: integer, minimum: 1, maximum: 3650 }
+                entImageDailyLimit: { type: integer, minimum: 0, maximum: 1000 }
+                entAgentDailyLimit: { type: integer, minimum: 0, maximum: 1000 }
+                enabled: { type: boolean }
+                sortOrder: { type: integer }
+      responses:
+        '201': { description: '已创建', content: { application/json: { schema: { type: object } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /billing/products/{id}:
+    parameters: [ { name: id, in: path, required: true, schema: { type: string, maxLength: 36 } } ]
+    put:
+      tags: [billing]
+      operationId: updateBillingProduct
+      description: '只能改名称、价格、上下架与排序；商品发放的内容不可改，已下的订单保持下单时的条款。'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name: { type: string, minLength: 1, maxLength: 120 }
+                priceMinor: { type: integer, minimum: 1, maximum: 100000000 }
+                enabled: { type: boolean }
+                sortOrder: { type: integer }
+      responses:
+        '200': { description: '更新后的商品', content: { application/json: { schema: { type: object } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /billing/orders:
+    get:
+      tags: [billing]
+      operationId: listBillingOrders
+      description: '订单，新的在前；用户只以 userKey 出现。'
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [CREATED, PAID, FULFILLED, CLOSED, FAILED, DISPUTED] } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        '200': { description: '订单', content: { application/json: { schema: { type: array, items: { type: object } } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /billing/orders/{id}/sandbox-dispute:
+    parameters: [ { name: id, in: path, required: true, schema: { type: string, maxLength: 36 } } ]
+    post:
+      tags: [billing]
+      operationId: sandboxDisputeOrder
+      description: '只对沙箱渠道订单演练拒付（撤销发放、冲回点数）；真实渠道的拒付由渠道通知，这里不提供远程退款。'
+      responses:
+        '200': { description: '处理后的订单', content: { application/json: { schema: { type: object } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /billing/redemption-batches:
+    get:
+      tags: [billing]
+      operationId: listRedemptionBatches
+      responses:
+        '200': { description: '批次，新的在前', content: { application/json: { schema: { type: array, items: { type: object } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [billing]
+      operationId: createRedemptionBatch
+      description: 创建兑换码批次。明文码只在此响应出现一次，库里只存 HMAC；未配置 `CLOSET_BILLING_REDEEM_HMAC_KEY` 时返回 503 REDEEM_NOT_CONFIGURED。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, points, quantity]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 120 }
+                points: { type: integer, minimum: 0, maximum: 10000000 }
+                unitPriceMicro: { type: integer, minimum: 0, description: '每点售价（币种百万分之一），0 表示赠送无收入；大于 0 必须填 currency' }
+                currency: { type: string, maxLength: 8 }
+                imageDailyLimit: { type: integer, minimum: 0, maximum: 1000 }
+                agentDailyLimit: { type: integer, minimum: 0, maximum: 1000 }
+                entitlementDays: { type: integer, minimum: 1, maximum: 3650 }
+                quantity: { type: integer, minimum: 1, maximum: 500 }
+                validFromMs: { type: integer }
+                validUntilMs: { type: integer }
+      responses:
+        '201': { description: '已创建（含一次性明文码）', content: { application/json: { schema: { type: object, required: [batch, codes], properties: { batch: { type: object }, codes: { type: array, items: { type: string } } } } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /billing/redemption-batches/{id}/codes:
+    parameters: [ { name: id, in: path, required: true, schema: { type: string, maxLength: 36 } } ]
+    get:
+      tags: [billing]
+      operationId: listRedemptionCodes
+      description: 只返回遮罩码、状态与兑换人 userKey，明文码无法找回。
+      responses:
+        '200': { description: '码', content: { application/json: { schema: { type: array, items: { type: object } } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /billing/redemption-batches/{id}/disable:
+    parameters: [ { name: id, in: path, required: true, schema: { type: string, maxLength: 36 } } ]
+    post:
+      tags: [billing]
+      operationId: disableRedemptionBatch
+      description: 停用批次内所有未兑换的码；已兑换的点数与权益不动。
+      responses:
+        '200': { description: '停用后的批次', content: { application/json: { schema: { type: object } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /billing/entitlements/{id}:
+    parameters: [ { name: id, in: path, required: true, schema: { type: string, maxLength: 36 } } ]
+    delete:
+      tags: [billing]
+      operationId: revokeEntitlement
+      description: 立即结束一个权益，记录保留。重复撤销保留第一次时间。
+      responses:
+        '200': { description: '撤销后的权益', content: { application/json: { schema: { type: object } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /users/{username}/billing:
+    parameters: [ { $ref: '#/components/parameters/Username' } ]
+    get:
+      tags: [billing]
+      operationId: getUserBilling
+      description: 该用户的点数余额、预留、全部权益与最近 50 条流水。
+      responses:
+        '200': { description: '用户收费概览', content: { application/json: { schema: { type: object } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /users/{username}/points:
+    parameters: [ { $ref: '#/components/parameters/Username' } ]
+    post:
+      tags: [billing]
+      operationId: changeUserPoints
+      description: 正数为赠送（无收入），负数为更正。相同 `Idempotency-Key` 不会重复生效。
+      parameters:
+        - { name: Idempotency-Key, in: header, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [points]
+              properties:
+                points: { type: integer, description: '非 0，绝对值不超过 10000000' }
+                note: { type: string, maxLength: 200 }
+      responses:
+        '200': { description: '写入的流水', content: { application/json: { schema: { type: object } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /users/{username}/entitlements:
+    parameters: [ { $ref: '#/components/parameters/Username' } ]
+    post:
+      tags: [billing]
+      operationId: grantUserEntitlement
+      description: 发放一个自现在起 `days` 天的权益（只抬高额度），至少设置一项额度。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [days]
+              properties:
+                imageDailyLimit: { type: integer, minimum: 0, maximum: 1000 }
+                agentDailyLimit: { type: integer, minimum: 0, maximum: 1000 }
+                days: { type: integer, minimum: 1, maximum: 3650 }
+                note: { type: string, maxLength: 80 }
+      responses:
+        '201': { description: '已发放', content: { application/json: { schema: { type: object } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
 components:
   securitySchemes:
     closetHmac:
@@ -1062,10 +1395,16 @@ components:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
   schemas:
+    BillingSettingsView: {"type": "object", "required": ["state", "billingActive"], "properties": {"billingActive": {"type": "boolean"}, "state": {"type": "object", "required": ["effective", "defaults", "overridden"], "properties": {"effective": {"$ref": "#/components/schemas/BillingSwitches"}, "defaults": {"$ref": "#/components/schemas/BillingSwitches"}, "overridden": {"type": "object", "additionalProperties": {"type": "boolean"}}, "updatedBy": {"type": ["string", "null"]}, "updatedAtMs": {"type": ["integer", "null"]}}}}}
+    BillingSwitches: {"type": "object", "required": ["enabled", "tryon", "image", "agent", "showPrices"], "properties": {"enabled": {"type": "boolean"}, "tryon": {"type": "boolean"}, "image": {"type": "boolean"}, "agent": {"type": "boolean"}, "showPrices": {"type": "boolean"}}}
+    BillingTier: {"type": "object", "required": ["tier", "name", "unit", "model"], "properties": {"tier": {"type": "string"}, "name": {"type": "string"}, "unit": {"type": "string", "enum": ["IMAGE", "KTOKEN", "SECOND"]}, "model": {"type": "string"}, "milliPointsPerUnit": {"type": ["integer", "null"]}, "priceVersionId": {"type": ["string", "null"]}}}
+    BillingCostRate: {"type": "object", "required": ["id", "model", "unit", "amountMicro", "currency", "effectiveFromMs"], "properties": {"id": {"type": "string"}, "model": {"type": "string"}, "unit": {"type": "string", "enum": ["PER_IMAGE", "PER_MTOK_IN", "PER_MTOK_OUT", "PER_SECOND"]}, "amountMicro": {"type": "integer"}, "currency": {"type": "string"}, "effectiveFromMs": {"type": "integer"}, "actor": {"type": ["string", "null"]}, "note": {"type": ["string", "null"]}}}
+    BillingAlert: {"type": "object", "required": ["tier", "model", "status"], "properties": {"tier": {"type": "string"}, "model": {"type": "string"}, "status": {"type": "string", "enum": ["NO_PRICE", "NO_COST", "BELOW_COST", "LOW_MARGIN", "OK"]}, "priceMilliPoints": {"type": ["integer", "null"]}, "revenuePerUnitMicro": {"type": ["number", "null"]}, "costPerUnitMicro": {"type": ["number", "null"]}, "assumedMix": {"type": "boolean"}}}
+    BillingMarginReport: {"type": "object", "required": ["fromMs", "toMs", "lines", "liabilities", "notes"], "properties": {"orderLines": {"type": "array", "description": "\u8ba2\u5355\u5e26\u6765\u7684\u6536\u5165\u4e0e\u624b\u7eed\u8d39\uff0c\u6309\u5929\u6309\u5e01\u79cd\uff1b\u8ba2\u9605\u6536\u5165\u6309\u5929\u5e73\u644a", "items": {"type": "object"}}, "totals": {"type": "array", "description": "\u5404\u5e01\u79cd\u7684\u5e95\u7ebf\uff1a\u70b9\u6570\u6536\u5165 + \u8ba2\u9605\u6536\u5165 - \u4e0a\u6e38\u6210\u672c - \u6e20\u9053\u624b\u7eed\u8d39\uff0c\u5e01\u79cd\u4e4b\u95f4\u4e0d\u6298\u7b97", "items": {"type": "object"}}, "fromMs": {"type": "integer"}, "toMs": {"type": "integer"}, "lines": {"type": "array", "items": {"type": "object"}}, "liabilities": {"type": "array", "items": {"type": "object"}}, "notes": {"type": "array", "items": {"type": "string"}}}}
     TryOnSettingsValue: {"type": "object", "additionalProperties": false, "required": ["mode", "defaultEnabled", "dailySeconds", "dailyPoints", "totalPoints", "sessionSeconds", "startupSeconds", "firstFrameSeconds", "queueSeconds", "offerSeconds", "recordingSeconds", "recordingBytes", "storageBytes", "accountConcurrency", "accountGuardPoints"], "properties": {"mode": {"type": "string", "enum": ["FORCE_OFF", "FORCE_ON", "FOLLOW_USER"]}, "defaultEnabled": {"type": "boolean"}, "dailySeconds": {"type": "integer", "minimum": 0, "maximum": 86400}, "dailyPoints": {"type": "integer", "minimum": 0, "maximum": 1000000000}, "totalPoints": {"type": "integer", "minimum": 0, "maximum": 1000000000000}, "sessionSeconds": {"type": "integer", "minimum": 1, "maximum": 3600}, "startupSeconds": {"type": "integer", "minimum": 1, "maximum": 120}, "firstFrameSeconds": {"type": "integer", "minimum": 1, "maximum": 120}, "queueSeconds": {"type": "integer", "minimum": 1, "maximum": 600}, "offerSeconds": {"type": "integer", "minimum": 1, "maximum": 60}, "recordingSeconds": {"type": "integer", "minimum": 1, "maximum": 600}, "recordingBytes": {"type": "integer", "minimum": 1024, "maximum": 536870912}, "storageBytes": {"type": "integer", "minimum": 0, "maximum": 1099511627776}, "accountConcurrency": {"type": "integer", "minimum": 1, "maximum": 100}, "accountGuardPoints": {"type": "integer", "minimum": 0, "maximum": 3600}}}
     TryOnSettingsChange: {"type": "object", "additionalProperties": false, "required": ["revision", "value"], "properties": {"revision": {"type": "integer", "minimum": 0}, "value": {"$ref": "#/components/schemas/TryOnSettingsValue"}}}
     TryOnReset: {"type": "object", "additionalProperties": false, "required": ["revision"], "properties": {"revision": {"type": "integer", "minimum": 0}}}
-    TryOnUserPolicy: {"type": "object", "additionalProperties": false, "required": ["accessMode", "dailySeconds"], "properties": {"accessMode": {"type": "string", "enum": ["INHERIT", "ENABLED", "DISABLED"]}, "dailySeconds": {"type": ["integer", "null"], "minimum": 0, "maximum": 86400}, "startupFailureLimit": {"type": ["integer", "null"], "minimum": 0, "maximum": 999, "description": '每日有费用的首帧前失败上限；null 或省略继承默认 3，0 关闭该用户次数限制。PUT 为完整替换。'}}}
+    TryOnUserPolicy: {"type": "object", "additionalProperties": false, "required": ["accessMode", "dailySeconds"], "properties": {"accessMode": {"type": "string", "enum": ["INHERIT", "ENABLED", "DISABLED"]}, "dailySeconds": {"type": ["integer", "null"], "minimum": 0, "maximum": 86400}, "startupFailureLimit": {"type": ["integer", "null"], "minimum": 0, "maximum": 999, "description": "\u6bcf\u65e5\u6709\u8d39\u7528\u7684\u9996\u5e27\u524d\u5931\u8d25\u4e0a\u9650\uff1bnull \u6216\u7701\u7565\u7ee7\u627f\u9ed8\u8ba4 3\uff0c0 \u5173\u95ed\u8be5\u7528\u6237\u6b21\u6570\u9650\u5236\u3002PUT \u4e3a\u5b8c\u6574\u66ff\u6362\u3002"}}}
     TryOnCredentialInput: {"type": "object", "additionalProperties": false, "required": ["name", "environment", "apiKey"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 80}, "environment": {"type": "string", "enum": ["china", "global"]}, "apiKey": {"type": "string", "writeOnly": true, "pattern": "^uk-[A-Za-z0-9_-]{8,500}$"}}}
     TryOnAccountChange: {"type": "object", "additionalProperties": false, "required": ["name", "accepting", "weight", "concurrencyLimit"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 80}, "accepting": {"type": "boolean"}, "weight": {"type": "integer", "minimum": 1, "maximum": 100}, "concurrencyLimit": {"type": "integer", "minimum": 1, "maximum": 100}}}
     TryOnBudgetChange: {"type": "object", "additionalProperties": false, "required": ["budgetPoints"], "properties": {"budgetPoints": {"type": "integer", "minimum": 0, "maximum": 1000000000000}}}
@@ -1571,6 +1910,9 @@ components:
             agentMessagesToday: { type: integer }
             imageUnitsToday: { type: integer }
             modelTokensToday: { type: integer }
+            ordersToday: { type: integer, description: '今日创建的订单总数，按创建日期统计' }
+            revenueToday: { type: array, description: '今日收款，按币种的最小货币单位；不是利润报表确认收入', items: { $ref: '#/components/schemas/BillingReceipt' } }
+            costToday: { type: array, description: '今日上游成本，按币种的百万分之一货币单位，未知成本单列', items: { $ref: '#/components/schemas/BillingCost' } }
         hourly: { type: object, description: '近 24 个整点（含当前小时）', properties: { hours: { type: array, items: { type: string } }, series: { type: array, items: { type: object } } } }
         daily: { type: object, description: '近 30 天', properties: { days: { type: array, items: { type: string, format: date } }, series: { type: array, items: { type: object } } } }
         distributions:
@@ -1608,10 +1950,16 @@ components:
         from: { type: string, format: date }
         to: { type: string, format: date }
         columns: { type: array, items: { type: string } }
-        rows: { type: array, items: { type: object, additionalProperties: true } }
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            properties:
+              billing: { $ref: '#/components/schemas/BillingDailyAggregate' }
     EventType:
       type: string
-      enum: [garment_created, model_usage, outfit_created, quick_intake, recommendation_feedback, recommendation_shown, user_created, wear_logged]
+      enum: [garment_created, model_usage, outfit_created, quick_intake, recommendation_feedback, recommendation_shown, user_created, wear_logged, billing_order, billing_ledger]
     EventPage:
       type: object
       required: [items, nextCursor, hasMore, watermarkMs]
@@ -1626,7 +1974,10 @@ components:
               id: { type: string }
               atMs: { type: integer }
               userKey: { type: string, description: 'HMAC-SHA256(盐, 用户名) 前 16 位十六进制；换盐即变' }
-              attrs: { type: object, additionalProperties: true }
+              attrs:
+                type: object
+                description: 'billing_order 仅含 orderId、status；billing_ledger 仅含 kind、points（带符号的余额变动），不含备注、actor、引用、渠道单号或商品名称'
+                additionalProperties: true
         nextCursor: { type: string }
         hasMore: { type: boolean }
         watermarkMs: { type: integer }
@@ -1702,3 +2053,13 @@ components:
         maxBonus: { type: number }
         active: { type: integer }
         items: { type: array, items: { $ref: '#/components/schemas/Template' } }
+
+    BillingReceipt: {"type": "object", "properties": {"currency": {"type": "string"}, "paidMinor": {"type": "integer", "format": "int64"}}}
+
+    BillingCost: {"type": "object", "properties": {"currency": {"type": ["string", "null"]}, "costMicro": {"type": "integer", "format": "int64"}, "unknownCostUses": {"type": "integer", "format": "int64"}}}
+
+    BillingPaymentAggregate: {"type": "object", "properties": {"currency": {"type": "string"}, "orders": {"type": "integer", "format": "int64"}, "paidMinor": {"type": "integer", "format": "int64"}, "feeMinor": {"type": "integer", "format": "int64"}, "feeEstimatedOrders": {"type": "integer", "format": "int64"}}}
+
+    BillingUsageAggregate: {"type": "object", "properties": {"tier": {"type": "string"}, "currency": {"type": ["string", "null"]}, "uses": {"type": "integer", "format": "int64"}, "unitsIn": {"type": "integer", "format": "int64"}, "unitsOut": {"type": "integer", "format": "int64"}, "points": {"type": "integer", "format": "int64"}, "costMicro": {"type": "integer", "format": "int64"}, "unknownCostUses": {"type": "integer", "format": "int64"}, "failedUses": {"type": "integer", "format": "int64"}}, "description": "\u539f\u59cb billing_usage \u6309\u6863\u4f4d\u53ca cost_currency \u5206\u7ec4\uff1b\u542b\u514d\u8d39\u4e0e\u5931\u8d25\u7528\u91cf\uff1b\u8f93\u5165/\u8f93\u51fa\u5355\u4f4d\u6cbf\u7528\u6863\u4f4d\uff08\u56fe\u7247\u3001token\u3001\u79d2\uff09\uff0ccostMicro \u4e3a\u767e\u4e07\u5206\u4e4b\u4e00\u8d27\u5e01\uff0c\u672a\u77e5\u6210\u672c\u4e0d\u5f53\u4f5c\u5df2\u77e5\u96f6\u6210\u672c\u3002"}
+
+    BillingDailyAggregate: {"type": "object", "properties": {"ordersByStatus": {"type": "object", "properties": {"CREATED": {"type": "integer", "format": "int64"}, "PAID": {"type": "integer", "format": "int64"}, "FULFILLED": {"type": "integer", "format": "int64"}, "CLOSED": {"type": "integer", "format": "int64"}, "FAILED": {"type": "integer", "format": "int64"}, "DISPUTED": {"type": "integer", "format": "int64"}}}, "payments": {"type": "array", "items": {"$ref": "#/components/schemas/BillingPaymentAggregate"}}, "points": {"type": "object", "properties": {"topup": {"type": "integer", "format": "int64"}, "grant": {"type": "integer", "format": "int64"}, "consumed": {"type": "integer", "format": "int64"}, "expired": {"type": "integer", "format": "int64"}, "adjusted": {"type": "integer", "format": "int64"}}}, "redemptions": {"type": "integer", "format": "int64"}, "entitledUsers": {"type": "integer", "format": "int64"}, "usage": {"type": "array", "items": {"$ref": "#/components/schemas/BillingUsageAggregate"}}}, "description": "\u6309 Asia/Shanghai \u5206\u65e5\uff1b\u8ba2\u5355\u6309\u521b\u5efa\u65e5\u53ca\u5f53\u524d\u72b6\u6001\uff0c\u6536\u6b3e\u6309 paid_at_ms\uff08\u542b\u540e\u6765\u62d2\u4ed8\uff09\uff1b\u70b9\u6570\u6d88\u8017\u5728\u7ed3\u7b97\u65e5\u6309 -\u9884\u7559\u53d8\u52a8-\u7ed3\u7b97\u53d8\u52a8\u8ba1\uff0c\u91ca\u653e\u4e0e\u672a\u7ed3\u7b97\u4e0d\u8ba1\uff1b\u8c03\u6574\u4fdd\u7559\u6b63\u8d1f\u3002\u5386\u53f2\u6743\u76ca\u6309\u65e5\u672b\u3001\u4eca\u65e5\u6309\u5f53\u524d\u65f6\u523b\u53bb\u91cd\uff0c\u5df2\u64a4\u9500\u6743\u76ca\u6309\u64a4\u9500\u65f6\u523b\u6392\u9664\u3002\u6536\u8d39\u5173\u95ed\u4ecd\u53ef\u8bfb\u5386\u53f2\uff0c\u4e0d\u6539\u65e7\u5217\u3002"}

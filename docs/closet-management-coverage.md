@@ -1,6 +1,6 @@
 # 鱼搭管理接口覆盖清单
 
-2026-11-05 对照 `smart-closet-server/docs/management-api.yaml`：69 个上游 HTTP 操作全部接入，实时试穿占 22 个。后台另外保留风格词批量审核扩展；它逐项调用上游单项接口。页面只调用管理后端的 `/api/v1/closet`。
+2026-11-11 对照 `smart-closet-server/docs/management-api.yaml`：91 个上游 HTTP 操作全部接入，实时试穿占 22 个、收费管理占 22 个。收费路径、权限与页面见[收费覆盖清单](integrations/closet/billing.md)。后台另外保留风格词批量审核扩展；它逐项调用上游单项接口。页面只调用管理后端的 `/api/v1/closet`。
 
 | 分组 | 操作数 | 后台入口 |
 | --- | ---: | --- |

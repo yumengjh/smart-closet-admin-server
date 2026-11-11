@@ -905,3 +905,8 @@ Actuator health 保持公开以服务容器探针；其余 Actuator 路径统一
 资料更新体为必填 `{displayName}`（空串清除）；单会话 `sessionRef` 为 16 位小写十六进制，删除返回 204。邀请码创建返回 201 和仅展示一次的 `code`；撤销返回 204。注册模式、邀请码输入范围、账号审计筛选及新增审计 action 详见 [1.2 账号控制代理契约](integrations/closet/accounts-1.2.md)。
 
 签名协议、输入规则、权限矩阵、审计和部署安全见[鱼搭管理集成说明](api/closet-integration.md)。上游 401 映射为 `502 CLOSET_INTEGRATION_MISCONFIGURED`，连接失败/超时/5xx 映射为 `503 CLOSET_SERVICE_UNAVAILABLE`；用户、会话、邀请码等不存在映射为 `404 NOT_FOUND`，已撤销邀请码修改映射为 `409 CONFLICT`，最后一个管理员保护映射为 `409 CLOSET_LAST_ADMIN_PROTECTED`。写操作成功/失败均审计；元数据不含密码、临时密码、邀请码明文或上游 detail。
+
+
+### 收费与利润管理
+
+新增22个收费操作，GET要求`closet:billing:read`，写入要求`closet:billing:write`。路径、请求约束、幂等键、明文兑换码与错误映射见[收费管理代理契约](integrations/closet/billing.md)。源契约快照由`scripts/sync-closet-contract.sh`同步。

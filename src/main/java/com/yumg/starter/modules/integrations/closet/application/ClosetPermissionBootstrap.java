@@ -18,6 +18,8 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(prefix = "app.integrations.closet", name = "enabled", havingValue = "true")
 public class ClosetPermissionBootstrap implements ApplicationRunner {
     private static final List<PermissionSeed> SEEDS = List.of(
+            new PermissionSeed("closet:billing:read", "查看收费设置、成本、订单、利润与用户权益"),
+            new PermissionSeed("closet:billing:write", "管理收费设置、商品、兑换码、点数与权益"),
             new PermissionSeed("closet:user:read", "查看鱼搭业务用户、会话、便携链接与额度"),
             new PermissionSeed("closet:user:write", "创建鱼搭用户、管理状态角色会话与便携链接"),
             new PermissionSeed("closet:user:reset-password", "重置鱼搭业务用户密码"),
