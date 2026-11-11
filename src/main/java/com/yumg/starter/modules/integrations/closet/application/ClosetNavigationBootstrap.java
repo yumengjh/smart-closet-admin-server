@@ -33,6 +33,14 @@ public class ClosetNavigationBootstrap implements ApplicationRunner {
         seed(directory, "closet-templates", "模板审核", "/closet/templates", "closet-templates", "ri/checkbox-multiple-line", 50, "closet:templates:read");
         seed(directory, "closet-style-terms", "风格词审核", "/closet/style-terms", "closet-style-terms", "ri/price-tag-3-line", 55, "closet:styleterms:read");
         seed(directory, "closet-tryon", "实时试穿", "/closet/tryon", "closet-tryon", "ri/vidicon-line", 35, "closet:tryon:read");
+        NavigationMenu billing = menus.findByCode("closet-billing").orElseGet(() -> menus.save(new NavigationMenu(
+                null, "closet-billing", "收费管理", "/billing", null, "ri/money-cny-circle-line", 160,
+                NavigationMenuType.DIRECTORY, "closet:billing:read", true, true, false, true)));
+        seed(billing, "closet-billing-settings", "总开关与能力开关", "/billing/settings", "closet-billing-settings", "ri/money-cny-circle-line", 10, "closet:billing:read");
+        seed(billing, "closet-billing-tiers", "档位与成本", "/billing/tiers", "closet-billing-tiers", "ri/money-cny-circle-line", 20, "closet:billing:read");
+        seed(billing, "closet-billing-products", "商品与订单", "/billing/products", "closet-billing-products", "ri/money-cny-circle-line", 30, "closet:billing:read");
+        seed(billing, "closet-billing-redemptions", "兑换码批次", "/billing/redemptions", "closet-billing-redemptions", "ri/money-cny-circle-line", 40, "closet:billing:read");
+        seed(billing, "closet-billing-margin", "利润报表", "/billing/margin", "closet-billing-margin", "ri/money-cny-circle-line", 50, "closet:billing:read");
         seed(directory, "closet-users", "业务用户", "/closet/users", "closet-users", "ri/group-line", 20, "closet:user:read");
     }
     private void seed(NavigationMenu parent, String code, String title, String path, String component,

@@ -36,6 +36,7 @@ public class ClosetManagementClient {
 
     public JsonNode get(String path, Map<String, ? extends List<String>> query) { return exchange(HttpMethod.GET, path, query, null); }
     public JsonNode post(String path, Object body) { return exchange(HttpMethod.POST, path, Map.of(), body); }
+    public JsonNode post(String path, Object body, String idempotencyKey) { return exchange(HttpMethod.POST, path, Map.of(), body, idempotencyKey); }
     public JsonNode patch(String path, Object body) { return exchange(HttpMethod.PATCH, path, Map.of(), body); }
     public JsonNode put(String path, Object body) { return exchange(HttpMethod.PUT, path, Map.of(), body); }
 
@@ -69,6 +70,10 @@ public class ClosetManagementClient {
     }
 
     private JsonNode exchange(HttpMethod method, String path, Map<String, ? extends List<String>> query, Object body) {
+        return exchange(method, path, query, body, null);
+    }
+
+    private JsonNode exchange(HttpMethod method, String path, Map<String, ? extends List<String>> query, Object body, String idempotencyKey) {
         Map<String, ? extends List<String>> safeQuery = query == null ? Map.of() : query;
         URI uri = uri(path, safeQuery);
         byte[] bytes;
@@ -76,7 +81,10 @@ public class ClosetManagementClient {
         catch (Exception exception) { throw new IllegalStateException("Could not serialize closet request", exception); }
         try {
             var spec = restClient().method(method).uri(uri)
-                    .headers(headers -> headers.addAll(headers(uri, method.name(), safeQuery, bytes)));
+                    .headers(headers -> {
+                        headers.addAll(headers(uri, method.name(), safeQuery, bytes));
+                        if (idempotencyKey != null) headers.set("Idempotency-Key", idempotencyKey);
+                    });
             if (body != null) spec.contentType(MediaType.APPLICATION_JSON).body(bytes);
             return spec.retrieve().body(JsonNode.class);
         } catch (RestClientResponseException exception) { throw translator.translate(exception); }

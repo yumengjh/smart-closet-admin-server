@@ -914,7 +914,88 @@ class ClosetIntegrationApiTest {
             }
             server.verify();
         }
-        assertThat(actual).hasSize(69).containsExactlyInAnyOrderElementsOf(expected);
+        assertThat(actual).hasSize(91).containsExactlyInAnyOrderElementsOf(expected);
+    }
+
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> billingOperations() {
+        return java.util.stream.Stream.of(
+            org.junit.jupiter.params.provider.Arguments.of("GET", "/billing/settings", "", "{}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("PUT", "/billing/settings", "", "{\"enabled\":true}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("GET", "/billing/tiers", "", "{}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("PUT", "/billing/tiers/image.standard", "", "{\"model\":\"test-model\",\"milliPointsPerUnit\":1000}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("GET", "/billing/cost-rates", "", "{}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("POST", "/billing/cost-rates", "", "{\"model\":\"test-model\",\"unit\":\"PER_IMAGE\",\"amountMicro\":10000,\"currency\":\"CNY\"}", 201),
+            org.junit.jupiter.params.provider.Arguments.of("GET", "/billing/margin", "", "{}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("GET", "/billing/margin/alerts", "", "{}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("GET", "/billing/margin/explain", "?tier=image.standard&limit=100", "{}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("GET", "/billing/products", "", "{}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("POST", "/billing/products", "", "{\"kind\":\"POINTS\",\"name\":\"test product\",\"currency\":\"CNY\",\"priceMinor\":100,\"points\":100,\"enabled\":true}", 201),
+            org.junit.jupiter.params.provider.Arguments.of("PUT", "/billing/products/12345678-1234-1234-1234-123456789abc", "", "{\"name\":\"updated\",\"priceMinor\":200,\"enabled\":false}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("GET", "/billing/orders", "?limit=100", "{}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("POST", "/billing/orders/12345678-1234-1234-1234-123456789abc/sandbox-dispute", "", "{}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("GET", "/billing/redemption-batches", "", "{}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("POST", "/billing/redemption-batches", "", "{\"name\":\"test batch\",\"points\":100,\"quantity\":1}", 201),
+            org.junit.jupiter.params.provider.Arguments.of("GET", "/billing/redemption-batches/12345678-1234-1234-1234-123456789abc/codes", "", "{}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("POST", "/billing/redemption-batches/12345678-1234-1234-1234-123456789abc/disable", "", "{}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("DELETE", "/billing/entitlements/12345678-1234-1234-1234-123456789abc", "", "{}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("GET", "/users/alice/billing", "", "{}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("POST", "/users/alice/points", "", "{\"points\":100,\"note\":\"test grant\"}", 200),
+            org.junit.jupiter.params.provider.Arguments.of("POST", "/users/alice/entitlements", "", "{\"imageDailyLimit\":40,\"agentDailyLimit\":40,\"days\":1}", 201));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("billingOperations")
+    void billingRoutesForwardEveryOperationWithPermissions(String method, String path, String query, String body, int expectedStatus) throws Exception {
+        HttpMethod verb = HttpMethod.valueOf(method);
+        String authority = "closet:billing:" + (method.equals("GET") ? "read" : "write");
+        mvc.perform(request(verb, "/api/v1/closet" + path + query).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(request(verb, "/api/v1/closet" + path + query).with(jwtAs("closet:user:read"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body).header("Idempotency-Key", "billing-key-1"))
+                .andExpect(status().isForbidden());
+        if (!method.equals("GET")) mvc.perform(request(verb, "/api/v1/closet" + path + query).with(jwtAs("closet:billing:read"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body).header("Idempotency-Key", "billing-key-1"))
+                .andExpect(status().isForbidden());
+        server.expect(requestTo("http://closet.test/api/manage/v1" + path + query))
+                .andExpect(method(verb))
+                .andExpect(request -> {
+                    assertThat(request.getHeaders().getFirst("X-Closet-Signature")).isNotBlank();
+                    if (path.endsWith("/points")) assertThat(request.getHeaders().getFirst("Idempotency-Key")).isEqualTo("billing-key-1");
+                })
+                .andRespond(withSuccess("{\"id\":\"billing-result\",\"codes\":[\"ONE-TIME-BILLING-CODE\"]}", MediaType.APPLICATION_JSON));
+        mvc.perform(request(verb, "/api/v1/closet" + path + query).with(jwtAs(authority))
+                        .header("Idempotency-Key", "billing-key-1").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().is(expectedStatus)).andExpect(jsonPath("$.data.id").value("billing-result"));
+        server.verify();
+        assertThat(auditEvents.findAll().stream().filter(e -> e.getAction().startsWith("CLOSET_BILLING_")).toList())
+                .allSatisfy(e -> assertThat(java.util.Objects.toString(e.getMetadata(), "")).doesNotContain("ONE-TIME-BILLING-CODE"));
+    }
+
+    @Test void billingValidationAndSeeds() throws Exception {
+        assertThat(permissions.findByCode("closet:billing:read")).isPresent();
+        assertThat(permissions.findByCode("closet:billing:write")).isPresent();
+        for (String page : java.util.List.of("settings", "tiers", "products", "redemptions", "margin"))
+            assertThat(menus.findByCode("closet-billing-" + page)).isPresent();
+        mvc.perform(get("/api/v1/closet/billing/orders?limit=501").with(jwtAs("closet:billing:read"))).andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/closet/users/alice/points").with(jwtAs("closet:billing:write"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"points\":100}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/closet/billing/products").with(jwtAs("closet:billing:write"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"kind\":\"POINTS\",\"name\":\"test\",\"priceMinor\":0,\"currency\":\"CNY\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test void billingFailureIsAuditedAndKeepsConflictStatus() throws Exception {
+        server.expect(requestTo("http://closet.test/api/manage/v1/users/alice/points"))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON).body("{\"code\":\"IDEMPOTENCY_CONFLICT\",\"detail\":\"Request already used\"}"));
+        mvc.perform(post("/api/v1/closet/users/alice/points").with(jwtAs("closet:billing:write"))
+                .header("Idempotency-Key", "billing-conflict").contentType(MediaType.APPLICATION_JSON).content("{\"points\":100}"))
+                .andExpect(status().isConflict());
+        server.verify();
+        assertThat(auditEvents.findAll()).anySatisfy(e -> {
+            assertThat(e.getAction()).isEqualTo("CLOSET_BILLING_POINTS_CHANGED");
+            assertThat(e.getResult()).isEqualTo("FAILURE");
+        });
     }
 
 }

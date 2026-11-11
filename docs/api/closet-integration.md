@@ -131,3 +131,8 @@ start 使用 UTF-8 secret 计算 HMAC-SHA256，签名采用 base64url 无填充�
 ## 2026-11-05 全量同步与实时试穿
 
 当前 69 个上游操作均有管理网关入口，新增实时试穿 22 个操作、6 个独立权限与 `closet-tryon` 菜单。完整路径、权限、完整替换、版本冲突、凭证保护、诊断及 SQL 字段归一化见 [管理接口覆盖清单](../closet-management-coverage.md)。配置仍沿用原 `APP_CLOSET_ENABLED`、HMAC 密钥与源服务地址，不需增加公网入口。
+
+
+## 2026-11-11 收费与利润
+
+当前91个上游操作均有网关入口，收费新增22操作与`closet:billing:read/write`权限。总开关、档位与成本、商品订单、兑换码、利润追溯及用户点数权益的路径、边界与验证见[收费接入清单](../integrations/closet/billing.md)。默认关闭与HMAC边界保持不变。
