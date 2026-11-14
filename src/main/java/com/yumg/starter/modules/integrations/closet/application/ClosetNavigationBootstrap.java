@@ -33,6 +33,12 @@ public class ClosetNavigationBootstrap implements ApplicationRunner {
         seed(directory, "closet-templates", "模板审核", "/closet/templates", "closet-templates", "ri/checkbox-multiple-line", 50, "closet:templates:read");
         seed(directory, "closet-style-terms", "风格词审核", "/closet/style-terms", "closet-style-terms", "ri/price-tag-3-line", 55, "closet:styleterms:read");
         seed(directory, "closet-tryon", "实时试穿", "/closet/tryon", "closet-tryon", "ri/vidicon-line", 35, "closet:tryon:read");
+        NavigationMenu creation = menus.findByCode("closet-creation").orElseGet(() -> menus.save(new NavigationMenu(
+                null, "closet-creation", "穿搭创作", "/creation", null, "ri/image-line", 155,
+                NavigationMenuType.DIRECTORY, "closet:creation:read", true, true, false, true)));
+        seed(creation, "closet-creation-templates", "模板", "/creation/templates", "closet-creation-templates", "ri/image-line", 10, "closet:creation:read");
+        seed(creation, "closet-creation-capabilities", "模型能力", "/creation/capabilities", "closet-creation-capabilities", "ri/settings-3-line", 20, "closet:creation:read");
+        seed(creation, "closet-creation-usage", "用量", "/creation/usage", "closet-creation-usage", "ri/bar-chart-line", 30, "closet:creation:read");
         NavigationMenu billing = menus.findByCode("closet-billing").orElseGet(() -> menus.save(new NavigationMenu(
                 null, "closet-billing", "收费管理", "/billing", null, "ri/money-cny-circle-line", 160,
                 NavigationMenuType.DIRECTORY, "closet:billing:read", true, true, false, true)));
