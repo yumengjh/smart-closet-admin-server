@@ -1,6 +1,6 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/management-api.yaml
-# source-commit: 06e2ff4a9749b34eed7c2bfbf395c62d85e5bd22
-# source-sha256: 1ce8c512d193c48f668ad53443ad53a9d3a8788afdc7b5830a75ce115c744df8
+# source-commit: 63bff12d855b6151460d5c0195f0bc1fdd939548
+# source-sha256: 66e99b68e27cf40235a63681c6b12eb85aacd2ea4848d49cbe45bf6391b57332
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
@@ -41,6 +41,132 @@ tags:
   - name: style-terms
     description: 助手学到的风格词审核（不含用户名，只给提出人数）
 paths:
+  /creations/showcases/uploads:
+    post:
+      operationId: uploadCreationShowcase
+      tags: [creations]
+      description: Signed raw multipart up to 12MiB; requires nonblank signed X-Operator. Only this POST has a larger HMAC body limit. PNG up to 10MiB/20MP, valid AIGC label required.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file, sourceNote]
+              properties:
+                file: { type: string, format: binary }
+                sourceNote: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        '200':
+          description: One-time owner-bound upload; unused uploads expire after 24h
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShowcaseUpload' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+  /creations/showcases:
+    get:
+      operationId: listCreationShowcases
+      tags: [creations]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1, minimum: 1, maximum: 1000000 } }
+        - { name: size, in: query, schema: { type: integer, default: 20, minimum: 1, maximum: 50 } }
+      responses:
+        '200':
+          description: Metadata only; sorted by sortOrder then id; no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, page, size]
+                properties:
+                  items: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/Showcase' } }
+                  total: { type: integer, format: int64 }
+                  page: { type: integer }
+                  size: { type: integer }
+    post:
+      operationId: createCreationShowcase
+      tags: [creations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShowcaseCreate' }
+      responses:
+        '200':
+          description: DRAFT revision 0; upload consumed once by the same keyId and operator
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Showcase' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /creations/showcases/{id}:
+    parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+    put:
+      operationId: editCreationShowcase
+      tags: [creations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShowcaseEdit' }
+      responses:
+        '200':
+          description: Only DRAFT or RETIRED editable; becomes DRAFT with revision increment
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Showcase' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /creations/showcases/{id}/publish:
+    parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+    post:
+      operationId: publishCreationShowcase
+      tags: [creations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreationRevision' }
+      responses:
+        '200':
+          description: DRAFT to PUBLISHED
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Showcase' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /creations/showcases/{id}/retire:
+    parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+    post:
+      operationId: retireCreationShowcase
+      tags: [creations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreationRevision' }
+      responses:
+        '200':
+          description: PUBLISHED to RETIRED; immediately denies subsequent public image reads
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Showcase' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /creations/showcases/{id}/image:
+    parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+    get:
+      operationId: previewCreationShowcase
+      tags: [creations]
+      responses:
+        '200':
+          description: Authenticated preview for every state; no-store
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/Problem' }
   /creations/usage:
     get:
       operationId: getCreationUsage
@@ -1567,6 +1693,51 @@ components:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
   schemas:
+    ShowcaseUpload:
+      type: object
+      required: [uploadId, hash, width, height]
+      properties:
+        uploadId: { type: string, format: uuid }
+        hash: { type: string }
+        width: { type: integer }
+        height: { type: integer }
+    ShowcaseCreate:
+      type: object
+      additionalProperties: false
+      required: [uploadId, title, description, sortOrder]
+      properties:
+        uploadId: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, maxLength: 500 }
+        sortOrder: { type: integer, minimum: 0, maximum: 10000 }
+    ShowcaseEdit:
+      type: object
+      additionalProperties: false
+      required: [revision, title, description, sortOrder]
+      properties:
+        revision: { type: integer, format: int64 }
+        title: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, maxLength: 500 }
+        sortOrder: { type: integer, minimum: 0, maximum: 10000 }
+    Showcase:
+      type: object
+      additionalProperties: false
+      required: [id, title, description, sortOrder, status, revision, sourceNote, hash, width, height, aiGenerated, imageUrl, createdAtMs, updatedAtMs]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string }
+        sortOrder: { type: integer }
+        status: { type: string, enum: [DRAFT, PUBLISHED, RETIRED] }
+        revision: { type: integer, format: int64 }
+        sourceNote: { type: string }
+        hash: { type: string }
+        width: { type: integer }
+        height: { type: integer }
+        aiGenerated: { type: boolean, const: true }
+        imageUrl: { type: string }
+        createdAtMs: { type: integer, format: int64 }
+        updatedAtMs: { type: integer, format: int64 }
     CreationUsageReport:
       type: object
       required: [from, to, timeZone, asOfMs, items]

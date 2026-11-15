@@ -50,6 +50,17 @@ public class ClosetManagementClient {
         catch (ResourceAccessException exception) { throw translator.translate(exception); }
     }
 
+    /** Sign exactly the bytes sent on the wire, including multipart boundaries. */
+    public JsonNode postRaw(String path, byte[] bytes, MediaType contentType) {
+        URI uri = uri(path, Map.of());
+        try {
+            return restClient().post().uri(uri)
+                    .headers(headers -> headers.addAll(headers(uri, "POST", Map.of(), bytes)))
+                    .contentType(contentType).body(bytes).retrieve().body(JsonNode.class);
+        } catch (RestClientResponseException exception) { throw translator.translate(exception); }
+        catch (ResourceAccessException exception) { throw translator.translate(exception); }
+    }
+
     public void delete(String path) {
         URI uri = uri(path, Map.of());
         try {

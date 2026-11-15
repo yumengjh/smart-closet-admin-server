@@ -35,6 +35,9 @@ class ClosetContractSnapshotTest {
 
     /** Upstream operations called by ClosetManagementClient users. Register new calls here. */
     private static final Set<String> USED = Set.of(
+            "GET /creations/showcases", "POST /creations/showcases", "POST /creations/showcases/uploads",
+            "PUT /creations/showcases/{id}", "POST /creations/showcases/{id}/publish",
+            "POST /creations/showcases/{id}/retire", "GET /creations/showcases/{id}/image",
             "GET /creations/templates", "POST /creations/templates/{id}/versions",
             "GET /creations/templates/{id}/versions/{versionId}", "PUT /creations/templates/{id}/versions/{versionId}",
             "POST /creations/templates/{id}/versions/{versionId}/verify", "POST /creations/templates/{id}/versions/{versionId}/publish",

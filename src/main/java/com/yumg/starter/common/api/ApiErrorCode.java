@@ -28,6 +28,7 @@ public enum ApiErrorCode {
     AVATAR_CANDIDATE_EXPIRED(HttpStatus.GONE, "Avatar candidate has expired"),
     AVATAR_CANDIDATE_INVALID(HttpStatus.NOT_FOUND, "Avatar candidate is invalid"),
     AVATAR_GENERATOR_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Avatar generator is unavailable"),
+    CLOSET_REQUEST_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "Official asset request exceeds the size limit"),
     CLOSET_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Closet management service is unavailable"),
     CLOSET_INTEGRATION_MISCONFIGURED(HttpStatus.BAD_GATEWAY, "Closet integration authentication is misconfigured"),
     CLOSET_LAST_ADMIN_PROTECTED(HttpStatus.CONFLICT, "The last enabled closet administrator cannot be disabled or demoted"),

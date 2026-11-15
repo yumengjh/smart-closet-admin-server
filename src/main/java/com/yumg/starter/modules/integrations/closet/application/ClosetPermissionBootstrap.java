@@ -18,6 +18,9 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(prefix = "app.integrations.closet", name = "enabled", havingValue = "true")
 public class ClosetPermissionBootstrap implements ApplicationRunner {
     private static final List<PermissionSeed> SEEDS = List.of(
+            new PermissionSeed("closet:showcase:read", "查看官方素材"),
+            new PermissionSeed("closet:showcase:write", "上传和编辑官方素材草稿"),
+            new PermissionSeed("closet:showcase:publish", "发布或下架官方素材"),
             new PermissionSeed("closet:creation:read", "查看穿搭创作模板、模型能力与用量"),
             new PermissionSeed("closet:creation:write", "编辑穿搭创作草稿与模型能力"),
             new PermissionSeed("closet:creation:publish", "发布或下架穿搭创作模板"),
