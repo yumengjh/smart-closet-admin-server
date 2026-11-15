@@ -6,12 +6,15 @@
 
 ## 固定契约来源
 
-源仓 `/Users/yaopinxin/project/art-showcase-server` 的 owner 确认本次固定提交为 `63bff12d855b6151460d5c0195f0bc1fdd939548`。该提交的 `docs/management-api.yaml` SHA-256 为 `66e99b68e27cf40235a63681c6b12eb85aacd2ea4848d49cbe45bf6391b57332`。同步使用仓库脚本完成，没有手工编辑快照；后端快照头和正文对应此提交及哈希。
+源仓 `/Users/yaopinxin/project/art-showcase-server` 的 owner 确认本次固定提交为 `63bff12d855b6151460d5c0195f0bc1fdd939548`。该提交的 `docs/management-api.yaml` SHA-256 为 `66e99b68e27cf40235a63681c6b12eb85aacd2ea4848d49cbe45bf6391b57332`。管理后端与管理前端各自通过仓库内 `scripts/sync-closet-contract.sh` 同步，没有手工编辑快照；两份来源头都记录此提交及哈希，去掉前四行后正文均与固定源逐字节一致。管理前端此前的快照仍指向旧源 `06e2ff4`，现已由新增的同步脚本从固定源更新，没有复制旧分支合同。
 
 | 检查 | 结果 |
 |---|---|
 | `scripts/sync-closet-contract.sh /Users/yaopinxin/project/art-showcase-server` | 通过 |
 | `scripts/sync-closet-contract.sh --check /Users/yaopinxin/project/art-showcase-server` | 通过，快照与源契约一致 |
+| 管理前端 `scripts/sync-closet-contract.sh /Users/yaopinxin/project/art-showcase-server` | 通过，来源头更新到 `63bff12` |
+| 管理前端 `scripts/sync-closet-contract.sh --check /Users/yaopinxin/project/art-showcase-server` | 通过 |
+| 两份快照正文与源文件逐字节比较 | 通过；两端来源 SHA-256 均为 `66e99b68e27cf40235a63681c6b12eb85aacd2ea4848d49cbe45bf6391b57332` |
 | `./mvnw '-Dtest=ClosetContractSnapshotTest' '-DCLOSET_CONTRACT_SOURCE=/Users/yaopinxin/project/art-showcase-server/docs/management-api.yaml' test` | 3 项通过 |
 | `./mvnw '-Dtest=ClosetIntegrationApiTest#everyUpstreamContractOperationHasAnActualGatewayMapping' test` | 1 项通过；此前因快照缺少 7 个素材路由而失败的映射断言已恢复 |
 
@@ -34,6 +37,7 @@
 - 选择合成 PNG 后出现图片预览；填写必填来源、标题和说明及排序值后创建成功，表格回读“草稿”。调用记录确认上传为 `FormData(file, sourceNote)`，随后创建请求携带 `uploadId` 和内容字段。
 - 对草稿执行发布与确认后，表格显示“已发布”；执行下架与确认后显示“已下架”。
 - 人为注入一次 409 后，页面锁住保存并显示“重新载入”；点击后重取列表、重开详情，revision 从 2 更新为 3，未提交的旧表单值不覆盖服务端状态。
+- 用可控门闩延迟详情图片请求复现关闭详情后立即新建的竞态。修复前，旧请求仍 pending 时新窗口的 `previewLoading` 持续为 true，放行旧响应后仍遮挡本地预览。修复在 `reset()` 中清除 `previewLoading`；修复后先关闭详情并等关闭过渡结束，loading mask 在旧请求仍 pending 时已清除。新建窗口选择 PNG 后放行旧响应，mask 保持清除且本地预览的 blob URL 不变，迟到回调没有覆盖新窗口状态。
 - `?readOnly` 下新建、发布、下架入口消失；详情可读，保存操作不显示。
 - 视口检查：390 px 时对话框 358 px、文档宽度 390 px；320 px 时对话框 288 px、文档宽度 320 px；1440 px 时对话框 760 px、编辑区两列各 352 px。移动端内容在对话框内滚动，创建流程的页脚按钮可滚动到达。
 
@@ -49,6 +53,7 @@
 | `pnpm exec stylelint --max-warnings 0 src/views/integrations/closet/creation/Showcases.vue` | 整理样式属性顺序和空行后通过 |
 | `pnpm build` | 通过；产物 3.48 MB。工具提示浏览器兼容数据较旧，不影响构建结果 |
 | `node scripts/closet-showcases-contract.test.mjs` | 通过：7 项请求契约、原始 multipart boundary、二进制预览和独立导航 |
+| 管理前端 `bash -n scripts/sync-closet-contract.sh` 与同步/`--check` | 通过 |
 
 ## 清理与范围
 
