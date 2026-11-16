@@ -147,6 +147,204 @@ class ClosetIntegrationApiTest {
         server.verify();
     }
 
+    private record ShowcaseRoute(HttpMethod method, String path, String permission, String body) {}
+    static java.util.stream.Stream<ShowcaseRoute> showcaseRoutes() {
+        return java.util.stream.Stream.of(
+                new ShowcaseRoute(HttpMethod.POST, "", "write", "{\"uploadId\":\"upload-1\",\"title\":\"Official\",\"description\":\"\",\"sortOrder\":0}"),
+                new ShowcaseRoute(HttpMethod.PUT, "/asset-1", "write", "{\"revision\":0,\"title\":\"Official\",\"description\":\"\",\"sortOrder\":0}"),
+                new ShowcaseRoute(HttpMethod.POST, "/asset-1/publish", "publish", "{\"revision\":0}"),
+                new ShowcaseRoute(HttpMethod.POST, "/asset-1/retire", "publish", "{\"revision\":1}"));
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("showcaseRoutes")
+    void showcaseJsonRoutesRequireSeparatePermissionAndForwardExactBody(ShowcaseRoute route) throws Exception {
+        String path = "/creations/showcases" + route.path();
+        mvc.perform(request(route.method(), "/api/v1/closet" + path).with(jwtAs("closet:creation:publish"))
+                .contentType(MediaType.APPLICATION_JSON).content(route.body())).andExpect(status().isForbidden());
+        if (route.permission().equals("publish")) mvc.perform(request(route.method(), "/api/v1/closet" + path)
+                .with(jwtAs("closet:showcase:write")).contentType(MediaType.APPLICATION_JSON).content(route.body()))
+                .andExpect(status().isForbidden());
+        server.expect(requestTo("http://closet.test/api/manage/v1" + path)).andExpect(method(route.method()))
+                .andExpect(content().json(route.body())).andRespond(withSuccess("{\"id\":\"asset-1\"}", MediaType.APPLICATION_JSON));
+        mvc.perform(request(route.method(), "/api/v1/closet" + path).with(jwtAs("closet:showcase:" + route.permission()))
+                .contentType(MediaType.APPLICATION_JSON).content(route.body())).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value("asset-1"));
+        server.verify();
+        assertThat(auditEvents.findAll().stream().filter(e -> e.getAction().startsWith("CLOSET_SHOWCASE_")))
+                .allSatisfy(e -> assertThat(java.util.Objects.toString(e.getMetadata(), "")).isIn("", "CONFLICT"));
+    }
+    @Test void showcaseListConvertsPaginationAndDoesNotRequireCreationPermission() throws Exception {
+        String root = "/api/v1/closet/creations/showcases";
+        server.expect(req -> {
+                    assertThat(req.getURI().getPath()).isEqualTo("/api/manage/v1/creations/showcases");
+                    assertThat(req.getURI().getQuery().split("&")).containsExactlyInAnyOrder("page=2", "size=20");
+                })
+                .andRespond(withSuccess("{\"items\":[],\"total\":21,\"page\":2,\"size\":20}", MediaType.APPLICATION_JSON));
+        server.expect(req -> assertThat(req.getURI().getQuery().split("&"))
+                        .containsExactlyInAnyOrder("page=1", "size=1"))
+                .andRespond(withSuccess("{\"items\":[],\"total\":0,\"page\":1,\"size\":1}", MediaType.APPLICATION_JSON));
+        server.expect(req -> assertThat(req.getURI().getQuery().split("&"))
+                        .containsExactlyInAnyOrder("page=1000000", "size=50"))
+                .andRespond(withSuccess("{\"items\":[],\"total\":0,\"page\":1000000,\"size\":50}", MediaType.APPLICATION_JSON));
+        mvc.perform(get(root + "?page=1").with(jwtAs("closet:showcase:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.page").value(1))
+                .andExpect(jsonPath("$.data.total").value(21))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Cache-Control", "no-store"));
+        mvc.perform(get(root + "?page=0&size=1").with(jwtAs("closet:showcase:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.page").value(0))
+                .andExpect(jsonPath("$.data.size").value(1));
+        mvc.perform(get(root + "?size=50&page=999999").with(jwtAs("closet:showcase:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.page").value(999999))
+                .andExpect(jsonPath("$.data.size").value(50));
+        mvc.perform(get(root + "?size=0").with(jwtAs("closet:showcase:read")))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get(root + "?size=51").with(jwtAs("closet:showcase:read")))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get(root + "?page=-1").with(jwtAs("closet:showcase:read")))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get(root + "?page=1000000").with(jwtAs("closet:showcase:read")))
+                .andExpect(status().isBadRequest());
+        server.verify();
+    }
+    private record ShowcaseBoundaryCase(String boundary, String contentType, String parsedParameter) {}
+    static java.util.stream.Stream<ShowcaseBoundaryCase> showcaseBoundaryCases() {
+        return java.util.stream.Stream.of(
+                new ShowcaseBoundaryCase("plainBoundary", "multipart/form-data;boundary=plainBoundary", "plainBoundary"),
+                new ShowcaseBoundaryCase("quoted boundary", "multipart/form-data; boundary=\"quoted boundary\"", "\"quoted boundary\""));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("showcaseBoundaryCases")
+    void showcaseAcceptsValidPngWithPlainAndQuotedBoundary(ShowcaseBoundaryCase boundary) throws Exception {
+        var image = new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        var pngOutput = new java.io.ByteArrayOutputStream();
+        assertThat(javax.imageio.ImageIO.write(image, "png", pngOutput)).isTrue();
+        byte[] png = pngOutput.toByteArray();
+        assertThat(javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(png))).isNotNull();
+        byte[] raw = multipartPng(boundary.boundary(), png);
+        server.expect(requestTo("http://closet.test/api/manage/v1/creations/showcases/uploads"))
+                .andExpect(method(HttpMethod.POST)).andExpect(content().bytes(raw))
+                .andExpect(req -> {
+                    var h = req.getHeaders();
+                    assertThat(h.getContentType().getParameter("boundary")).isEqualTo(boundary.parsedParameter());
+                    assertThat(h.getFirst("X-Operator")).isEqualTo("admin");
+                    var signer = new com.yumg.starter.modules.integrations.closet.infrastructure.ClosetRequestSigner();
+                    String canonical = signer.canonical("POST", req.getURI().getRawPath(), java.util.Map.of(),
+                            Long.parseLong(h.getFirst("X-Closet-Timestamp")), h.getFirst("X-Closet-Nonce"),
+                            h.getFirst("X-Operator"), h.getFirst("X-Request-Id"), raw);
+                    assertThat(h.getFirst("X-Closet-Signature")).isEqualTo(signer.sign(canonical, "0123456789abcdef0123456789abcdef"));
+                })
+                .andRespond(withSuccess("{\"uploadId\":\"upload-1\",\"hash\":\"hash\",\"width\":1,\"height\":1}", MediaType.APPLICATION_JSON));
+        var request = post("/api/v1/closet/creations/showcases/uploads").with(jwtAs("closet:showcase:write"))
+                .content(raw).with(servletRequest -> {
+                    servletRequest.setContentType(boundary.contentType());
+                    return servletRequest;
+                });
+        mvc.perform(request).andExpect(status().isOk()).andExpect(jsonPath("$.data.uploadId").value("upload-1"));
+        server.verify();
+    }
+
+    private static byte[] multipartPng(String boundary, byte[] png) {
+        var body = new java.io.ByteArrayOutputStream();
+        body.writeBytes(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"fixture.png\"\r\n"
+                + "Content-Type: image/png\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        body.writeBytes(png);
+        body.writeBytes(("\r\n--" + boundary + "\r\nContent-Disposition: form-data; name=\"sourceNote\"\r\n\r\n"
+                + "Generated valid 1x1 PNG fixture\r\n--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return body.toByteArray();
+    }
+
+    @Test void showcaseMaximumBodyIsOpaqueTransportFixtureAndSignedByteForByte() throws Exception {
+        byte[] raw = new byte[12 * 1024 * 1024];
+        String boundary = "transportBoundary";
+        byte[] prefix = ("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"transport-fixture.bin\"\r\n"
+                + "Content-Type: application/octet-stream\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        System.arraycopy(prefix, 0, raw, 0, prefix.length);
+        byte[] suffix = ("\r\n--" + boundary + "\r\nContent-Disposition: form-data; name=\"sourceNote\"\r\n\r\n"
+                + "Opaque max-size transport fixture\r\n--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        System.arraycopy(suffix, 0, raw, raw.length - suffix.length, suffix.length);
+        raw[raw.length - suffix.length - 1] = (byte) 255;
+        server.expect(requestTo("http://closet.test/api/manage/v1/creations/showcases/uploads"))
+                .andExpect(method(HttpMethod.POST)).andExpect(content().bytes(raw))
+                .andExpect(req -> {
+                    var h = req.getHeaders();
+                    assertThat(h.getContentType().getParameter("boundary")).isEqualTo(boundary);
+                    assertThat(h.getFirst("X-Operator")).isEqualTo("admin");
+                    var signer = new com.yumg.starter.modules.integrations.closet.infrastructure.ClosetRequestSigner();
+                    String canonical = signer.canonical("POST", req.getURI().getRawPath(), java.util.Map.of(),
+                            Long.parseLong(h.getFirst("X-Closet-Timestamp")), h.getFirst("X-Closet-Nonce"),
+                            h.getFirst("X-Operator"), h.getFirst("X-Request-Id"), raw);
+                    assertThat(h.getFirst("X-Closet-Signature")).isEqualTo(signer.sign(canonical, "0123456789abcdef0123456789abcdef"));
+                }).andRespond(withSuccess("{\"uploadId\":\"upload-1\",\"hash\":\"hash\",\"width\":240,\"height\":320}", MediaType.APPLICATION_JSON));
+        var request = post("/api/v1/closet/creations/showcases/uploads").with(jwtAs("closet:showcase:write"))
+                .contentType("multipart/form-data;boundary=" + boundary).content(raw);
+        var result = mvc.perform(request).andReturn();
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        server.verify();
+    }
+    @Test void showcaseUploadBoundariesAreLocalAndOnlyExactRouteSkipsMultipartResolver() throws Exception {
+        String root = "/api/v1/closet/creations/showcases/uploads";
+        for (String type : java.util.List.of("image/png", "multipart/*;boundary=fixture", "multipart/form-data",
+                "multipart/form-data;boundary=bad%boundary", "multipart/form-data;boundary=\"trailing \"",
+                "multipart/form-data;boundary=\"" + "a".repeat(71) + "\""))
+            mvc.perform(post(root).with(jwtAs("closet:showcase:write")).contentType(type).content("body"))
+                    .andExpect(status().isBadRequest());
+        mvc.perform(post(root).with(jwtAs("closet:showcase:read")).contentType("multipart/form-data;boundary=fixture").content("body"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(root).with(jwtAs("closet:showcase:write")).contentType("multipart/form-data;boundary=fixture")
+                .content(new byte[12 * 1024 * 1024 + 1])).andExpect(status().isPayloadTooLarge());
+        var resolver = context.getBean("multipartResolver", org.springframework.web.multipart.MultipartResolver.class);
+        var upload = new org.springframework.mock.web.MockHttpServletRequest("POST", root);
+        upload.setContentType("multipart/form-data;boundary=fixture");
+        assertThat(resolver.isMultipart(upload)).isFalse();
+        upload.setMethod("GET");
+        assertThat(resolver.isMultipart(upload)).isTrue();
+        upload.setMethod("PUT");
+        assertThat(resolver.isMultipart(upload)).isTrue();
+        upload.setMethod("POST");
+        upload.setRequestURI("/api/v1/users/me/avatar");
+        assertThat(resolver.isMultipart(upload)).isTrue();
+        upload.setRequestURI(root + "/other");
+        assertThat(resolver.isMultipart(upload)).isTrue();
+        upload.setRequestURI(root + "/");
+        assertThat(resolver.isMultipart(upload)).isTrue();
+        upload.setContextPath("/ctx");
+        upload.setRequestURI("/ctx" + root);
+        assertThat(resolver.isMultipart(upload)).isFalse();
+        server.verify();
+    }
+    @Test void showcaseImageBypassesJsonEnvelopeAndIsNoStore() throws Exception {
+        byte[] png = new byte[]{(byte)137, 80, 78, 71, 13, 10, 26, 10};
+        mvc.perform(get("/api/v1/closet/creations/showcases/asset-1/image").with(jwtAs("closet:showcase:write")))
+                .andExpect(status().isForbidden());
+        server.expect(requestTo("http://closet.test/api/manage/v1/creations/showcases/asset-1/image"))
+                .andRespond(withSuccess(png, MediaType.IMAGE_PNG));
+        var result = mvc.perform(get("/api/v1/closet/creations/showcases/asset-1/image").with(jwtAs("closet:showcase:read")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.request().asyncStarted()).andReturn();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch(result))
+                .andExpect(status().isOk()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(png))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().contentType(MediaType.IMAGE_PNG))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Cache-Control", "no-store"));
+        server.verify();
+    }
+    @Test void showcaseRejectsPrivateFieldsAndPreservesRevisionConflict() throws Exception {
+        String root = "/api/v1/closet/creations/showcases";
+        mvc.perform(post(root).with(jwtAs("closet:showcase:write")).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"uploadId\":\"upload-1\",\"title\":\"Official\",\"description\":\"\",\"sortOrder\":0,\"mediaId\":\"private\"}"))
+                .andExpect(status().isBadRequest());
+        server.expect(requestTo("http://closet.test/api/manage/v1/creations/showcases/asset-1/publish"))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("{\"code\":\"SHOWCASE_REVISION_CONFLICT\",\"detail\":\"Reload revision\"}"));
+        mvc.perform(post(root + "/asset-1/publish").with(jwtAs("closet:showcase:publish"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"revision\":0}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.message").value("Reload revision"));
+        assertThat(menus.findByCode("closet-creation-showcases")).get()
+                .extracting(m -> m.getRequiredPermission()).isEqualTo("closet:showcase:read");
+        for (String permission : java.util.List.of("read", "write", "publish"))
+            assertThat(permissions.findByCode("closet:showcase:" + permission)).isPresent();
+        server.verify();
+    }
+
     private record CreationRoute(HttpMethod method, String path, String permission, String body) {}
     static java.util.stream.Stream<CreationRoute> creationRoutes() {
         String template = "/creations/templates/sunlit-flatlay";

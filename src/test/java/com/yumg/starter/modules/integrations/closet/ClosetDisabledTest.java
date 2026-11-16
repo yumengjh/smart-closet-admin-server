@@ -27,6 +27,9 @@ class ClosetDisabledTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({
+            "GET, /creations/showcases", "POST, /creations/showcases", "POST, /creations/showcases/uploads",
+            "PUT, /creations/showcases/asset-1", "POST, /creations/showcases/asset-1/publish",
+            "POST, /creations/showcases/asset-1/retire", "GET, /creations/showcases/asset-1/image",
             "PATCH, /users/alice/profile", "DELETE, /users/alice/sessions/0123456789abcdef",
             "GET, /users/alice/login-lock", "DELETE, /users/alice/login-lock", "GET, /users/alice/events",
             "GET, /registration", "PUT, /registration", "GET, /invites", "POST, /invites",
@@ -34,14 +37,16 @@ class ClosetDisabledTest {
     void disabledAccountRoutesDoNotExistEvenWithAllTheirPermissions(String method, String path) throws Exception {
         var mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         mvc.perform(request(HttpMethod.valueOf(method), "/api/v1/closet" + path)
-                        .with(jwt().authorities(() -> "closet:user:read", () -> "closet:user:write",
+                        .with(jwt().authorities(() -> "closet:showcase:read", () -> "closet:showcase:write", () -> "closet:showcase:publish",
+                                () -> "closet:user:read", () -> "closet:user:write",
                                 () -> "closet:registration:read", () -> "closet:registration:write"))
                         .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isNotFound());
     }
 
     @Test void disabledIntegrationRegistersNoControllersServicesOrSeeders() {
-        Class<?>[] gated = { ClosetUserAdministrationController.class, ClosetInsightController.class,
+        Class<?>[] gated = { ClosetShowcaseController.class, ClosetShowcaseService.class,
+                com.yumg.starter.modules.integrations.closet.infrastructure.ClosetShowcaseMultipartConfiguration.class, ClosetUserAdministrationController.class, ClosetInsightController.class,
                 ClosetRegistrationController.class, ClosetRegistrationService.class, ClosetManagementController.class, ClosetUserAdministrationService.class, ClosetInsightService.class,
                 ClosetManagementService.class, ClosetPermissionBootstrap.class, ClosetNavigationBootstrap.class,
                 ClosetBillingController.class, ClosetBillingService.class, ClosetTryOnController.class, ClosetTryOnService.class, ClosetIntegrationConfiguration.class };

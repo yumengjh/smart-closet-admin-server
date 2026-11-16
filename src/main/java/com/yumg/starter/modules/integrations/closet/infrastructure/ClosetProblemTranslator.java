@@ -20,6 +20,16 @@ public class ClosetProblemTranslator {
         JsonNode problem = parse(exception.getResponseBodyAsString());
         String code = problem.path("code").asText("");
         String detail = problem.path("detail").asText("");
+        if (code.startsWith("SHOWCASE_")) {
+            ApiErrorCode mapped = switch (status.value()) {
+                case 403 -> ApiErrorCode.ACCESS_DENIED;
+                case 404 -> ApiErrorCode.NOT_FOUND;
+                case 409 -> ApiErrorCode.CONFLICT;
+                case 413 -> ApiErrorCode.CLOSET_REQUEST_TOO_LARGE;
+                default -> status.is5xxServerError() ? ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE : ApiErrorCode.INVALID_PARAMETER;
+            };
+            return ApiException.fromUpstream(mapped, detail, List.of());
+        }
         if (code.startsWith("TRYON_")) {
             // Preserve control-plane failures instead of turning stale revisions or missing sessions into HTTP 400.
             ApiErrorCode mapped = switch (status.value()) {
