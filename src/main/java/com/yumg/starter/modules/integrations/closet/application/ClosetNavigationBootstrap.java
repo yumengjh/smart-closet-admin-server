@@ -36,6 +36,7 @@ public class ClosetNavigationBootstrap implements ApplicationRunner {
         NavigationMenu creation = menus.findByCode("closet-creation").orElseGet(() -> menus.save(new NavigationMenu(
                 null, "closet-creation", "穿搭创作", "/creation", null, "ri/image-line", 155,
                 NavigationMenuType.DIRECTORY, "closet:creation:read", true, true, false, true)));
+        seed(creation, "closet-creation-guide", "使用指南", "/creation/guide", "closet-creation-guide", "ri/book-open-line", 0, "closet:creation:read");
         seed(creation, "closet-creation-templates", "模板", "/creation/templates", "closet-creation-templates", "ri/image-line", 10, "closet:creation:read");
         seed(creation, "closet-creation-capabilities", "模型能力", "/creation/capabilities", "closet-creation-capabilities", "ri/settings-3-line", 20, "closet:creation:read");
         seed(creation, "closet-creation-usage", "用量", "/creation/usage", "closet-creation-usage", "ri/bar-chart-line", 30, "closet:creation:read");

@@ -115,6 +115,17 @@ class ClosetIntegrationApiTest {
             assertThat(page.getParentId()).isEqualTo(parent.getId());
             assertThat(page.getRequiredPermission()).isEqualTo("closet:creation:read");
         }
+        var guide = menus.findByCode("closet-creation-guide").orElseThrow();
+        assertThat(guide.getParentId()).isEqualTo(parent.getId());
+        assertThat(guide.getSortOrder()).isZero();
+        assertThat(guide.getRoutePath()).isEqualTo("/creation/guide");
+        assertThat(guide.getComponentKey()).isEqualTo("closet-creation-guide");
+        assertThat(guide.getRequiredPermission()).isEqualTo("closet:creation:read");
+        var business = menus.findByCode("closet").orElseThrow();
+        var showcase = menus.findByCode("closet-creation-showcases").orElseThrow();
+        assertThat(showcase.getParentId()).isEqualTo(business.getId());
+        assertThat(showcase.getSortOrder()).isEqualTo(57);
+        assertThat(showcase.getRequiredPermission()).isEqualTo("closet:showcase:read");
     }
 
     @Test void creationPublishSignsRequestAndAuditsWithoutBody() throws Exception {
