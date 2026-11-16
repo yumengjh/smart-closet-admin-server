@@ -93,6 +93,103 @@ class ClosetIntegrationApiTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test void creationPublishRequiresSeparatePermissionAndRejectsUnknownRoutes() throws Exception {
+        String publish = "/api/v1/closet/creations/templates/sunlit-flatlay/versions/v1/publish";
+        mvc.perform(post(publish).with(jwtAs("closet:creation:write"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"revision\":1}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/closet/creations/templates/other/versions/v1")
+                .with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/closet/creations/arbitrary/private")
+                .with(jwtAs("closet:creation:read"))).andExpect(status().isNotFound());
+        server.verify();
+    }
+
+    @Test void creationNavigationAndPermissionsAreSeeded() {
+        assertThat(roles.findAllWithPermissions().stream().filter(role -> role.getCode().equals("SUPER_ADMIN"))
+                .findFirst().orElseThrow().getPermissions()).extracting(permission -> permission.getCode())
+                .contains("closet:creation:read", "closet:creation:write", "closet:creation:publish");
+        var parent = menus.findByCode("closet-creation").orElseThrow();
+        for (String key : java.util.List.of("templates", "capabilities", "usage")) {
+            var page = menus.findByCode("closet-creation-" + key).orElseThrow();
+            assertThat(page.getParentId()).isEqualTo(parent.getId());
+            assertThat(page.getRequiredPermission()).isEqualTo("closet:creation:read");
+        }
+    }
+
+    @Test void creationPublishSignsRequestAndAuditsWithoutBody() throws Exception {
+        String path = "/creations/templates/sunlit-flatlay/versions/v1/publish";
+        server.expect(requestTo("http://closet.test/api/manage/v1" + path))
+                .andExpect(method(HttpMethod.POST)).andExpect(ClosetIntegrationApiTest::capture)
+                .andExpect(content().json("{\"revision\":1}"))
+                .andRespond(withSuccess("{\"status\":\"PUBLISHED\"}", MediaType.APPLICATION_JSON));
+        mvc.perform(post("/api/v1/closet" + path).with(jwtAs("closet:creation:publish"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"revision\":1}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("PUBLISHED"));
+        server.verify();
+        assertThat(recorded.get().keyId()).isEqualTo("test-key");
+        assertThat(recorded.get().signature()).isNotBlank();
+        AuditEvent event = auditEvents.findAll().stream()
+                .filter(item -> item.getAction().equals("CLOSET_CREATION_VERSION_PUBLISHED"))
+                .reduce((first, second) -> second).orElseThrow();
+        assertThat(event.getResult()).isEqualTo("SUCCESS");
+        assertThat(event.getMetadata()).isNull();
+    }
+
+    @Test void creationConflictIsPreserved() throws Exception {
+        String path = "/creations/templates/sunlit-flatlay/versions/v1/publish";
+        server.expect(requestTo("http://closet.test/api/manage/v1" + path))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"code\":\"REVISION_CONFLICT\",\"detail\":\"版本已变更，请重新载入\"}"));
+        mvc.perform(post("/api/v1/closet" + path).with(jwtAs("closet:creation:publish"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"revision\":1}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.message").value("版本已变更，请重新载入"));
+        server.verify();
+    }
+
+    private record CreationRoute(HttpMethod method, String path, String permission, String body) {}
+    static java.util.stream.Stream<CreationRoute> creationRoutes() {
+        String template = "/creations/templates/sunlit-flatlay";
+        String version = template + "/versions/v1";
+        return java.util.stream.Stream.of(
+                new CreationRoute(HttpMethod.GET, "/creations/templates", "read", null),
+                new CreationRoute(HttpMethod.POST, template + "/versions", "write", "{\"fromVersionId\":null}"),
+                new CreationRoute(HttpMethod.GET, version, "read", null),
+                new CreationRoute(HttpMethod.PUT, version, "write", "{\"revision\":1}"),
+                new CreationRoute(HttpMethod.POST, version + "/verify", "write", "{\"revision\":1,\"evidence\":\"fixture evidence\"}"),
+                new CreationRoute(HttpMethod.POST, version + "/publish", "publish", "{\"revision\":1}"),
+                new CreationRoute(HttpMethod.POST, template + "/retire", "publish", "{\"revision\":1}"),
+                new CreationRoute(HttpMethod.GET, "/creations/capabilities", "read", null),
+                new CreationRoute(HttpMethod.PUT, "/creations/capabilities", "write", "{\"purpose\":\"ART_CREATION\"}"));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("creationRoutes")
+    void creationRoutesRequireOwnPermissionAndForwardToTheirExactPath(CreationRoute route) throws Exception {
+        var denied = request(route.method(), "/api/v1/closet" + route.path())
+                .with(jwtAs("system:user:read")).contentType(MediaType.APPLICATION_JSON);
+        if (route.body() != null) denied.content(route.body());
+        mvc.perform(denied).andExpect(status().isForbidden());
+        var expectation = server.expect(requestTo("http://closet.test/api/manage/v1" + route.path()))
+                .andExpect(method(route.method())).andExpect(ClosetIntegrationApiTest::capture);
+        if (route.body() != null) expectation.andExpect(content().json(route.body()));
+        expectation.andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+        var allowed = request(route.method(), "/api/v1/closet" + route.path())
+                .with(jwtAs("closet:creation:" + route.permission())).contentType(MediaType.APPLICATION_JSON);
+        if (route.body() != null) allowed.content(route.body());
+        mvc.perform(allowed).andExpect(status().isOk());
+        server.verify();
+        assertThat(recorded.get().signature()).isNotBlank();
+    }
+
+    @Test void creationUsageRejectsInvalidDateRangeBeforeForwarding() throws Exception {
+        mvc.perform(get("/api/v1/closet/creations/usage?from=2026-01-01&to=2026-02-01")
+                .with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/closet/creations/usage?from=2026-01-02&to=2026-01-01")
+                .with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
+        server.verify();
+    }
+
     @Test void translatesPagingAndWrapsTheSuccessfulResponse() throws Exception {
         server.expect(requestTo(org.hamcrest.Matchers.containsString("/api/manage/v1/users")))
                 .andExpect(request -> capture(request))
@@ -914,7 +1011,7 @@ class ClosetIntegrationApiTest {
             }
             server.verify();
         }
-        assertThat(actual).hasSize(91).containsExactlyInAnyOrderElementsOf(expected);
+        assertThat(actual).containsExactlyInAnyOrderElementsOf(expected);
     }
 
     static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> billingOperations() {

@@ -31,7 +31,8 @@ public class NavigationService {
             "ip-rule-management", "audit-log", "announcement-management",
             "account-security", "gc-management", "sql-console",
             "closet-users", "closet-insights", "closet-dashboard", "closet-ops", "closet-exports", "closet-templates", "closet-style-terms",
-            "closet-registration", "closet-account-events", "closet-security-audit", "closet-tryon");
+            "closet-registration", "closet-account-events", "closet-security-audit", "closet-tryon",
+            "closet-creation-templates", "closet-creation-capabilities", "closet-creation-usage");
 
     private final NavigationMenuRepository menus;
     private final PermissionRepository permissions;

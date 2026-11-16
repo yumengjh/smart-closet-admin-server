@@ -1,6 +1,6 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/management-api.yaml
-# source-commit: 682983124070b333217b61f059c08249036a98a5
-# source-sha256: 25a3cb3396b5483b341f0d78e99c34266294d06d17eab82e92e6b12e95f14176
+# source-commit: 06e2ff4a9749b34eed7c2bfbf395c62d85e5bd22
+# source-sha256: 1ce8c512d193c48f668ad53443ad53a9d3a8788afdc7b5830a75ce115c744df8
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
@@ -23,6 +23,7 @@ servers:
 security:
   - closetHmac: []
 tags:
+  - name: creations
   - name: users
   - name: registration
     description: 注册模式（只读，来自部署配置）与邀请码
@@ -40,6 +41,167 @@ tags:
   - name: style-terms
     description: 助手学到的风格词审核（不含用户名，只给提出人数）
 paths:
+  /creations/usage:
+    get:
+      operationId: getCreationUsage
+      tags: [creations]
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Bounded aggregates by template, actual model and currency
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationUsageReport' }
+        '400': { $ref: '#/components/responses/Problem' }
+  /creations/templates:
+    get:
+      operationId: listCreationTemplates
+      tags: [creations]
+      responses:
+        '200':
+          description: Creation templates and versions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/CreationTemplateSummary' } }
+  /creations/templates/{id}/versions:
+    parameters: [ { $ref: '#/components/parameters/CreationTemplateId' } ]
+    post:
+      operationId: createCreationTemplateVersion
+      tags: [creations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreationVersionCreate' }
+      responses:
+        '200':
+          description: Draft version created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationVersion' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /creations/templates/{id}/versions/{versionId}:
+    parameters: [ { $ref: '#/components/parameters/CreationTemplateId' }, { $ref: '#/components/parameters/CreationVersionId' } ]
+    get:
+      operationId: getCreationTemplateVersion
+      tags: [creations]
+      responses:
+        '200':
+          description: Version details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationVersion' }
+        '404': { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: updateCreationTemplateVersion
+      tags: [creations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreationVersionEdit' }
+      responses:
+        '200':
+          description: Updated draft
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationVersion' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /creations/templates/{id}/versions/{versionId}/verify:
+    parameters: [ { $ref: '#/components/parameters/CreationTemplateId' }, { $ref: '#/components/parameters/CreationVersionId' } ]
+    post:
+      operationId: verifyCreationTemplateVersion
+      tags: [creations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreationVersionVerify' }
+      responses:
+        '200':
+          description: Verified version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationVersion' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /creations/templates/{id}/versions/{versionId}/publish:
+    parameters: [ { $ref: '#/components/parameters/CreationTemplateId' }, { $ref: '#/components/parameters/CreationVersionId' } ]
+    post:
+      operationId: publishCreationTemplateVersion
+      tags: [creations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreationRevision' }
+      responses:
+        '200':
+          description: Published version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationVersion' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /creations/templates/{id}/retire:
+    parameters: [ { $ref: '#/components/parameters/CreationTemplateId' } ]
+    post:
+      operationId: retireCreationTemplate
+      tags: [creations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreationRevision' }
+      responses:
+        '200':
+          description: Template retired
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [retired]
+                properties:
+                  retired: { type: boolean }
+        '409': { $ref: '#/components/responses/Problem' }
+  /creations/capabilities:
+    get:
+      operationId: listCreationCapabilities
+      tags: [creations]
+      responses:
+        '200':
+          description: ART_CREATION capabilities
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/CreationCapability' } }
+    put:
+      operationId: updateCreationCapability
+      tags: [creations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreationCapabilityChange' }
+      responses:
+        '200':
+          description: Updated capability
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationCapability' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
   /users:
     get:
       tags: [users]
@@ -1360,6 +1522,16 @@ components:
         ```
         时间偏差上限默认 300 秒；nonce 在 600 秒内不可重复。
   parameters:
+    CreationTemplateId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, enum: [sunlit-flatlay, dual-view-editorial, daily-outfit-share] }
+    CreationVersionId:
+      name: versionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     Username:
       name: username
       in: path
@@ -1395,6 +1567,151 @@ components:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
   schemas:
+    CreationUsageReport:
+      type: object
+      required: [from, to, timeZone, asOfMs, items]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        timeZone: { type: string }
+        asOfMs: { type: integer, format: int64 }
+        items: { type: array, items: { $ref: '#/components/schemas/CreationUsageItem' } }
+    CreationUsageItem:
+      type: object
+      required: [templateId, templateVersion, provider, model, currency, requests, dispatchedAttempts, succeeded, failed, unknown, recreates, recreateRatio, estimatedCostMicro, unknownCostAttempts]
+      properties:
+        templateId: { type: string }
+        templateVersion: { type: integer, format: int64 }
+        provider: { type: string }
+        model: { type: string }
+        currency: { type: [string, 'null'] }
+        requests: { type: integer, format: int64 }
+        dispatchedAttempts: { type: integer, format: int64 }
+        succeeded: { type: integer, format: int64 }
+        failed: { type: integer, format: int64 }
+        unknown: { type: integer, format: int64 }
+        recreates: { type: integer, format: int64 }
+        recreateRatio: { type: [number, 'null'] }
+        estimatedCostMicro: { type: integer, format: int64 }
+        unknownCostAttempts: { type: integer, format: int64 }
+    CreationVersionCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        fromVersionId: { type: [string, 'null'], format: uuid }
+    CreationRevision:
+      type: object
+      additionalProperties: false
+      required: [revision]
+      properties:
+        revision: { type: integer, format: int64, minimum: 0 }
+    CreationVersionVerify:
+      type: object
+      additionalProperties: false
+      required: [revision, evidence]
+      properties:
+        revision: { type: integer, format: int64, minimum: 0 }
+        evidence: { type: string, minLength: 20, maxLength: 1000 }
+    CreationOptions:
+      type: object
+      additionalProperties: false
+      required: [light]
+      properties:
+        light:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          contains: { const: DEFAULT }
+          items: { type: string, enum: [DEFAULT, WARM, COOL] }
+    CreationVersionEdit:
+      type: object
+      additionalProperties: false
+      required: [revision, name, description, previewAssetId, personRequired, maxGarments, options, prompt]
+      properties:
+        revision: { type: integer, format: int64, minimum: 0 }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        previewAssetId: { type: string, enum: [sunlit-flatlay, dual-view-editorial, daily-outfit-share] }
+        personRequired: { type: boolean }
+        maxGarments: { type: integer, minimum: 1, maximum: 12 }
+        options: { $ref: '#/components/schemas/CreationOptions' }
+        prompt: { type: string, minLength: 1, maxLength: 8000 }
+        provider: { type: [string, 'null'] }
+        model: { type: [string, 'null'] }
+        capabilityVersion: { type: [integer, 'null'], format: int64 }
+    CreationVersion:
+      type: object
+      required: [id, versionId, version, revision, status, name, description, previewAssetId, personRequired, maxGarments, options, prompt, provider, model, capabilityVersion, evidence, publishedAtMs]
+      properties:
+        id: { type: string }
+        versionId: { type: string, format: uuid }
+        version: { type: integer, format: int64 }
+        revision: { type: integer, format: int64 }
+        status: { type: string, enum: [DRAFT, VERIFIED, PUBLISHED, RETIRED] }
+        name: { type: string }
+        description: { type: string }
+        previewAssetId: { type: string }
+        personRequired: { type: boolean }
+        maxGarments: { type: integer }
+        options: { $ref: '#/components/schemas/CreationOptions' }
+        prompt: { type: string }
+        provider: { type: [string, 'null'] }
+        model: { type: [string, 'null'] }
+        capabilityVersion: { type: [integer, 'null'], format: int64 }
+        evidence: { type: [string, 'null'] }
+        publishedAtMs: { type: [integer, 'null'], format: int64 }
+    CreationVersionSummary:
+      type: object
+      required: [versionId, version, revision, status, name, description, personRequired, maxGarments, publishedAtMs]
+      properties:
+        versionId: { type: string, format: uuid }
+        version: { type: integer, format: int64 }
+        revision: { type: integer, format: int64 }
+        status: { type: string, enum: [DRAFT, VERIFIED, PUBLISHED, RETIRED] }
+        name: { type: string }
+        description: { type: string }
+        personRequired: { type: boolean }
+        maxGarments: { type: integer }
+        publishedAtMs: { type: [integer, 'null'], format: int64 }
+    CreationTemplateSummary:
+      type: object
+      required: [id, sortOrder, publishedVersionId, enabled, revision, versions]
+      properties:
+        id: { type: string }
+        sortOrder: { type: integer }
+        publishedVersionId: { type: [string, 'null'] }
+        enabled: { type: boolean }
+        revision: { type: integer, format: int64 }
+        versions: { type: array, items: { $ref: '#/components/schemas/CreationVersionSummary' } }
+    CreationCapabilityChange:
+      type: object
+      additionalProperties: false
+      required: [provider, model, purpose, maxReferences, verified, version, notes, outputOptions]
+      properties:
+        provider: { type: string }
+        model: { type: string }
+        purpose: { type: string, enum: [ART_CREATION] }
+        maxReferences: { type: integer, minimum: 1, maximum: 20 }
+        verified: { type: boolean }
+        version: { type: integer, format: int64, minimum: 0 }
+        notes: { type: string, maxLength: 1000 }
+        outputOptions: { type: object }
+    CreationCapability:
+      type: object
+      required: [provider, model, purpose, maxReferences, verified, version, verifiedAt, providerRevision, notes, outputOptions, outputCount, pricingKey]
+      properties:
+        provider: { type: string }
+        model: { type: string }
+        purpose: { type: string, enum: [ART_CREATION] }
+        maxReferences: { type: integer, minimum: 1, maximum: 20 }
+        verified: { type: boolean }
+        version: { type: integer, format: int64 }
+        verifiedAt: { type: [integer, 'null'], format: int64 }
+        providerRevision: { type: [string, 'null'] }
+        notes: { type: string }
+        outputOptions: { type: object }
+        outputCount: { type: integer, const: 1 }
+        pricingKey: { type: string, pattern: '^art:[a-f0-9]{64}$', readOnly: true }
     BillingSettingsView: {"type": "object", "required": ["state", "billingActive"], "properties": {"billingActive": {"type": "boolean"}, "state": {"type": "object", "required": ["effective", "defaults", "overridden"], "properties": {"effective": {"$ref": "#/components/schemas/BillingSwitches"}, "defaults": {"$ref": "#/components/schemas/BillingSwitches"}, "overridden": {"type": "object", "additionalProperties": {"type": "boolean"}}, "updatedBy": {"type": ["string", "null"]}, "updatedAtMs": {"type": ["integer", "null"]}}}}}
     BillingSwitches: {"type": "object", "required": ["enabled", "tryon", "image", "agent", "showPrices"], "properties": {"enabled": {"type": "boolean"}, "tryon": {"type": "boolean"}, "image": {"type": "boolean"}, "agent": {"type": "boolean"}, "showPrices": {"type": "boolean"}}}
     BillingTier: {"type": "object", "required": ["tier", "name", "unit", "model"], "properties": {"tier": {"type": "string"}, "name": {"type": "string"}, "unit": {"type": "string", "enum": ["IMAGE", "KTOKEN", "SECOND"]}, "model": {"type": "string"}, "milliPointsPerUnit": {"type": ["integer", "null"]}, "priceVersionId": {"type": ["string", "null"]}}}
