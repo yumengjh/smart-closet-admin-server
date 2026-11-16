@@ -357,6 +357,7 @@ class ClosetIntegrationApiTest {
                 new CreationRoute(HttpMethod.POST, version + "/verify", "write", "{\"revision\":1,\"evidence\":\"fixture evidence\"}"),
                 new CreationRoute(HttpMethod.POST, version + "/publish", "publish", "{\"revision\":1}"),
                 new CreationRoute(HttpMethod.POST, template + "/retire", "publish", "{\"revision\":1}"),
+                new CreationRoute(HttpMethod.GET, "/creations/generation-options", "read", null),
                 new CreationRoute(HttpMethod.GET, "/creations/capabilities", "read", null),
                 new CreationRoute(HttpMethod.PUT, "/creations/capabilities", "write", "{\"purpose\":\"ART_CREATION\"}"));
     }

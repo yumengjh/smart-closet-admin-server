@@ -54,6 +54,9 @@ public class ClosetCreationController {
     @GetMapping("/capabilities") @PreAuthorize("hasAuthority('closet:creation:read')")
     public JsonNode capabilities() { return service.read("/capabilities", Map.of()); }
 
+    @GetMapping("/generation-options") @PreAuthorize("hasAuthority('closet:creation:read')")
+    public JsonNode generationOptions() { return service.read("/generation-options", Map.of()); }
+
     @PutMapping("/capabilities") @PreAuthorize("hasAuthority('closet:creation:write')")
     public JsonNode capabilities(@RequestBody JsonNode body) { return service.write("CAPABILITY_UPDATED", "PUT", "/capabilities", body); }
 
