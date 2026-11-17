@@ -1,11 +1,11 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/management-api.yaml
-# source-commit: 64f02be7c506b7d9f1f4c42b996b6b77a4d8a056
-# source-sha256: c72ddb9f651ad93fa499d9d401de7c293960aae8240162b384d5fe76702eab15
+# source-commit: uncommitted
+# source-sha256: 4730765a4e1a962607cb2d636bf58f9c7a5937435a5399fea90440c3bb35f124
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
   title: Smart Closet Management API
-  version: 1.5.1
+  version: 1.6.0
   description: |
     鱼搭中立管理接口。默认关闭（`closet.management.enabled=false`），开启后供任意宿主平台以服务身份调用。
     设计说明见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md`；1.1（运维、KPI、大屏与数据出口、模板审核）见
@@ -167,6 +167,196 @@ paths:
             image/png:
               schema: { type: string, format: binary }
         '404': { $ref: '#/components/responses/Problem' }
+  /creations/trial-garments:
+    get:
+      operationId: listCreationTrialGarments
+      tags: [creations]
+      description: Listed public preset garments usable for trials; never account-owned garments.
+      responses:
+        '200':
+          description: Trial garments
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/CreationTrialGarment' } }
+  /creations/trial-garments/{id}/image:
+    parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+    get:
+      operationId: getCreationTrialGarmentImage
+      tags: [creations]
+      responses:
+        '200':
+          description: PNG with longest side at most 512; no-store
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/Problem' }
+  /creations/trial-persons:
+    get:
+      operationId: listCreationTrialPersons
+      tags: [creations]
+      responses:
+        '200':
+          description: Operator-uploaded trial persons, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/CreationTrialPerson' } }
+    post:
+      operationId: uploadCreationTrialPerson
+      tags: [creations]
+      description: Signed raw multipart (same format as showcase uploads); requires nonblank signed X-Operator. PNG or JPEG up to 10MiB, re-encoded as PNG without metadata. The note must not contain personal data.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file, sourceNote]
+              properties:
+                file: { type: string, format: binary }
+                sourceNote: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        '200':
+          description: Stored trial person
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationTrialPerson' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+  /creations/trial-persons/{id}/image:
+    parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+    get:
+      operationId: getCreationTrialPersonImage
+      tags: [creations]
+      responses:
+        '200':
+          description: PNG of the stored trial person; no-store
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/Problem' }
+  /creations/trial-persons/{id}:
+    parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+    delete:
+      operationId: deleteCreationTrialPerson
+      tags: [creations]
+      responses:
+        '200':
+          description: Trial person deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted]
+                properties:
+                  deleted: { type: boolean }
+        '404': { $ref: '#/components/responses/Problem' }
+  /creations/templates/{id}/versions/{versionId}/trials:
+    parameters: [ { $ref: '#/components/parameters/CreationTemplateId' }, { $ref: '#/components/parameters/CreationVersionId' } ]
+    post:
+      operationId: startCreationTrial
+      tags: [creations]
+      description: Starts one real, paid model call for a DRAFT version (409 if another trial is running, 429 past the daily limit). Requires nonblank signed X-Operator.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreationTrialStart' }
+      responses:
+        '200':
+          description: Queued trial
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationTrial' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+  /creations/templates/{id}/trials:
+    parameters: [ { $ref: '#/components/parameters/CreationTemplateId' } ]
+    get:
+      operationId: listCreationTrials
+      tags: [creations]
+      responses:
+        '200':
+          description: Latest 12 trials, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/CreationTrial' } }
+  /creations/trials/{trialId}:
+    parameters: [ { name: trialId, in: path, required: true, schema: { type: string, format: uuid } } ]
+    get:
+      operationId: getCreationTrial
+      tags: [creations]
+      responses:
+        '200':
+          description: Trial state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationTrial' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /creations/trials/{trialId}/image:
+    parameters: [ { name: trialId, in: path, required: true, schema: { type: string, format: uuid } } ]
+    get:
+      operationId: getCreationTrialImage
+      tags: [creations]
+      responses:
+        '200':
+          description: PNG, 3:4, only for SUCCEEDED trials; no-store
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/Problem' }
+  /creations/templates/{id}/versions/{versionId}/preview:
+    parameters: [ { $ref: '#/components/parameters/CreationTemplateId' }, { $ref: '#/components/parameters/CreationVersionId' } ]
+    post:
+      operationId: setCreationVersionPreview
+      tags: [creations]
+      description: Uses a successful trial image as the preview of a DRAFT version; the revision does not change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreationTrialUse' }
+      responses:
+        '200':
+          description: Updated draft
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationVersion' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /creations/templates/{id}/versions/{versionId}/launch:
+    parameters: [ { $ref: '#/components/parameters/CreationTemplateId' }, { $ref: '#/components/parameters/CreationVersionId' } ]
+    post:
+      operationId: launchCreationVersion
+      tags: [creations]
+      description: Goes live from a successful trial of exactly this draft. Writes a verified capability record when needed, binds it, records the evidence and publishes; the revision increases several times.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreationTrialUse' }
+      responses:
+        '200':
+          description: Published version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationVersion' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
   /creations/usage:
     get:
       operationId: getCreationUsage
@@ -1824,7 +2014,7 @@ components:
         capabilityVersion: { type: [integer, 'null'], format: int64 }
     CreationVersion:
       type: object
-      required: [id, versionId, version, revision, status, name, description, previewAssetId, personRequired, maxGarments, options, prompt, provider, model, capabilityVersion, evidence, publishedAtMs]
+      required: [id, versionId, version, revision, status, name, description, previewAssetId, personRequired, maxGarments, options, prompt, provider, model, capabilityVersion, evidence, publishedAtMs, previewImage]
       properties:
         id: { type: string }
         versionId: { type: string, format: uuid }
@@ -1843,6 +2033,62 @@ components:
         capabilityVersion: { type: [integer, 'null'], format: int64 }
         evidence: { type: [string, 'null'] }
         publishedAtMs: { type: [integer, 'null'], format: int64 }
+        previewImage: { type: boolean, description: 'a chosen trial image replaces the placeholder preview' }
+    CreationTrialGarment:
+      type: object
+      required: [id, name, role, gender]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        role: { type: string, description: 'OutfitRules.Role, e.g. TOP, BOTTOM, SHOES' }
+        gender: { type: string }
+    CreationTrialPerson:
+      type: object
+      required: [id, note, width, height, createdAtMs]
+      properties:
+        id: { type: string, format: uuid }
+        note: { type: string }
+        width: { type: integer }
+        height: { type: integer }
+        createdAtMs: { type: integer, format: int64 }
+    CreationTrialStart:
+      type: object
+      additionalProperties: false
+      required: [revision, garmentIds]
+      properties:
+        revision: { type: integer, format: int64, minimum: 0 }
+        garmentIds: { type: array, items: { type: string, format: uuid }, minItems: 1 }
+        personId: { type: [string, 'null'], format: uuid }
+        light: { type: [string, 'null'], enum: [DEFAULT, WARM, COOL, null] }
+        pose: { type: [string, 'null'], maxLength: 80 }
+    CreationTrialUse:
+      type: object
+      additionalProperties: false
+      required: [trialId]
+      properties:
+        revision: { type: [integer, 'null'], format: int64, minimum: 0, description: 'optional for preview, required for launch' }
+        trialId: { type: string, format: uuid }
+    CreationTrial:
+      type: object
+      required: [id, templateId, versionId, versionRevision, status, provider, model, garmentCount, withPerson, light, pose, errorMessage, width, height, current, createdAtMs, finishedAtMs]
+      properties:
+        id: { type: string, format: uuid }
+        templateId: { type: string }
+        versionId: { type: string, format: uuid }
+        versionRevision: { type: integer, format: int64 }
+        status: { type: string, enum: [QUEUED, RUNNING, SUCCEEDED, FAILED] }
+        provider: { type: string }
+        model: { type: string }
+        garmentCount: { type: integer }
+        withPerson: { type: boolean }
+        light: { type: string }
+        pose: { type: [string, 'null'] }
+        errorMessage: { type: [string, 'null'] }
+        width: { type: [integer, 'null'] }
+        height: { type: [integer, 'null'] }
+        current: { type: boolean, description: 'draft unchanged since the trial, so it may be used to go live' }
+        createdAtMs: { type: integer, format: int64 }
+        finishedAtMs: { type: [integer, 'null'], format: int64 }
     CreationVersionSummary:
       type: object
       required: [versionId, version, revision, status, name, description, personRequired, maxGarments, publishedAtMs]

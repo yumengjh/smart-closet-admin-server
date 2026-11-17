@@ -72,7 +72,7 @@ public class ClosetShowcaseController {
         if (!id.matches("[A-Za-z0-9_-]{1,80}")) throw ApiException.invalidParameter();
         return "/" + id;
     }
-    private static boolean validBoundary(String boundary) {
+    static boolean validBoundary(String boundary) {
         if (boundary.length() >= 2 && boundary.charAt(0) == '"' && boundary.charAt(boundary.length() - 1) == '"') {
             boundary = boundary.substring(1, boundary.length() - 1);
         } else if (boundary.startsWith("\"") || boundary.endsWith("\"")) {
@@ -81,7 +81,7 @@ public class ClosetShowcaseController {
         return !boundary.isEmpty() && boundary.length() <= 70 && boundary.charAt(boundary.length() - 1) != ' '
                 && boundary.matches("[A-Za-z0-9'()+_,./:=? -]+");
     }
-    private static ApiException tooLarge() {
+    static ApiException tooLarge() {
         return ApiException.fromUpstream(ApiErrorCode.CLOSET_REQUEST_TOO_LARGE, null, List.of());
     }
 }

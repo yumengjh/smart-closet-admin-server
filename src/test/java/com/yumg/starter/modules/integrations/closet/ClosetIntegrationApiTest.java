@@ -115,12 +115,16 @@ class ClosetIntegrationApiTest {
             assertThat(page.getParentId()).isEqualTo(parent.getId());
             assertThat(page.getRequiredPermission()).isEqualTo("closet:creation:read");
         }
-        var guide = menus.findByCode("closet-creation-guide").orElseThrow();
-        assertThat(guide.getParentId()).isEqualTo(parent.getId());
-        assertThat(guide.getSortOrder()).isZero();
-        assertThat(guide.getRoutePath()).isEqualTo("/creation/guide");
-        assertThat(guide.getComponentKey()).isEqualTo("closet-creation-guide");
-        assertThat(guide.getRequiredPermission()).isEqualTo("closet:creation:read");
+        var effects = menus.findByCode("closet-creation-templates").orElseThrow();
+        assertThat(effects.getTitle()).isEqualTo("创作效果");
+        assertThat(effects.getSortOrder()).isZero();
+        assertThat(effects.isVisible()).isTrue();
+        for (String hidden : java.util.List.of("guide", "capabilities")) {
+            var page = menus.findByCode("closet-creation-" + hidden).orElseThrow();
+            assertThat(page.isVisible()).isFalse();
+            assertThat(page.getComponentKey()).isEqualTo("closet-creation-" + hidden);
+        }
+        assertThat(menus.findByCode("closet-creation-usage").orElseThrow().isVisible()).isTrue();
         var business = menus.findByCode("closet").orElseThrow();
         var showcase = menus.findByCode("closet-creation-showcases").orElseThrow();
         assertThat(showcase.getParentId()).isEqualTo(business.getId());
@@ -1305,4 +1309,130 @@ class ClosetIntegrationApiTest {
         });
     }
 
+    @Autowired com.yumg.starter.modules.integrations.closet.application.ClosetNavigationBootstrap navigationBootstrap;
+
+    @Test void upgradingAnOldDatabaseHidesGuideAndCapabilitiesAndRenamesTemplates() throws Exception {
+        for (String code : java.util.List.of("closet-creation-guide", "closet-creation-capabilities", "closet-creation-templates")) {
+            var menu = menus.findByCode(code).orElseThrow();
+            menu.setVisible(true);
+            if (code.endsWith("templates")) { menu.rename("模板"); menu.reorder(10); }
+            menus.save(menu);
+        }
+        navigationBootstrap.run(null);
+        assertThat(menus.findByCode("closet-creation-guide").orElseThrow().isVisible()).isFalse();
+        assertThat(menus.findByCode("closet-creation-capabilities").orElseThrow().isVisible()).isFalse();
+        var effects = menus.findByCode("closet-creation-templates").orElseThrow();
+        assertThat(effects.getTitle()).isEqualTo("创作效果");
+        assertThat(effects.getSortOrder()).isZero();
+        assertThat(effects.isVisible()).isTrue();
+    }
+
+    private static final String UUID_A = "11111111-2222-3333-4444-555555555555";
+    private static final String UUID_B = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    private record TrialRoute(HttpMethod method, String path, String permission, String body) {}
+    static java.util.stream.Stream<TrialRoute> trialRoutes() {
+        String v = "/templates/sunlit-flatlay/versions/" + UUID_A;
+        return java.util.stream.Stream.of(
+                new TrialRoute(HttpMethod.GET, "/trial-garments", "read", null),
+                new TrialRoute(HttpMethod.GET, "/trial-persons", "read", null),
+                new TrialRoute(HttpMethod.DELETE, "/trial-persons/" + UUID_B, "write", null),
+                new TrialRoute(HttpMethod.POST, v + "/trials", "write", "{\"garmentIds\":[\"" + UUID_B + "\"]}"),
+                new TrialRoute(HttpMethod.GET, "/templates/dual-view-editorial/trials", "read", null),
+                new TrialRoute(HttpMethod.GET, "/trials/" + UUID_B, "read", null),
+                new TrialRoute(HttpMethod.POST, v + "/preview", "write", "{\"trialId\":\"" + UUID_B + "\"}"),
+                new TrialRoute(HttpMethod.POST, v + "/launch", "publish", "{\"revision\":3,\"trialId\":\"" + UUID_B + "\"}"));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("trialRoutes")
+    void trialRoutesRequirePermissionAndForwardMethodPathAndBody(TrialRoute route) throws Exception {
+        String path = "/creations" + route.path();
+        String other = route.permission().equals("read") ? "closet:showcase:read" : "closet:creation:read";
+        var denied = request(route.method(), "/api/v1/closet" + path).with(jwtAs(other));
+        if (route.body() != null) denied.contentType(MediaType.APPLICATION_JSON).content(route.body());
+        mvc.perform(denied).andExpect(status().isForbidden());
+        var expect = server.expect(requestTo("http://closet.test/api/manage/v1" + path)).andExpect(method(route.method()));
+        if (route.body() != null) expect.andExpect(content().json(route.body()));
+        expect.andRespond(withSuccess("{\"ok\":true}", MediaType.APPLICATION_JSON));
+        var call = request(route.method(), "/api/v1/closet" + path).with(jwtAs("closet:creation:" + route.permission()));
+        if (route.body() != null) call.contentType(MediaType.APPLICATION_JSON).content(route.body());
+        mvc.perform(call).andExpect(status().isOk());
+        server.verify();
+    }
+
+    @Test void trialWritesAreAuditedWithTheirActions() throws Exception {
+        String v = "/creations/templates/sunlit-flatlay/versions/" + UUID_A;
+        server.expect(requestTo("http://closet.test/api/manage/v1" + v + "/launch")).andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://closet.test/api/manage/v1/creations/trial-persons/" + UUID_B))
+                .andRespond(withSuccess("{\"deleted\":true}", MediaType.APPLICATION_JSON));
+        mvc.perform(post("/api/v1/closet" + v + "/launch").with(jwtAs("closet:creation:publish"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"trialId\":\"" + UUID_B + "\"}")).andExpect(status().isOk());
+        mvc.perform(request(HttpMethod.DELETE, "/api/v1/closet/creations/trial-persons/" + UUID_B).with(jwtAs("closet:creation:write")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.deleted").value(true));
+        assertThat(auditEvents.findAll().stream().map(e -> e.getAction()))
+                .contains("CLOSET_CREATION_VERSION_LAUNCHED", "CLOSET_CREATION_TRIAL_PERSON_DELETED");
+    }
+
+    @Test void trialRoutesRejectMalformedPathParameters() throws Exception {
+        String root = "/api/v1/closet/creations";
+        String body = "{\"trialId\":\"" + UUID_B + "\"}";
+        mvc.perform(post(root + "/templates/other/versions/" + UUID_A + "/trials").with(jwtAs("closet:creation:write"))
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
+        mvc.perform(post(root + "/templates/sunlit-flatlay/versions/v1/preview").with(jwtAs("closet:creation:write"))
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
+        mvc.perform(post(root + "/templates/sunlit-flatlay/versions/not-a-uuid/launch").with(jwtAs("closet:creation:publish"))
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
+        mvc.perform(get(root + "/templates/nope/trials").with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get(root + "/trials/abc").with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get(root + "/trials/abc/image").with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get(root + "/trial-garments/abc/image").with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get(root + "/trial-persons/abc/image").with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
+        mvc.perform(request(HttpMethod.DELETE, root + "/trial-persons/abc").with(jwtAs("closet:creation:write")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"trial-garments", "trial-persons", "trials"})
+    void trialImagesPassBytesAndPngTypeThrough(String kind) throws Exception {
+        byte[] png = new byte[]{(byte) 137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3};
+        String path = "/creations/" + kind + "/" + UUID_B + "/image";
+        mvc.perform(get("/api/v1/closet" + path).with(jwtAs("closet:showcase:read"))).andExpect(status().isForbidden());
+        server.expect(requestTo("http://closet.test/api/manage/v1" + path)).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(png, MediaType.IMAGE_PNG));
+        var result = mvc.perform(get("/api/v1/closet" + path).with(jwtAs("closet:creation:read")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.request().asyncStarted()).andReturn();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch(result))
+                .andExpect(status().isOk()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(png))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().contentType(MediaType.IMAGE_PNG))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Cache-Control", "no-store"));
+        server.verify();
+    }
+
+    @Test void trialPersonUploadForwardsSignedRawMultipartAndEnforcesLimits() throws Exception {
+        byte[] raw = multipartPng("personBoundary", new byte[]{(byte) 137, 80, 78, 71, 13, 10, 26, 10});
+        String url = "/api/v1/closet/creations/trial-persons";
+        String type = "multipart/form-data;boundary=personBoundary";
+        mvc.perform(post(url).with(jwtAs("closet:creation:read")).content(raw)
+                .with(r -> { r.setContentType(type); return r; })).andExpect(status().isForbidden());
+        server.expect(requestTo("http://closet.test/api/manage/v1/creations/trial-persons"))
+                .andExpect(method(HttpMethod.POST)).andExpect(content().bytes(raw))
+                .andExpect(req -> {
+                    var h = req.getHeaders();
+                    assertThat(h.getContentType().getParameter("boundary")).isEqualTo("personBoundary");
+                    var signer = new com.yumg.starter.modules.integrations.closet.infrastructure.ClosetRequestSigner();
+                    String canonical = signer.canonical("POST", req.getURI().getRawPath(), java.util.Map.of(),
+                            Long.parseLong(h.getFirst("X-Closet-Timestamp")), h.getFirst("X-Closet-Nonce"),
+                            h.getFirst("X-Operator"), h.getFirst("X-Request-Id"), raw);
+                    assertThat(h.getFirst("X-Closet-Signature")).isEqualTo(signer.sign(canonical, "0123456789abcdef0123456789abcdef"));
+                })
+                .andRespond(withSuccess("{\"id\":\"" + UUID_B + "\"}", MediaType.APPLICATION_JSON));
+        mvc.perform(post(url).with(jwtAs("closet:creation:write")).content(raw).with(r -> { r.setContentType(type); return r; }))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(UUID_B));
+        server.verify();
+        mvc.perform(post(url).with(jwtAs("closet:creation:write")).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
+        byte[] big = new byte[12 * 1024 * 1024 + 1];
+        mvc.perform(post(url).with(jwtAs("closet:creation:write")).content(big).with(r -> { r.setContentType(type); return r; }))
+                .andExpect(status().isPayloadTooLarge());
+    }
 }
