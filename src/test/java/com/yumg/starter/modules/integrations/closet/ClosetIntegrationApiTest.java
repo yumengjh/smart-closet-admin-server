@@ -1383,6 +1383,8 @@ class ClosetIntegrationApiTest {
         mvc.perform(post(root + "/templates/sunlit-flatlay/versions/not-a-uuid/launch").with(jwtAs("closet:creation:publish"))
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
         mvc.perform(get(root + "/templates/nope/trials").with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get(root + "/templates/sunlit-flatlay/versions/v1/preview-image").with(jwtAs("closet:creation:read")))
+                .andExpect(status().isBadRequest());
         mvc.perform(get(root + "/trials/abc").with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
         mvc.perform(get(root + "/trials/abc/image").with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
         mvc.perform(get(root + "/trial-garments/abc/image").with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
@@ -1392,10 +1394,11 @@ class ClosetIntegrationApiTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"trial-garments", "trial-persons", "trials"})
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"trial-garments", "trial-persons", "trials", "preview"})
     void trialImagesPassBytesAndPngTypeThrough(String kind) throws Exception {
         byte[] png = new byte[]{(byte) 137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3};
-        String path = "/creations/" + kind + "/" + UUID_B + "/image";
+        String path = kind.equals("preview") ? "/creations/templates/sunlit-flatlay/versions/" + UUID_A + "/preview-image"
+                : "/creations/" + kind + "/" + UUID_B + "/image";
         mvc.perform(get("/api/v1/closet" + path).with(jwtAs("closet:showcase:read"))).andExpect(status().isForbidden());
         server.expect(requestTo("http://closet.test/api/manage/v1" + path)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(png, MediaType.IMAGE_PNG));

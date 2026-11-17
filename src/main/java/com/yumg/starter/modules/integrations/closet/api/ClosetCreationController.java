@@ -136,6 +136,11 @@ public class ClosetCreationController {
         return service.write("VERSION_LAUNCHED", "POST", template(id) + "/versions/" + uuid(versionId) + "/launch", body);
     }
 
+    @GetMapping("/templates/{id}/versions/{versionId}/preview-image") @PreAuthorize("hasAuthority('closet:creation:read')")
+    public ResponseEntity<StreamingResponseBody> previewImage(@PathVariable String id, @PathVariable String versionId) {
+        return image(template(id) + "/versions/" + uuid(versionId) + "/preview-image");
+    }
+
     private ResponseEntity<StreamingResponseBody> image(String path) {
         byte[] image = service.image(path);
         return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).cacheControl(CacheControl.noStore())

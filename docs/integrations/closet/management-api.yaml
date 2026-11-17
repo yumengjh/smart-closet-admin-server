@@ -1,6 +1,6 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/management-api.yaml
-# source-commit: uncommitted
-# source-sha256: 4730765a4e1a962607cb2d636bf58f9c7a5937435a5399fea90440c3bb35f124
+# source-commit: f7402316be0e67fe9bc163eb6b786ecf924f4145
+# source-sha256: ae9ffcc17e10e829c630ebf31bc214ac6f080f1408612b44b22c65aa0a263dc9
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
@@ -45,7 +45,7 @@ paths:
     post:
       operationId: uploadCreationShowcase
       tags: [creations]
-      description: Signed raw multipart up to 12MiB; requires nonblank signed X-Operator. Only this POST has a larger HMAC body limit. PNG up to 10MiB/20MP, valid AIGC label required.
+      description: Signed raw multipart up to 12MiB; requires nonblank signed X-Operator. Only this POST and POST /creations/trial-persons have a larger HMAC body limit. PNG up to 10MiB/20MP, valid AIGC label required.
       requestBody:
         required: true
         content:
@@ -315,6 +315,19 @@ paths:
       responses:
         '200':
           description: PNG, 3:4, only for SUCCEEDED trials; no-store
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/Problem' }
+  /creations/templates/{id}/versions/{versionId}/preview-image:
+    parameters: [ { $ref: '#/components/parameters/CreationTemplateId' }, { $ref: '#/components/parameters/CreationVersionId' } ]
+    get:
+      operationId: getCreationVersionPreviewImage
+      tags: [creations]
+      description: The chosen preview image of a version in any state; 404 when none was chosen.
+      responses:
+        '200':
+          description: PNG; no-store
           content:
             image/png:
               schema: { type: string, format: binary }
