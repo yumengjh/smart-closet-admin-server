@@ -1,11 +1,11 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/management-api.yaml
-# source-commit: afd1b14afc996683546428cb6b4d2391edc27f76
-# source-sha256: 09ff1e944c72aaf11ac8f2b39b0c4db5c43ea6d9988c85232ea79bf3b55c027c
+# source-commit: 841a4ce2eb597cfb87819f8c07c06fb112c3d374
+# source-sha256: 63712a7b80b6a39abfc5f41a7a0679da407df3f6f8be37fef88eb37176b8e843
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
   title: Smart Closet Management API
-  version: 1.7.0
+  version: 1.7.1
   description: |
     鱼搭中立管理接口。默认关闭（`closet.management.enabled=false`），开启后供任意宿主平台以服务身份调用。
     设计说明见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md`；1.1（运维、KPI、大屏与数据出口、模板审核）见
@@ -2225,6 +2225,7 @@ components:
         enabled: { type: boolean }
         revision: { type: integer, format: int64 }
         versions: { type: array, items: { $ref: '#/components/schemas/CreationVersionSummary' } }
+        sampleKey: { type: [string, 'null'], description: 'prompt sample the effect started from; null for blank starts' }
     CreationGenerationSelection:
       type: object
       additionalProperties: false
