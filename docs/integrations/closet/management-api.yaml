@@ -1,11 +1,11 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/management-api.yaml
-# source-commit: 63bff12d855b6151460d5c0195f0bc1fdd939548
-# source-sha256: 66e99b68e27cf40235a63681c6b12eb85aacd2ea4848d49cbe45bf6391b57332
+# source-commit: 841a4ce2eb597cfb87819f8c07c06fb112c3d374
+# source-sha256: 63712a7b80b6a39abfc5f41a7a0679da407df3f6f8be37fef88eb37176b8e843
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
   title: Smart Closet Management API
-  version: 1.5.0
+  version: 1.7.1
   description: |
     鱼搭中立管理接口。默认关闭（`closet.management.enabled=false`），开启后供任意宿主平台以服务身份调用。
     设计说明见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md`；1.1（运维、KPI、大屏与数据出口、模板审核）见
@@ -45,7 +45,7 @@ paths:
     post:
       operationId: uploadCreationShowcase
       tags: [creations]
-      description: Signed raw multipart up to 12MiB; requires nonblank signed X-Operator. Only this POST has a larger HMAC body limit. PNG up to 10MiB/20MP, valid AIGC label required.
+      description: Signed raw multipart up to 12MiB; requires nonblank signed X-Operator. Only this POST and POST /creations/trial-persons have a larger HMAC body limit. PNG up to 10MiB/20MP, valid AIGC label required.
       requestBody:
         required: true
         content:
@@ -167,6 +167,209 @@ paths:
             image/png:
               schema: { type: string, format: binary }
         '404': { $ref: '#/components/responses/Problem' }
+  /creations/trial-garments:
+    get:
+      operationId: listCreationTrialGarments
+      tags: [creations]
+      description: Listed public preset garments usable for trials; never account-owned garments.
+      responses:
+        '200':
+          description: Trial garments
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/CreationTrialGarment' } }
+  /creations/trial-garments/{id}/image:
+    parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+    get:
+      operationId: getCreationTrialGarmentImage
+      tags: [creations]
+      responses:
+        '200':
+          description: PNG with longest side at most 512; no-store
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/Problem' }
+  /creations/trial-persons:
+    get:
+      operationId: listCreationTrialPersons
+      tags: [creations]
+      responses:
+        '200':
+          description: Operator-uploaded trial persons, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/CreationTrialPerson' } }
+    post:
+      operationId: uploadCreationTrialPerson
+      tags: [creations]
+      description: Signed raw multipart (same format as showcase uploads); requires nonblank signed X-Operator. PNG or JPEG up to 10MiB, re-encoded as PNG without metadata. The note must not contain personal data.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file, sourceNote]
+              properties:
+                file: { type: string, format: binary }
+                sourceNote: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        '200':
+          description: Stored trial person
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationTrialPerson' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+  /creations/trial-persons/{id}/image:
+    parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+    get:
+      operationId: getCreationTrialPersonImage
+      tags: [creations]
+      responses:
+        '200':
+          description: PNG of the stored trial person; no-store
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/Problem' }
+  /creations/trial-persons/{id}:
+    parameters: [ { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+    delete:
+      operationId: deleteCreationTrialPerson
+      tags: [creations]
+      responses:
+        '200':
+          description: Trial person deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted]
+                properties:
+                  deleted: { type: boolean }
+        '404': { $ref: '#/components/responses/Problem' }
+  /creations/templates/{id}/versions/{versionId}/trials:
+    parameters: [ { $ref: '#/components/parameters/CreationTemplateId' }, { $ref: '#/components/parameters/CreationVersionId' } ]
+    post:
+      operationId: startCreationTrial
+      tags: [creations]
+      description: Starts one real, paid model call for a DRAFT version (409 if another trial is running, 429 past the daily limit). Requires nonblank signed X-Operator.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreationTrialStart' }
+      responses:
+        '200':
+          description: Queued trial
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationTrial' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+  /creations/templates/{id}/trials:
+    parameters: [ { $ref: '#/components/parameters/CreationTemplateId' } ]
+    get:
+      operationId: listCreationTrials
+      tags: [creations]
+      responses:
+        '200':
+          description: Latest 12 trials, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/CreationTrial' } }
+  /creations/trials/{trialId}:
+    parameters: [ { name: trialId, in: path, required: true, schema: { type: string, format: uuid } } ]
+    get:
+      operationId: getCreationTrial
+      tags: [creations]
+      responses:
+        '200':
+          description: Trial state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationTrial' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /creations/trials/{trialId}/image:
+    parameters: [ { name: trialId, in: path, required: true, schema: { type: string, format: uuid } } ]
+    get:
+      operationId: getCreationTrialImage
+      tags: [creations]
+      responses:
+        '200':
+          description: PNG, 3:4, only for SUCCEEDED trials; no-store
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/Problem' }
+  /creations/templates/{id}/versions/{versionId}/preview-image:
+    parameters: [ { $ref: '#/components/parameters/CreationTemplateId' }, { $ref: '#/components/parameters/CreationVersionId' } ]
+    get:
+      operationId: getCreationVersionPreviewImage
+      tags: [creations]
+      description: The chosen preview image of a version in any state; 404 when none was chosen.
+      responses:
+        '200':
+          description: PNG; no-store
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/Problem' }
+  /creations/templates/{id}/versions/{versionId}/preview:
+    parameters: [ { $ref: '#/components/parameters/CreationTemplateId' }, { $ref: '#/components/parameters/CreationVersionId' } ]
+    post:
+      operationId: setCreationVersionPreview
+      tags: [creations]
+      description: Uses a successful trial image as the preview of a DRAFT version; the revision does not change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreationTrialUse' }
+      responses:
+        '200':
+          description: Updated draft
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationVersion' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /creations/templates/{id}/versions/{versionId}/launch:
+    parameters: [ { $ref: '#/components/parameters/CreationTemplateId' }, { $ref: '#/components/parameters/CreationVersionId' } ]
+    post:
+      operationId: launchCreationVersion
+      tags: [creations]
+      description: Goes live from a successful trial of exactly this draft. Writes a verified capability record when needed, binds it, records the evidence and publishes; the revision increases several times.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreationTrialUse' }
+      responses:
+        '200':
+          description: Published version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationVersion' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
   /creations/usage:
     get:
       operationId: getCreationUsage
@@ -195,6 +398,76 @@ paths:
                 required: [items]
                 properties:
                   items: { type: array, items: { $ref: '#/components/schemas/CreationTemplateSummary' } }
+    post:
+      operationId: createCreationEffect
+      tags: [creations]
+      description: Creates an effect with a DRAFT version 1. The id is generated by the server. Missing fields come from the sample when sampleKey is given; provider and model default to generation-options defaultSelection (or null).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreationNewEffect' }
+      responses:
+        '200':
+          description: The new draft version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationVersion' }
+        '400': { $ref: '#/components/responses/Problem' }
+  /creations/prompt-samples:
+    get:
+      operationId: listCreationPromptSamples
+      tags: [creations]
+      description: Read-only starting points for new effects (the seven source prompts).
+      responses:
+        '200':
+          description: Samples
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/CreationPromptSample' } }
+  /creations/templates/order:
+    put:
+      operationId: reorderCreationTemplates
+      tags: [creations]
+      description: Submit every effect id exactly once; sort_order becomes 1..n in list order.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreationTemplateOrder' }
+      responses:
+        '200':
+          description: Effects in the new order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/CreationTemplateSummary' } }
+        '400': { $ref: '#/components/responses/Problem' }
+  /creations/templates/{id}:
+    parameters: [ { $ref: '#/components/parameters/CreationTemplateId' } ]
+    delete:
+      operationId: deleteCreationTemplate
+      tags: [creations]
+      description: Only for effects that never went live and were never used by a creation; trials, previews and versions are removed with it.
+      responses:
+        '200':
+          description: Effect deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted]
+                properties:
+                  deleted: { type: boolean }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
   /creations/templates/{id}/versions:
     parameters: [ { $ref: '#/components/parameters/CreationTemplateId' } ]
     post:
@@ -298,6 +571,18 @@ paths:
                 properties:
                   retired: { type: boolean }
         '409': { $ref: '#/components/responses/Problem' }
+  /creations/generation-options:
+    get:
+      operationId: getCreationGenerationOptions
+      tags: [creations]
+      description: Safe configured generation defaults for creation capability selection; no provider calls or capability writes.
+      responses:
+        '200':
+          description: Configured provider/model options ordered by provider id
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreationGenerationOptions' }
+        '401': { $ref: '#/components/responses/Problem' }
   /creations/capabilities:
     get:
       operationId: listCreationCapabilities
@@ -1652,7 +1937,7 @@ components:
       name: id
       in: path
       required: true
-      schema: { type: string, enum: [sunlit-flatlay, dual-view-editorial, daily-outfit-share] }
+      schema: { type: string, pattern: '^[a-z0-9][a-z0-9-]{1,79}$', description: 'effect id; the built-in three keep their names, new ones are fx- plus 8 hex; unknown ids answer 404' }
     CreationVersionId:
       name: versionId
       in: path
@@ -1800,10 +2085,10 @@ components:
       required: [revision, name, description, previewAssetId, personRequired, maxGarments, options, prompt]
       properties:
         revision: { type: integer, format: int64, minimum: 0 }
-        name: { type: string, minLength: 1, maxLength: 120 }
-        description: { type: string, maxLength: 1000 }
-        previewAssetId: { type: string, enum: [sunlit-flatlay, dual-view-editorial, daily-outfit-share] }
-        personRequired: { type: boolean }
+        name: { type: string, minLength: 1, maxLength: 40 }
+        description: { type: string, maxLength: 200 }
+        previewAssetId: { type: string, description: 'empty string, or the id of a built-in preview SVG' }
+        personRequired: { type: boolean, description: 'max garments plus one for the person must stay within 20' }
         maxGarments: { type: integer, minimum: 1, maximum: 12 }
         options: { $ref: '#/components/schemas/CreationOptions' }
         prompt: { type: string, minLength: 1, maxLength: 8000 }
@@ -1812,7 +2097,7 @@ components:
         capabilityVersion: { type: [integer, 'null'], format: int64 }
     CreationVersion:
       type: object
-      required: [id, versionId, version, revision, status, name, description, previewAssetId, personRequired, maxGarments, options, prompt, provider, model, capabilityVersion, evidence, publishedAtMs]
+      required: [id, versionId, version, revision, status, name, description, previewAssetId, personRequired, maxGarments, options, prompt, provider, model, capabilityVersion, evidence, publishedAtMs, previewImage]
       properties:
         id: { type: string }
         versionId: { type: string, format: uuid }
@@ -1831,6 +2116,91 @@ components:
         capabilityVersion: { type: [integer, 'null'], format: int64 }
         evidence: { type: [string, 'null'] }
         publishedAtMs: { type: [integer, 'null'], format: int64 }
+        previewImage: { type: boolean, description: 'a chosen trial image replaces the placeholder preview' }
+    CreationTrialGarment:
+      type: object
+      required: [id, name, role, gender]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        role: { type: string, description: 'OutfitRules.Role, e.g. TOP, BOTTOM, SHOES' }
+        gender: { type: string }
+    CreationTrialPerson:
+      type: object
+      required: [id, note, width, height, createdAtMs]
+      properties:
+        id: { type: string, format: uuid }
+        note: { type: string }
+        width: { type: integer }
+        height: { type: integer }
+        createdAtMs: { type: integer, format: int64 }
+    CreationTrialStart:
+      type: object
+      additionalProperties: false
+      required: [revision, garmentIds]
+      properties:
+        revision: { type: integer, format: int64, minimum: 0 }
+        garmentIds: { type: array, items: { type: string, format: uuid }, minItems: 1 }
+        personId: { type: [string, 'null'], format: uuid }
+        light: { type: [string, 'null'], enum: [DEFAULT, WARM, COOL, null] }
+        pose: { type: [string, 'null'], maxLength: 80 }
+    CreationTrialUse:
+      type: object
+      additionalProperties: false
+      required: [trialId]
+      properties:
+        revision: { type: [integer, 'null'], format: int64, minimum: 0, description: 'optional for preview, required for launch' }
+        trialId: { type: string, format: uuid }
+    CreationTrial:
+      type: object
+      required: [id, templateId, versionId, versionRevision, status, provider, model, garmentCount, withPerson, light, pose, errorMessage, width, height, current, createdAtMs, finishedAtMs]
+      properties:
+        id: { type: string, format: uuid }
+        templateId: { type: string }
+        versionId: { type: string, format: uuid }
+        versionRevision: { type: integer, format: int64 }
+        status: { type: string, enum: [QUEUED, RUNNING, SUCCEEDED, FAILED] }
+        provider: { type: string }
+        model: { type: string }
+        garmentCount: { type: integer }
+        withPerson: { type: boolean }
+        light: { type: string }
+        pose: { type: [string, 'null'] }
+        errorMessage: { type: [string, 'null'] }
+        width: { type: [integer, 'null'] }
+        height: { type: [integer, 'null'] }
+        current: { type: boolean, description: 'draft unchanged since the trial, so it may be used to go live' }
+        createdAtMs: { type: integer, format: int64 }
+        finishedAtMs: { type: [integer, 'null'], format: int64 }
+    CreationPromptSample:
+      type: object
+      required: [key, name, description, personRequired, maxGarments, light, prompt]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        description: { type: string }
+        personRequired: { type: boolean }
+        maxGarments: { type: integer }
+        light: { type: array, items: { type: string, enum: [DEFAULT, WARM, COOL] } }
+        prompt: { type: string }
+    CreationNewEffect:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 40 }
+        description: { type: [string, 'null'], maxLength: 200 }
+        personRequired: { type: [boolean, 'null'], description: 'required unless the sample supplies it' }
+        maxGarments: { type: [integer, 'null'], minimum: 1, maximum: 12 }
+        light: { type: [array, 'null'], items: { type: string, enum: [DEFAULT, WARM, COOL] } }
+        prompt: { type: [string, 'null'], maxLength: 8000 }
+        sampleKey: { type: [string, 'null'] }
+    CreationTemplateOrder:
+      type: object
+      additionalProperties: false
+      required: [ids]
+      properties:
+        ids: { type: array, items: { type: string } }
     CreationVersionSummary:
       type: object
       required: [versionId, version, revision, status, name, description, personRequired, maxGarments, publishedAtMs]
@@ -1846,14 +2216,41 @@ components:
         publishedAtMs: { type: [integer, 'null'], format: int64 }
     CreationTemplateSummary:
       type: object
-      required: [id, sortOrder, publishedVersionId, enabled, revision, versions]
+      required: [id, name, sortOrder, publishedVersionId, enabled, revision, versions]
       properties:
         id: { type: string }
+        name: { type: string, description: 'name of the live version, else of the latest version' }
         sortOrder: { type: integer }
         publishedVersionId: { type: [string, 'null'] }
         enabled: { type: boolean }
         revision: { type: integer, format: int64 }
         versions: { type: array, items: { $ref: '#/components/schemas/CreationVersionSummary' } }
+        sampleKey: { type: [string, 'null'], description: 'prompt sample the effect started from; null for blank starts' }
+    CreationGenerationSelection:
+      type: object
+      additionalProperties: false
+      required: [provider, model]
+      properties:
+        provider: { type: string }
+        model: { type: string }
+    CreationGenerationOption:
+      type: object
+      additionalProperties: false
+      required: [provider, model, protocol]
+      properties:
+        provider: { type: string }
+        model: { type: string }
+        protocol: { type: string, enum: [OPENAI_IMAGES, GEMINI] }
+    CreationGenerationOptions:
+      type: object
+      additionalProperties: false
+      required: [defaultSelection, providers]
+      properties:
+        defaultSelection:
+          oneOf:
+            - { $ref: '#/components/schemas/CreationGenerationSelection' }
+            - { type: 'null' }
+        providers: { type: array, items: { $ref: '#/components/schemas/CreationGenerationOption' } }
     CreationCapabilityChange:
       type: object
       additionalProperties: false

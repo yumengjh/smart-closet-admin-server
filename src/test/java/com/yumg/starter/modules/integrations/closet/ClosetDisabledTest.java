@@ -27,6 +27,9 @@ class ClosetDisabledTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({
+            "GET, /creations/trial-garments", "POST, /creations/trial-persons",
+            "DELETE, /creations/trial-persons/11111111-2222-3333-4444-555555555555",
+            "GET, /creations/trials/11111111-2222-3333-4444-555555555555/image",
             "GET, /creations/showcases", "POST, /creations/showcases", "POST, /creations/showcases/uploads",
             "PUT, /creations/showcases/asset-1", "POST, /creations/showcases/asset-1/publish",
             "POST, /creations/showcases/asset-1/retire", "GET, /creations/showcases/asset-1/image",

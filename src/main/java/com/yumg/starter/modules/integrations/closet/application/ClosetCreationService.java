@@ -26,4 +26,22 @@ public class ClosetCreationService {
             throw exception;
         }
     }
+
+    public JsonNode upload(String action, String path, byte[] bytes, org.springframework.http.MediaType type) {
+        return audited(action, path, () -> client.postRaw("/creations" + path, bytes, type));
+    }
+    public JsonNode delete(String action, String path) {
+        return audited(action, path, () -> client.deleteWithResponse("/creations" + path));
+    }
+    public byte[] image(String path) { return client.getBytes("/creations" + path, Map.of()); }
+    private <T> T audited(String action, String path, java.util.function.Supplier<T> operation) {
+        try {
+            T result = operation.get();
+            audit.event("CLOSET_CREATION_" + action, "ClosetCreation", path, "SUCCESS", null);
+            return result;
+        } catch (ApiException exception) {
+            audit.event("CLOSET_CREATION_" + action, "ClosetCreation", path, "FAILURE", exception.error().name());
+            throw exception;
+        }
+    }
 }

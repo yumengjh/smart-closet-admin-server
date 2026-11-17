@@ -11,14 +11,15 @@ import org.springframework.web.multipart.support.StandardServletMultipartResolve
 @ConditionalOnProperty(prefix = "app.integrations.closet", name = "enabled", havingValue = "true")
 public class ClosetShowcaseMultipartConfiguration {
     public static final String UPLOAD_PATH = "/api/v1/closet/creations/showcases/uploads";
+    public static final String TRIAL_PERSON_PATH = "/api/v1/closet/creations/trial-persons";
     @Bean(name = "multipartResolver")
     StandardServletMultipartResolver multipartResolver() {
         return new StandardServletMultipartResolver() {
             @Override public boolean isMultipart(HttpServletRequest request) {
-                return !("POST".equals(request.getMethod())
-                        && UPLOAD_PATH.equals(request.getRequestURI().substring(request.getContextPath().length())))
+                return !("POST".equals(request.getMethod()) && rawUpload(request.getRequestURI().substring(request.getContextPath().length())))
                         && super.isMultipart(request);
             }
         };
-    }
+        }
+    private static boolean rawUpload(String path) { return UPLOAD_PATH.equals(path) || TRIAL_PERSON_PATH.equals(path); }
 }

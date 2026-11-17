@@ -94,6 +94,23 @@ class NavigationServiceTest {
     }
 
     @Test
+    void acceptsSupportedClosetCreationGuideComponentKey() {
+        NavigationMenuRequest request = new NavigationMenuRequest(null, "closet-creation-guide", "使用指南",
+                "/creation/guide", "closet-creation-guide", "ri/book-open-line", 0,
+                NavigationMenuType.PAGE, "closet:creation:read", true, true, false);
+        when(menus.findByCode(request.code())).thenReturn(Optional.empty());
+        when(permissions.findByCode("closet:creation:read")).thenReturn(Optional.of(
+                new com.yumg.starter.entities.Permission("closet:creation:read", "Read closet creation")));
+        when(menus.save(any(NavigationMenu.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service().create(request);
+
+        assertThat(response.code()).isEqualTo("closet-creation-guide");
+        assertThat(response.componentKey()).isEqualTo("closet-creation-guide");
+        verify(menus).save(any(NavigationMenu.class));
+    }
+
+    @Test
     void rejectsMissingParent() {
         NavigationMenuRequest request = new NavigationMenuRequest("missing-parent", "child", "Child",
                 "/child", "welcome", null, 0, NavigationMenuType.PAGE, null, true, true, false);
