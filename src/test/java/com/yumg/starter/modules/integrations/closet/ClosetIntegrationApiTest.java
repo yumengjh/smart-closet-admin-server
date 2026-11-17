@@ -98,7 +98,7 @@ class ClosetIntegrationApiTest {
         mvc.perform(post(publish).with(jwtAs("closet:creation:write"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"revision\":1}"))
                 .andExpect(status().isForbidden());
-        mvc.perform(get("/api/v1/closet/creations/templates/other/versions/v1")
+        mvc.perform(get("/api/v1/closet/creations/templates/Bad_Id/versions/v1")
                 .with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
         mvc.perform(get("/api/v1/closet/creations/arbitrary/private")
                 .with(jwtAs("closet:creation:read"))).andExpect(status().isNotFound());
@@ -1333,6 +1333,11 @@ class ClosetIntegrationApiTest {
     static java.util.stream.Stream<TrialRoute> trialRoutes() {
         String v = "/templates/sunlit-flatlay/versions/" + UUID_A;
         return java.util.stream.Stream.of(
+                new TrialRoute(HttpMethod.GET, "/prompt-samples", "read", null),
+                new TrialRoute(HttpMethod.POST, "/templates", "write", "{\"name\":\"New\",\"personRequired\":true,\"sampleKey\":\"x\"}"),
+                new TrialRoute(HttpMethod.PUT, "/templates/order", "write", "{\"ids\":[\"fx-0a1b2c3d\",\"sunlit-flatlay\"]}"),
+                new TrialRoute(HttpMethod.DELETE, "/templates/fx-0a1b2c3d", "write", null),
+                new TrialRoute(HttpMethod.GET, "/templates/fx-0a1b2c3d/trials", "read", null),
                 new TrialRoute(HttpMethod.GET, "/trial-garments", "read", null),
                 new TrialRoute(HttpMethod.GET, "/trial-persons", "read", null),
                 new TrialRoute(HttpMethod.DELETE, "/trial-persons/" + UUID_B, "write", null),
@@ -1373,16 +1378,37 @@ class ClosetIntegrationApiTest {
                 .contains("CLOSET_CREATION_VERSION_LAUNCHED", "CLOSET_CREATION_TRIAL_PERSON_DELETED");
     }
 
+    @Test void effectSlugsAreValidatedByPatternAndDeleteRejectsBadIds() throws Exception {
+        String root = "/api/v1/closet/creations";
+        for (String bad : java.util.List.of("A", "x", "Bad_Id", "-ab", "a".repeat(81)))
+            mvc.perform(request(HttpMethod.DELETE, root + "/templates/" + bad).with(jwtAs("closet:creation:write")))
+                    .andExpect(status().isBadRequest());
+    }
+
+    @Test void orderRouteIsLiteralAndDoesNotCollideWithTemplateId() throws Exception {
+        server.expect(requestTo("http://closet.test/api/manage/v1/creations/templates/order"))
+                .andExpect(method(HttpMethod.PUT)).andRespond(withSuccess("{\"items\":[]}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://closet.test/api/manage/v1/creations/templates/fx-0a1b2c3d"))
+                .andExpect(method(HttpMethod.DELETE)).andRespond(withSuccess("{\"deleted\":true}", MediaType.APPLICATION_JSON));
+        mvc.perform(request(HttpMethod.PUT, "/api/v1/closet/creations/templates/order").with(jwtAs("closet:creation:write"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"ids\":[]}")).andExpect(status().isOk());
+        mvc.perform(request(HttpMethod.DELETE, "/api/v1/closet/creations/templates/fx-0a1b2c3d").with(jwtAs("closet:creation:write")))
+                .andExpect(status().isOk());
+        server.verify();
+        assertThat(auditEvents.findAll().stream().map(e -> e.getAction()))
+                .contains("CLOSET_CREATION_EFFECTS_REORDERED", "CLOSET_CREATION_EFFECT_DELETED");
+    }
+
     @Test void trialRoutesRejectMalformedPathParameters() throws Exception {
         String root = "/api/v1/closet/creations";
         String body = "{\"trialId\":\"" + UUID_B + "\"}";
-        mvc.perform(post(root + "/templates/other/versions/" + UUID_A + "/trials").with(jwtAs("closet:creation:write"))
+        mvc.perform(post(root + "/templates/Bad_Id/versions/" + UUID_A + "/trials").with(jwtAs("closet:creation:write"))
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
         mvc.perform(post(root + "/templates/sunlit-flatlay/versions/v1/preview").with(jwtAs("closet:creation:write"))
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
         mvc.perform(post(root + "/templates/sunlit-flatlay/versions/not-a-uuid/launch").with(jwtAs("closet:creation:publish"))
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
-        mvc.perform(get(root + "/templates/nope/trials").with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get(root + "/templates/-nope/trials").with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
         mvc.perform(get(root + "/templates/sunlit-flatlay/versions/v1/preview-image").with(jwtAs("closet:creation:read")))
                 .andExpect(status().isBadRequest());
         mvc.perform(get(root + "/trials/abc").with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());

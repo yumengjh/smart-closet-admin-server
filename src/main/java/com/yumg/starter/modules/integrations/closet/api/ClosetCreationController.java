@@ -28,6 +28,19 @@ public class ClosetCreationController {
     @GetMapping("/templates") @PreAuthorize("hasAuthority('closet:creation:read')")
     public JsonNode templates() { return service.read("/templates", Map.of()); }
 
+    @GetMapping("/prompt-samples") @PreAuthorize("hasAuthority('closet:creation:read')")
+    public JsonNode promptSamples() { return service.read("/prompt-samples", Map.of()); }
+
+    @PostMapping("/templates") @PreAuthorize("hasAuthority('closet:creation:write')")
+    public JsonNode createEffect(@RequestBody JsonNode body) { return service.write("EFFECT_CREATED", "POST", "/templates", body); }
+
+    // Literal path: wins over /templates/{id} for PUT and never shares a method with DELETE /templates/{id}.
+    @PutMapping("/templates/order") @PreAuthorize("hasAuthority('closet:creation:write')")
+    public JsonNode reorderEffects(@RequestBody JsonNode body) { return service.write("EFFECTS_REORDERED", "PUT", "/templates/order", body); }
+
+    @DeleteMapping("/templates/{id}") @PreAuthorize("hasAuthority('closet:creation:write')")
+    public JsonNode deleteEffect(@PathVariable String id) { return service.delete("EFFECT_DELETED", template(id)); }
+
     @PostMapping("/templates/{id}/versions") @PreAuthorize("hasAuthority('closet:creation:write')")
     public JsonNode create(@PathVariable String id, @RequestBody JsonNode body) {
         return service.write("VERSION_CREATED", "POST", template(id) + "/versions", body);
@@ -153,7 +166,7 @@ public class ClosetCreationController {
     }
 
     private static String template(String id) {
-        if (!List.of("sunlit-flatlay", "dual-view-editorial", "daily-outfit-share").contains(id))
+        if (!id.matches("^[a-z0-9][a-z0-9-]{1,79}$"))
             throw com.yumg.starter.common.api.ApiException.invalidParameter();
         return "/templates/" + id;
     }
