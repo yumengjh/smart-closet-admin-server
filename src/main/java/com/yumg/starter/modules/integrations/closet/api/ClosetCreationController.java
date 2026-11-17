@@ -8,7 +8,6 @@ import java.time.LocalDate;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import java.util.List;
 import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -92,7 +91,7 @@ public class ClosetCreationController {
     public JsonNode trialGarments() { return service.read("/trial-garments", Map.of()); }
 
     @GetMapping("/trial-garments/{id}/image") @PreAuthorize("hasAuthority('closet:creation:read')")
-    public ResponseEntity<StreamingResponseBody> trialGarmentImage(@PathVariable String id) {
+    public ResponseEntity<byte[]> trialGarmentImage(@PathVariable String id) {
         return image("/trial-garments/" + uuid(id) + "/image");
     }
 
@@ -114,7 +113,7 @@ public class ClosetCreationController {
     }
 
     @GetMapping("/trial-persons/{id}/image") @PreAuthorize("hasAuthority('closet:creation:read')")
-    public ResponseEntity<StreamingResponseBody> trialPersonImage(@PathVariable String id) {
+    public ResponseEntity<byte[]> trialPersonImage(@PathVariable String id) {
         return image("/trial-persons/" + uuid(id) + "/image");
     }
 
@@ -135,7 +134,7 @@ public class ClosetCreationController {
     public JsonNode trial(@PathVariable String trialId) { return service.read("/trials/" + uuid(trialId), Map.of()); }
 
     @GetMapping("/trials/{trialId}/image") @PreAuthorize("hasAuthority('closet:creation:read')")
-    public ResponseEntity<StreamingResponseBody> trialImage(@PathVariable String trialId) {
+    public ResponseEntity<byte[]> trialImage(@PathVariable String trialId) {
         return image("/trials/" + uuid(trialId) + "/image");
     }
 
@@ -150,14 +149,14 @@ public class ClosetCreationController {
     }
 
     @GetMapping("/templates/{id}/versions/{versionId}/preview-image") @PreAuthorize("hasAuthority('closet:creation:read')")
-    public ResponseEntity<StreamingResponseBody> previewImage(@PathVariable String id, @PathVariable String versionId) {
+    public ResponseEntity<byte[]> previewImage(@PathVariable String id, @PathVariable String versionId) {
         return image(template(id) + "/versions/" + uuid(versionId) + "/preview-image");
     }
 
-    private ResponseEntity<StreamingResponseBody> image(String path) {
+    private ResponseEntity<byte[]> image(String path) {
         byte[] image = service.image(path);
         return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).cacheControl(CacheControl.noStore())
-                .header("X-Content-Type-Options", "nosniff").body(output -> output.write(image));
+                .header("X-Content-Type-Options", "nosniff").body(image);
     }
     private static String uuid(String value) {
         if (!value.matches("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))

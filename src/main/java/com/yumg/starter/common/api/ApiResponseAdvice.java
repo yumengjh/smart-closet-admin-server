@@ -27,7 +27,9 @@ public class ApiResponseAdvice implements ResponseBodyAdvice<Object> {
                                   Class<? extends HttpMessageConverter<?>> selectedConverterType,
                                   ServerHttpRequest request, ServerHttpResponse response) {
         if (!request.getURI().getPath().startsWith("/api/v1/") || body == null
-                || body instanceof ApiError || body instanceof ApiResponse<?>) {
+                || body instanceof ApiError || body instanceof ApiResponse<?>
+                // Raw bytes (images, files) are written by ByteArrayHttpMessageConverter and are never JSON envelopes.
+                || body instanceof byte[]) {
             return body;
         }
         PublicApi publicApi = publicApi(returnType);

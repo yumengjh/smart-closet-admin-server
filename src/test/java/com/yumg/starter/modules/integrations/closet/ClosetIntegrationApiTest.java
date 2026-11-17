@@ -1428,9 +1428,8 @@ class ClosetIntegrationApiTest {
         mvc.perform(get("/api/v1/closet" + path).with(jwtAs("closet:showcase:read"))).andExpect(status().isForbidden());
         server.expect(requestTo("http://closet.test/api/manage/v1" + path)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(png, MediaType.IMAGE_PNG));
-        var result = mvc.perform(get("/api/v1/closet" + path).with(jwtAs("closet:creation:read")))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.request().asyncStarted()).andReturn();
-        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch(result))
+        // Plain byte[] response: no async streaming thread racing the security header writers.
+        mvc.perform(get("/api/v1/closet" + path).with(jwtAs("closet:creation:read")))
                 .andExpect(status().isOk()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(png))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().contentType(MediaType.IMAGE_PNG))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Cache-Control", "no-store"));
