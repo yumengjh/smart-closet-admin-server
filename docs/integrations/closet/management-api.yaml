@@ -1,6 +1,6 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/management-api.yaml
-# source-commit: 1c4edba4130808ed371204f3b0d99c3af7e9231f
-# source-sha256: 2b81c138fad49d485bd1c58a654fc6607092a9f06e20aeee88221a30bca3b784
+# source-commit: e062ab39597960c21b1cf4d47ae016035d2cc8f6
+# source-sha256: 5bf9a7dd6238b568a52b410a629b4bbeed4a0a4ee2b5ac8333205d083f43625c
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
@@ -24,6 +24,8 @@ security:
   - closetHmac: []
 tags:
   - name: creations
+  - name: presets
+  - name: onboarding
   - name: users
   - name: registration
     description: 注册模式（只读，来自部署配置）与邀请码
@@ -45,7 +47,7 @@ paths:
     post:
       operationId: uploadCreationShowcase
       tags: [creations]
-      description: Signed raw multipart up to 12MiB; requires nonblank signed X-Operator. Only this POST and POST /creations/trial-persons have a larger HMAC body limit. PNG up to 10MiB/20MP, valid AIGC label required.
+      description: Signed raw multipart up to 12MiB; requires nonblank signed X-Operator. This POST and POST /creations/trial-persons use a 12 MiB HMAC body limit. PNG up to 10MiB/20MP, valid AIGC label required.
       requestBody:
         required: true
         content:
@@ -1910,6 +1912,170 @@ paths:
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
+  /presets:
+    get:
+      tags: ["presets"]
+      operationId: listPresets
+      parameters:
+        - {"name": "status", "in": "query", "schema": {"$ref": "#/components/schemas/PresetStatus"}}
+        - {"name": "gender", "in": "query", "schema": {"$ref": "#/components/schemas/PresetGender"}}
+        - {"name": "group", "in": "query", "schema": {"$ref": "#/components/schemas/PresetGroup"}}
+        - {"name": "q", "in": "query", "schema": {"type": "string"}}
+        - {"name": "page", "in": "query", "schema": {"type": "integer", "minimum": 1, "default": 1}}
+        - {"name": "size", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 48}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PresetManagementPage"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+  /presets/{id}/image:
+    get:
+      tags: ["presets"]
+      operationId: getPresetImage
+      parameters:
+        - {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+      responses:
+        '200': {"description": "Success", "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+  /presets/{id}:
+    patch:
+      tags: ["presets"]
+      operationId: patchPreset
+      parameters:
+        - {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PresetEdit"}}}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PresetManagementItem"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+    delete:
+      tags: ["presets"]
+      operationId: removePreset
+      parameters:
+        - {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+      responses:
+        '204': {"description": "No Content"}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+  /presets/batch:
+    post:
+      tags: ["presets"]
+      operationId: batchPresets
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PresetBatch"}}}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"type": "object", "properties": {"updated": {"type": "integer"}}, "required": ["updated"]}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+  /presets/coverage:
+    get:
+      tags: ["presets"]
+      operationId: getPresetCoverage
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/PresetCoverageCell"}}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+  /presets/source-sessions:
+    post:
+      tags: ["presets"]
+      operationId: openPresetSourceSession
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PresetSourceCredentials"}}}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PresetSourceSession"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '429': {"$ref": "#/components/responses/Problem"}
+  /presets/source-sessions/{sessionId}:
+    delete:
+      tags: ["presets"]
+      operationId: closePresetSourceSession
+      parameters:
+        - {"name": "sessionId", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[A-Za-z0-9_-]{43}$"}}
+      responses:
+        '204': {"description": "No Content"}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+  /presets/source-sessions/{sessionId}/garments:
+    get:
+      tags: ["presets"]
+      operationId: listPresetSourceGarments
+      parameters:
+        - {"name": "sessionId", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[A-Za-z0-9_-]{43}$"}}
+        - {"name": "q", "in": "query", "schema": {"type": "string"}}
+        - {"name": "group", "in": "query", "schema": {"$ref": "#/components/schemas/PresetGroup"}}
+        - {"name": "page", "in": "query", "schema": {"type": "integer", "minimum": 1, "default": 1}}
+        - {"name": "size", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 48}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PresetSourcePage"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+  /presets/source-sessions/{sessionId}/garments/{garmentId}/image:
+    get:
+      tags: ["presets"]
+      operationId: getPresetSourceImage
+      parameters:
+        - {"name": "garmentId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+        - {"name": "sessionId", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[A-Za-z0-9_-]{43}$"}}
+      responses:
+        '200': {"description": "Success", "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+  /presets/source-sessions/{sessionId}/import:
+    post:
+      tags: ["presets"]
+      operationId: importPresetSourceGarments
+      parameters:
+        - {"name": "sessionId", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[A-Za-z0-9_-]{43}$"}}
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PresetSourceImport"}}}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/PresetManagementItem"}}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+  /onboarding/style-covers:
+    get:
+      tags: ["onboarding"]
+      operationId: listOnboardingStyleCovers
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"type": "object", "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/OnboardingStyleCover"}}}, "required": ["items"]}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+  /onboarding/style-covers/{key}/image:
+    put:
+      tags: ["onboarding"]
+      operationId: uploadOnboardingStyleCover
+      parameters:
+        - {"name": "key", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/OnboardingStyleKey"}}
+      requestBody: {"required": true, "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}, "image/jpeg": {"schema": {"type": "string", "format": "binary"}}, "image/webp": {"schema": {"type": "string", "format": "binary"}}}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OnboardingStyleCover"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+        '413': {"$ref": "#/components/responses/Problem"}
+    delete:
+      tags: ["onboarding"]
+      operationId: removeOnboardingStyleCover
+      parameters:
+        - {"name": "key", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/OnboardingStyleKey"}}
+      responses:
+        '204': {"description": "No Content"}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+    get:
+      tags: ["onboarding"]
+      operationId: getOnboardingStyleCoverImage
+      parameters:
+        - {"name": "key", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/OnboardingStyleKey"}}
+      responses:
+        '200': {"description": "Success", "content": {"image/jpeg": {"schema": {"type": "string", "format": "binary"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+
 components:
   securitySchemes:
     closetHmac:
@@ -1979,6 +2145,116 @@ components:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
   schemas:
+    PresetStatus:
+      type: "string"
+      enum: ["DRAFT", "LISTED", "UNLISTED"]
+    PresetGender:
+      type: "string"
+      enum: ["\u7537\u6b3e", "\u5973\u6b3e", "\u4e2d\u6027", "\u672a\u6807\u6ce8"]
+    PresetGroup:
+      type: "string"
+      enum: ["top", "bottom", "outer", "one-piece", "shoes", "accessory"]
+    PresetEdit:
+      type: "object"
+      properties:
+        name: {"type": "string", "minLength": 1, "maxLength": 100}
+        status: {"$ref": "#/components/schemas/PresetStatus"}
+        gender: {"$ref": "#/components/schemas/PresetGender"}
+        styles: {"type": "array", "items": {"type": "string"}}
+        seasons: {"type": "array", "items": {"type": "string"}}
+        sort: {"type": "integer"}
+      additionalProperties: false
+    PresetManagementItem:
+      type: "object"
+      properties:
+        name: {"type": ["string", "null"]}
+        status: {"$ref": "#/components/schemas/PresetStatus"}
+        gender: {"$ref": "#/components/schemas/PresetGender"}
+        styles: {"type": "array", "items": {"type": "string"}}
+        seasons: {"type": "array", "items": {"type": "string"}}
+        sort: {"type": "integer"}
+        id: {"type": "string", "format": "uuid"}
+        group: {"type": "string", "enum": ["top", "bottom", "outer", "one-piece", "shoes", "accessory", "other"]}
+        category: {"type": "array", "items": {"type": "string"}}
+        color: {"type": "array", "items": {"type": "string"}}
+        sourceOwner: {"type": ["string", "null"]}
+        importedCount: {"type": "integer", "format": "int64"}
+        createdAtMs: {"type": "integer", "format": "int64"}
+        updatedAtMs: {"type": "integer", "format": "int64"}
+      required: ["name", "status", "gender", "styles", "seasons", "sort", "id", "group", "category", "color", "sourceOwner", "importedCount", "createdAtMs", "updatedAtMs"]
+    PresetManagementPage:
+      type: "object"
+      properties:
+        items: {"type": "array", "items": {"$ref": "#/components/schemas/PresetManagementItem"}}
+        total: {"type": "integer", "format": "int64"}
+      required: ["items", "total"]
+    PresetBatch:
+      type: "object"
+      properties:
+        ids: {"type": "array", "items": {"type": "string", "format": "uuid"}, "minItems": 1, "maxItems": 200}
+        action: {"type": "string", "enum": ["LIST", "UNLIST", "REMOVE"]}
+      required: ["ids", "action"]
+      additionalProperties: false
+    PresetCoverageCell:
+      type: "object"
+      properties:
+        gender: {"$ref": "#/components/schemas/PresetGender"}
+        role: {"$ref": "#/components/schemas/PresetGroup"}
+        style: {"type": "string"}
+        count: {"type": "integer", "format": "int64"}
+        missing: {"type": "boolean"}
+      required: ["gender", "role", "style", "count", "missing"]
+    PresetSourceCredentials:
+      type: "object"
+      properties:
+        username: {"type": "string"}
+        password: {"type": "string", "writeOnly": true}
+      required: ["username", "password"]
+      additionalProperties: false
+    PresetSourceSession:
+      type: "object"
+      properties:
+        sessionId: {"type": "string", "pattern": "^[A-Za-z0-9_-]{43}$"}
+        username: {"type": "string"}
+        displayName: {"type": ["string", "null"]}
+        expiresAtMs: {"type": "integer", "format": "int64"}
+      required: ["sessionId", "username", "displayName", "expiresAtMs"]
+    PresetSourceGarment:
+      type: "object"
+      properties:
+        name: {"type": ["string", "null"]}
+        group: {"type": "string", "enum": ["top", "bottom", "outer", "one-piece", "shoes", "accessory", "other"]}
+        category: {"type": "array", "items": {"type": "string"}}
+        color: {"type": "array", "items": {"type": "string"}}
+        gender: {"$ref": "#/components/schemas/PresetGender"}
+        garmentId: {"type": "string", "format": "uuid"}
+        inLibrary: {"type": ["string", "null"], "enum": ["DRAFT", "LISTED", "UNLISTED", "REMOVED", null]}
+        presetId: {"type": ["string", "null"], "format": "uuid"}
+      required: ["name", "group", "category", "color", "gender", "garmentId", "inLibrary", "presetId"]
+    PresetSourcePage:
+      type: "object"
+      properties:
+        items: {"type": "array", "items": {"$ref": "#/components/schemas/PresetSourceGarment"}}
+        total: {"type": "integer", "format": "int64"}
+      required: ["items", "total"]
+    PresetSourceImport:
+      type: "object"
+      properties:
+        garmentIds: {"type": "array", "items": {"type": "string", "format": "uuid"}, "minItems": 1, "maxItems": 100}
+        list: {"type": "boolean", "default": false}
+      required: ["garmentIds"]
+      additionalProperties: false
+    OnboardingStyleKey:
+      type: "string"
+      enum: ["fresh", "sweet", "french", "commute", "minimal", "amekaji", "oldmoney", "sporty", "newchinese", "workwear", "barn", "outdoor"]
+    OnboardingStyleCover:
+      type: "object"
+      properties:
+        key: {"$ref": "#/components/schemas/OnboardingStyleKey"}
+        style: {"type": "string"}
+        configured: {"type": "boolean"}
+        updatedAtMs: {"type": ["integer", "null"], "format": "int64"}
+      required: ["key", "style", "configured", "updatedAtMs"]
     ShowcaseUpload:
       type: object
       required: [uploadId, hash, width, height]

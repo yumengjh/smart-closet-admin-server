@@ -52,10 +52,18 @@ public class ClosetManagementClient {
 
     /** Sign exactly the bytes sent on the wire, including multipart boundaries. */
     public JsonNode postRaw(String path, byte[] bytes, MediaType contentType) {
+        return sendRaw(HttpMethod.POST, path, bytes, contentType);
+    }
+
+    public JsonNode putRaw(String path, byte[] bytes, MediaType contentType) {
+        return sendRaw(HttpMethod.PUT, path, bytes, contentType);
+    }
+
+    private JsonNode sendRaw(HttpMethod method, String path, byte[] bytes, MediaType contentType) {
         URI uri = uri(path, Map.of());
         try {
-            return restClient().post().uri(uri)
-                    .headers(headers -> headers.addAll(headers(uri, "POST", Map.of(), bytes)))
+            return restClient().method(method).uri(uri)
+                    .headers(headers -> headers.addAll(headers(uri, method.name(), Map.of(), bytes)))
                     .contentType(contentType).body(bytes).retrieve().body(JsonNode.class);
         } catch (RestClientResponseException exception) { throw translator.translate(exception); }
         catch (ResourceAccessException exception) { throw translator.translate(exception); }

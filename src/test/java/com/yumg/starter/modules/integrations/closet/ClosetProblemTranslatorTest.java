@@ -21,6 +21,12 @@ class ClosetProblemTranslatorTest {
         assertThat(translator.translate(new ResourceAccessException("Read timed out")).error())
                 .isEqualTo(ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE);
     }
+    @Test void presetVerificationFailuresAreIndependentOfTheGatewayLogin() {
+        assertThat(translator.translate(error(HttpStatus.UNAUTHORIZED, "{\"code\":\"BAD_CREDENTIALS\"}")).error())
+                .isEqualTo(ApiErrorCode.CLOSET_PRESET_SOURCE_BAD_CREDENTIALS);
+        assertThat(translator.translate(error(HttpStatus.UNAUTHORIZED, "{\"code\":\"PRESET_SOURCE_SESSION_EXPIRED\"}")).error())
+                .isEqualTo(ApiErrorCode.CLOSET_PRESET_SOURCE_SESSION_EXPIRED);
+    }
     @Test void templateNotFoundKeeps404Semantics() {
         var error = translator.translate(error(HttpStatus.NOT_FOUND, "{\"code\":\"TEMPLATE_NOT_FOUND\",\"detail\":\"template missing\"}"));
         assertThat(error.error()).isEqualTo(ApiErrorCode.NOT_FOUND);

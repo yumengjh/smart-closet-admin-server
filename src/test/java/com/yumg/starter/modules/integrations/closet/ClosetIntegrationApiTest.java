@@ -93,6 +93,45 @@ class ClosetIntegrationApiTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test void presetSourceAuditsAvoidCredentialsAndSessionIdsAndUseDedicatedPermission() throws Exception {
+        String root = "/api/v1/closet/presets/source-sessions";
+        String upstream = "http://closet.test/api/manage/v1/presets/source-sessions";
+        String token = "X".repeat(43);
+        String password = "Sensitive-Test-Password";
+        assertThat(permissions.findByCode("closet:presets:write")).isPresent();
+        assertThat(menus.findByCode("closet-presets")).isPresent();
+        assertThat(menus.findByCode("closet-onboarding")).isPresent();
+        String credentials = "{\"username\":\"fixture-admin\",\"password\":\"" + password + "\"}";
+        mvc.perform(post(root).with(jwtAs("closet:presets:read")).contentType(MediaType.APPLICATION_JSON).content(credentials))
+                .andExpect(status().isForbidden());
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.POST)).andExpect(content().json(credentials))
+                .andRespond(withSuccess("{\"sessionId\":\"" + token + "\"}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(upstream + "/" + token + "/import")).andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+        mvc.perform(post(root).with(jwtAs("closet:presets:write")).contentType(MediaType.APPLICATION_JSON).content(credentials))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.sessionId").value(token));
+        mvc.perform(post(root + "/" + token + "/import").with(jwtAs("closet:presets:write"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"garmentIds\":[],\"list\":false}")).andExpect(status().isOk());
+        server.verify();
+        var recorded = auditEvents.findAll().stream().filter(e -> e.getAction().startsWith("CLOSET_PRESET_SOURCE_")).toList();
+        assertThat(recorded).extracting(AuditEvent::getAction).contains("CLOSET_PRESET_SOURCE_ACCESS","CLOSET_PRESET_SOURCE_IMPORT");
+        assertThat(recorded).allSatisfy(e -> {
+            assertThat(String.valueOf(e.getMetadata()) + e.getTargetId()).doesNotContain(token,password);
+        });
+    }
+
+    @Test void onboardingCoverUsesRawBytesAndForwardsTheSignedPut() throws Exception {
+        String path = "/api/v1/closet/onboarding/style-covers/fresh/image";
+        byte[] input = {1, 2, 3, 4};
+        server.expect(requestTo("http://closet.test/api/manage/v1/onboarding/style-covers/fresh/image"))
+                .andExpect(method(HttpMethod.PUT)).andExpect(content().bytes(input))
+                .andRespond(withSuccess("{\"configured\":true}", MediaType.APPLICATION_JSON));
+        mvc.perform(request(HttpMethod.PUT,path).with(jwtAs("closet:onboarding:write"))
+                .contentType(MediaType.IMAGE_PNG).content(input))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.configured").value(true));
+        server.verify();
+    }
+
     @Test void creationPublishRequiresSeparatePermissionAndRejectsUnknownRoutes() throws Exception {
         String publish = "/api/v1/closet/creations/templates/sunlit-flatlay/versions/v1/publish";
         mvc.perform(post(publish).with(jwtAs("closet:creation:write"))
