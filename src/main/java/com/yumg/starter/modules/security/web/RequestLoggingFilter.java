@@ -25,6 +25,9 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
     public RequestLoggingFilter(RuntimeSettingService settings, ClientIpResolver clientIp) {
         this.settings = settings; this.clientIp = clientIp;
     }
+    private static String maskSourceSession(String path) {
+        return path.replaceFirst("(/presets/source-sessions)/[^/]+", "$1/{sessionId}");
+    }
     @Override protected boolean shouldNotFilter(HttpServletRequest request) { return !RequestPaths.isApi(request); }
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
         long started = System.nanoTime();
@@ -33,8 +36,8 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             if (settings.enabled("security.request-log.enabled")) {
                 Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
                 String user = authentication == null || !authentication.isAuthenticated() ? null : authentication.getName();
-                String path = RequestPaths.normalized(request);
-                String rawPath = request.getRequestURI();
+                String path = maskSourceSession(RequestPaths.normalized(request));
+                String rawPath = maskSourceSession(request.getRequestURI());
                 // Log the path the handler actually matched; keep the raw form only when it differs so encoded variants stay traceable.
                 log.info("request method={} path={} rawPath={} status={} durationMs={} traceId={} userId={} clientIp={}", request.getMethod(), path, rawPath.equals(path) ? "-" : rawPath, response.getStatus(), (System.nanoTime()-started)/1_000_000, MDC.get(TraceIdFilter.TRACE_ID_MDC_KEY), user, clientIp.resolve(request));
             }

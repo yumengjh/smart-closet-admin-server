@@ -20,6 +20,15 @@ public class ClosetProblemTranslator {
         JsonNode problem = parse(exception.getResponseBodyAsString());
         String code = problem.path("code").asText("");
         String detail = problem.path("detail").asText("");
+        // A source-account challenge is distinct from the administrator's own gateway login.
+        if (status.value() == 401 && "BAD_CREDENTIALS".equals(code))
+            return ApiException.fromUpstream(ApiErrorCode.CLOSET_PRESET_SOURCE_BAD_CREDENTIALS, detail, List.of());
+        if (status.value() == 401 && "PRESET_SOURCE_SESSION_EXPIRED".equals(code))
+            return ApiException.fromUpstream(ApiErrorCode.CLOSET_PRESET_SOURCE_SESSION_EXPIRED, detail, List.of());
+        if (status.value() == 404 && ("PRESET_NOT_FOUND".equals(code) || "COVER_NOT_FOUND".equals(code)))
+            return ApiException.fromUpstream(ApiErrorCode.NOT_FOUND, detail, List.of());
+        if (status.value() == 413 && ("PAYLOAD_TOO_LARGE".equals(code) || "COVER_TOO_LARGE".equals(code)))
+            return ApiException.fromUpstream(ApiErrorCode.CLOSET_REQUEST_TOO_LARGE, detail, List.of());
         if (code.startsWith("SHOWCASE_")) {
             ApiErrorCode mapped = switch (status.value()) {
                 case 403 -> ApiErrorCode.ACCESS_DENIED;

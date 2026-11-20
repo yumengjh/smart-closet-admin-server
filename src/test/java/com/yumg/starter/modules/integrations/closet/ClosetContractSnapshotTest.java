@@ -35,6 +35,14 @@ class ClosetContractSnapshotTest {
 
     /** Upstream operations called by ClosetManagementClient users. Register new calls here. */
     private static final Set<String> USED = Set.of(
+            "GET /presets", "PATCH /presets/{id}", "DELETE /presets/{id}",
+            "GET /presets/{id}/image", "POST /presets/batch", "GET /presets/coverage",
+            "POST /presets/source-sessions", "DELETE /presets/source-sessions/{sessionId}",
+            "GET /presets/source-sessions/{sessionId}/garments",
+            "GET /presets/source-sessions/{sessionId}/garments/{garmentId}/image",
+            "POST /presets/source-sessions/{sessionId}/import",
+            "GET /onboarding/style-covers", "GET /onboarding/style-covers/{key}/image",
+            "PUT /onboarding/style-covers/{key}/image", "DELETE /onboarding/style-covers/{key}/image",
             "GET /creations/showcases", "POST /creations/showcases", "POST /creations/showcases/uploads",
             "PUT /creations/showcases/{id}", "POST /creations/showcases/{id}/publish",
             "POST /creations/showcases/{id}/retire", "GET /creations/showcases/{id}/image",
