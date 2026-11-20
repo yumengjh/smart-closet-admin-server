@@ -1,6 +1,6 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/management-api.yaml
-# source-commit: 841a4ce2eb597cfb87819f8c07c06fb112c3d374
-# source-sha256: 63712a7b80b6a39abfc5f41a7a0679da407df3f6f8be37fef88eb37176b8e843
+# source-commit: 1c4edba4130808ed371204f3b0d99c3af7e9231f
+# source-sha256: 2b81c138fad49d485bd1c58a654fc6607092a9f06e20aeee88221a30bca3b784
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
@@ -618,6 +618,7 @@ paths:
       tags: [users]
       operationId: listUsers
       parameters:
+        - { name: userKey, in: query, description: "Exact match for the user key", schema: { type: string, pattern: '^[0-9a-f]{16}$' } }
         - { name: q, in: query, description: '用户名或昵称包含（忽略大小写）', schema: { type: string, maxLength: 80 } }
         - { name: status, in: query, schema: { type: string, enum: [ENABLED, DISABLED] } }
         - { name: role, in: query, schema: { $ref: '#/components/schemas/Role' } }
@@ -2326,9 +2327,10 @@ components:
               message: { type: string }
     UserSummary:
       type: object
-      required: [username, role, enabled, mustChangePassword, createdAtMs, activeSessionCount, garmentCount, outfitCount]
+      required: [username, userKey, role, enabled, mustChangePassword, createdAtMs, activeSessionCount, garmentCount, outfitCount]
       properties:
         username: { type: string }
+        userKey: { type: string, pattern: '^[0-9a-f]{16}$' }
         role: { $ref: '#/components/schemas/Role' }
         enabled: { type: boolean }
         mustChangePassword: { type: boolean }
@@ -2351,10 +2353,11 @@ components:
         size: { type: integer }
     UserDetail:
       type: object
-      required: [username, role, enabled, mustChangePassword, createdAtMs, activeSessionCount, garments,
+      required: [username, userKey, role, enabled, mustChangePassword, createdAtMs, activeSessionCount, garments,
                  outfitCount, outfitPlanCount, quickIntakeCount, hasWearerProfile, activePortableLinkCount, quota]
       properties:
         username: { type: string }
+        userKey: { type: string, pattern: '^[0-9a-f]{16}$' }
         role: { $ref: '#/components/schemas/Role' }
         enabled: { type: boolean }
         mustChangePassword: { type: boolean }

@@ -25,11 +25,12 @@ public class ClosetUserAdministrationService {
         this.client = client; this.audit = audit; this.mapper = mapper;
     }
 
-    public PageResponse<JsonNode> list(String q, String status, String role, String sort, String order, String registeredVia, String deactivated, int page, int size) {
+    /** userKey：与鱼搭管理接口、Umami 的 Distinct ID 相同的 16 位用户编号，精确匹配。 */
+    public PageResponse<JsonNode> list(String q, String status, String role, String sort, String order, String registeredVia, String deactivated, String userKey, int page, int size) {
         Map<String, List<String>> query = new LinkedHashMap<>();
         add(query, "q", q); add(query, "status", status); add(query, "role", role);
         add(query, "sort", sort); add(query, "order", order);
-        add(query, "registeredVia", registeredVia); add(query, "deactivated", deactivated);
+        add(query, "registeredVia", registeredVia); add(query, "deactivated", deactivated); add(query, "userKey", userKey);
         query.put("page", List.of(Integer.toString(page + 1))); query.put("size", List.of(Integer.toString(size)));
         JsonNode result = client.get("/users", query);
         List<JsonNode> items = result.path("items").isArray() ? mapper.convertValue(result.path("items"),

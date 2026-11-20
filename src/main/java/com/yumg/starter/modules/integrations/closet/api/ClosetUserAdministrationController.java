@@ -49,12 +49,13 @@ public class ClosetUserAdministrationController {
             @RequestParam(required = false) @Pattern(regexp = "^(asc|desc)$") String order,
             @RequestParam(required = false) @Pattern(regexp = "^(ADMIN|INVITE|OPEN)$") String registeredVia,
             @RequestParam(required = false) @Pattern(regexp = "^(true|false)$") String deactivated,
+            @RequestParam(required = false) @Pattern(regexp = "^[0-9a-f]{16}$") String userKey,
             @RequestParam(defaultValue = "0") @Min(0) @Max(2147483646) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size, @RequestParam MultiValueMap<String, String> query) {
-        Set<String> allowed = Set.of("q", "status", "role", "sort", "order", "registeredVia", "deactivated", "page", "size");
+        Set<String> allowed = Set.of("q", "status", "role", "sort", "order", "registeredVia", "deactivated", "userKey", "page", "size");
         if (query.entrySet().stream().anyMatch(entry -> !allowed.contains(entry.getKey()) || entry.getValue().size() != 1))
             throw ApiException.invalidParameter();
-        return users.list(q, status, role, sort, order, registeredVia, deactivated, page, size);
+        return users.list(q, status, role, sort, order, registeredVia, deactivated, userKey, page, size);
     }
     @GetMapping("/{username}") @PreAuthorize("hasAuthority('closet:user:read')")
     public JsonNode detail(@PathVariable @Pattern(regexp = USERNAME) String username) { return users.detail(username); }

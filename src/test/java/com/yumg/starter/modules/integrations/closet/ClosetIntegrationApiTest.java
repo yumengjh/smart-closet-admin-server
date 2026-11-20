@@ -793,6 +793,11 @@ class ClosetIntegrationApiTest {
                 .andExpect(jsonPath("$.data.items[0].displayName").value("小鱼")).andExpect(jsonPath("$.data.items[0].registeredVia").value("INVITE"))
                 .andExpect(jsonPath("$.data.items[0].lastLoginAtMs").value(123)).andExpect(jsonPath("$.data.items[0].deactivatedAtMs").value(456));
         server.verify(); server.reset();
+        server.expect(requestTo("http://closet.test/api/manage/v1/users?userKey=aaaabbbbccccdddd&page=1&size=20"))
+                .andExpect(method(HttpMethod.GET)).andRespond(withSuccess("{\"items\":[{\"username\":\"alice\",\"userKey\":\"aaaabbbbccccdddd\"}],\"total\":1,\"page\":1,\"size\":20}", MediaType.APPLICATION_JSON));
+        mvc.perform(get("/api/v1/closet/users?userKey=aaaabbbbccccdddd").with(jwtAs("closet:user:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].userKey").value("aaaabbbbccccdddd"));
+        server.verify(); server.reset();
         server.expect(requestTo("http://closet.test/api/manage/v1/users/alice"))
                 .andRespond(withSuccess(user.substring(0, user.length() - 1) + ",\"inviteId\":\"invite-12\",\"loginLock\":{\"locked\":true}}", MediaType.APPLICATION_JSON));
         mvc.perform(get("/api/v1/closet/users/alice").with(jwtAs("closet:user:read"))).andExpect(status().isOk())
@@ -814,7 +819,7 @@ class ClosetIntegrationApiTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({
-            "users,registeredVia=INVALID", "users,deactivated=yes", "users,sort=invalid", "users,unexpected=x", "users,page=1&page=2", "users,page=2147483647",
+            "users,registeredVia=INVALID", "users,userKey=AAAABBBBCCCCDDDD", "users,userKey=aaaabbbb", "users,userKey=alice", "users,deactivated=yes", "users,sort=invalid", "users,unexpected=x", "users,page=1&page=2", "users,page=2147483647",
             "invites,status=INVALID", "invites,status=ACTIVE&status=EXPIRED", "invites,unexpected=x", "invites,page=-1", "invites,size=101", "invites,page=1&page=2",
             "account-events,unexpected=x", "account-events,from=2026-02-30", "account-events,to=20-10-2026", "account-events,action=bad-action",
             "account-events,username=x", "account-events,action=LOGIN_SUCCEEDED&action=REGISTERED", "account-events,size=0", "account-events,page=NaN"})
