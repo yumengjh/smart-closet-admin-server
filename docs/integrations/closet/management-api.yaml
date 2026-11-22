@@ -1,18 +1,19 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/management-api.yaml
-# source-commit: 78aa11f577587f3a441466daed9232945742fac2
-# source-sha256: dd618c8359e15cebb34dac0b98eb26a8893a0a94f28629655e8bdf22c3094abf
+# source-commit: 6dc15840cd14ce62687b8d8c3890fed546c4e8e7
+# source-sha256: 5d00bd8f44d4cce7167ad53e389f86b453c44d45f94f8c9f5ae9221c099a3716
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
   title: Smart Closet Management API
-  version: 1.8.0
+  version: 1.8.1
   description: |
     鱼搭中立管理接口。默认关闭（`closet.management.enabled=false`），开启后供任意宿主平台以服务身份调用。
     设计说明见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md`；1.1（运维、KPI、大屏与数据出口、模板审核）见
     `docs/design/2026-10-09-管理接口二期：运维、KPI与大屏数据设计.md`；1.2（注册、邀请码、账号事件与资料字段）见
     `docs/design/2026-10-19-用户账号：注册、资料与管理设计.md`；1.3（收费：开关、档位与价格、成本、利润、兑换码、权益与点数）见
     `docs/design/2026-11-10-收费与权益设计.md`；1.8（镜头试穿精选整套、预设动作与动作敏感检查）见
-    `docs/design/2026-11-22-镜头试穿：精选整套、动作管理与敏感检查设计.md`。
+    `docs/design/2026-11-22-镜头试穿：精选整套、动作管理与敏感检查设计.md`；1.8.1 起动作敏感词表在数据库里，可通过
+    `/poses/sensitive-terms` 增删改与停用（同一设计 5.3 节）。
 
     认证：每个请求都必须携带 HMAC 签名头（见 `components.securitySchemes.closetHmac`）。
     时间字段均为 Unix 毫秒，字段名以 `AtMs` 结尾；日期参数为 `YYYY-MM-DD`，按 Asia/Shanghai 解释，`to` 含当天。
@@ -2318,6 +2319,53 @@ paths:
         '400': {"$ref": "#/components/responses/Problem"}
         '401': {"$ref": "#/components/responses/Problem"}
         '409': {"$ref": "#/components/responses/Problem"}
+  /poses/sensitive-terms:
+    get:
+      tags: ["poses"]
+      operationId: listPoseSensitiveTerms
+      description: The pose sensitivity word list. Not paged; at most 1000 items ordered by kind (SUGGESTIVE, NUDITY, MINOR) then by the folded word; total counts every match.
+      parameters:
+        - {"name": "kind", "in": "query", "schema": {"$ref": "#/components/schemas/PoseTermKind"}}
+        - {"name": "enabled", "in": "query", "schema": {"type": "boolean"}}
+        - {"name": "q", "in": "query", "description": "Folded word or reason contains (lower case, no whitespace, full-width folded)", "schema": {"type": "string"}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseSensitiveTermPage"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+    post:
+      tags: ["poses"]
+      operationId: createPoseSensitiveTerm
+      description: Adds an enabled ADMIN word; it applies to the next check. The same folded word in the same kind answers 409 POSE_TERM_EXISTS; an empty or too long word or reason answers 400 POSE_TERM_INVALID; more than 1000 words answers 400 POSE_TERM_LIMIT. Recorded as POSE_TERM_CREATE.
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseSensitiveTermCreate"}}}}
+      responses:
+        '201': {"description": "Created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseSensitiveTerm"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '409': {"$ref": "#/components/responses/Problem"}
+  /poses/sensitive-terms/{id}:
+    patch:
+      tags: ["poses"]
+      operationId: patchPoseSensitiveTerm
+      description: Absent fields stay; source never changes. enabled=false stops matching at once, true brings it back. Recorded as POSE_TERM_EDIT.
+      parameters:
+        - {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseSensitiveTermEdit"}}}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseSensitiveTerm"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+        '409': {"$ref": "#/components/responses/Problem"}
+    delete:
+      tags: ["poses"]
+      operationId: deletePoseSensitiveTerm
+      description: Deletes the row for good, SEED words included; it stops matching at once. An unknown id answers 404 POSE_TERM_NOT_FOUND. Recorded as POSE_TERM_DELETE.
+      parameters:
+        - {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+      responses:
+        '204': {"description": "No Content"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
 
 components:
   securitySchemes:
@@ -2722,6 +2770,45 @@ components:
         admin: {"$ref": "#/components/schemas/PoseCheckSwitches"}
         revision: {"type": "integer", "format": "int64"}
       required: ["user", "admin", "revision"]
+      additionalProperties: false
+    PoseTermKind:
+      type: "string"
+      enum: ["SUGGESTIVE", "NUDITY", "MINOR"]
+    PoseSensitiveTerm:
+      type: "object"
+      properties:
+        id: {"type": "string", "format": "uuid"}
+        term: {"type": "string"}
+        kind: {"$ref": "#/components/schemas/PoseTermKind"}
+        reason: {"type": "string"}
+        enabled: {"type": "boolean"}
+        source: {"type": "string", "enum": ["SEED", "ADMIN"], "description": "SEED: copied from ootd/pose-sensitive.json by the migration; ADMIN: added from the management platform"}
+        createdAtMs: {"type": "integer", "format": "int64"}
+        updatedAtMs: {"type": "integer", "format": "int64"}
+      required: ["id", "term", "kind", "reason", "enabled", "source", "createdAtMs", "updatedAtMs"]
+    PoseSensitiveTermPage:
+      type: "object"
+      properties:
+        items: {"type": "array", "maxItems": 1000, "items": {"$ref": "#/components/schemas/PoseSensitiveTerm"}}
+        total: {"type": "integer", "format": "int64"}
+      required: ["items", "total"]
+    PoseSensitiveTermCreate:
+      type: "object"
+      description: "Unique by the folded word plus kind (lower case, no whitespace, full-width folded to half-width). Leading and trailing spaces are trimmed."
+      properties:
+        term: {"type": "string", "minLength": 1, "maxLength": 20}
+        kind: {"$ref": "#/components/schemas/PoseTermKind"}
+        reason: {"type": "string", "minLength": 1, "maxLength": 60}
+      required: ["term", "kind", "reason"]
+      additionalProperties: false
+    PoseSensitiveTermEdit:
+      type: "object"
+      description: "Absent fields stay; the same rules as create."
+      properties:
+        term: {"type": "string", "minLength": 1, "maxLength": 20}
+        kind: {"$ref": "#/components/schemas/PoseTermKind"}
+        reason: {"type": "string", "minLength": 1, "maxLength": 60}
+        enabled: {"type": "boolean"}
       additionalProperties: false
     PoseRejectedProblem:
       allOf:
