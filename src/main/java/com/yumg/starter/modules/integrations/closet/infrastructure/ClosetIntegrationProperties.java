@@ -12,7 +12,7 @@ public class ClosetIntegrationProperties {
     private String keyId = "primary";
     private String secret = "";
     private Duration connectTimeout = Duration.ofSeconds(2);
-    private Duration readTimeout = Duration.ofSeconds(10);
+    private Duration readTimeout = Duration.ofSeconds(90);
 
     @PostConstruct
     public void validate() {
