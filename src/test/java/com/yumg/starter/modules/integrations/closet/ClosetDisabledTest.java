@@ -47,12 +47,27 @@ class ClosetDisabledTest {
                 .andExpect(status().isNotFound());
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+            "GET, /looks/categories", "POST, /looks/categories", "GET, /looks", "POST, /looks/compose",
+            "PUT, /looks/11111111-2222-3333-4444-555555555555/image", "POST, /looks/batch",
+            "GET, /poses", "POST, /poses/extract", "POST, /poses/check", "GET, /poses/check-settings", "PUT, /poses/check-settings"})
+    void disabledTryContentRoutesDoNotExist(String method, String path) throws Exception {
+        var mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+        mvc.perform(request(HttpMethod.valueOf(method), "/api/v1/closet" + path)
+                        .with(jwt().authorities(() -> "closet:looks:read", () -> "closet:looks:write",
+                                () -> "closet:poses:read", () -> "closet:poses:write"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isNotFound());
+    }
+
     @Test void disabledIntegrationRegistersNoControllersServicesOrSeeders() {
         Class<?>[] gated = { ClosetShowcaseController.class, ClosetShowcaseService.class,
                 com.yumg.starter.modules.integrations.closet.infrastructure.ClosetShowcaseMultipartConfiguration.class, ClosetUserAdministrationController.class, ClosetInsightController.class,
                 ClosetRegistrationController.class, ClosetRegistrationService.class, ClosetManagementController.class, ClosetUserAdministrationService.class, ClosetInsightService.class,
                 ClosetManagementService.class, ClosetPermissionBootstrap.class, ClosetNavigationBootstrap.class,
-                ClosetBillingController.class, ClosetBillingService.class, ClosetTryOnController.class, ClosetTryOnService.class, ClosetIntegrationConfiguration.class };
+                ClosetBillingController.class, ClosetBillingService.class, ClosetTryOnController.class, ClosetTryOnService.class, ClosetIntegrationConfiguration.class,
+                ClosetLookController.class, ClosetPoseController.class, ClosetTryContentService.class };
         new ApplicationContextRunner().withUserConfiguration(gated).run(context -> {
             assertThat(context).hasNotFailed();
             for (Class<?> type : gated) assertThat(context).doesNotHaveBean(type);
