@@ -14,6 +14,7 @@ import jakarta.validation.constraints.Size;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
@@ -24,10 +25,11 @@ import tools.jackson.databind.JsonNode;
 import static com.yumg.starter.modules.integrations.closet.application.ClosetTryContentService.IMAGE_LIMIT;
 import static com.yumg.starter.modules.integrations.closet.application.ClosetTryContentService.POSE;
 import static com.yumg.starter.modules.integrations.closet.application.ClosetTryContentService.POSES;
+import static com.yumg.starter.modules.integrations.closet.application.ClosetTryContentService.TERMS;
 
 /**
- * Pose presets and the six sensitive-check switches (design 2026-11-22, sections 4.2 and 5). Photo extraction
- * forwards the raw image once and keeps nothing; the draft comes back for the administrator to edit and save.
+ * Pose presets, the six sensitive-check switches and the sensitive word list (design 2026-11-22, sections 4.2, 5 and 5.3).
+ * Photo extraction forwards the raw image once and keeps nothing; the draft comes back for the administrator to edit and save.
  */
 @RestController
 @ConditionalOnProperty(prefix = "app.integrations.closet", name = "enabled", havingValue = "true")
@@ -35,6 +37,7 @@ import static com.yumg.starter.modules.integrations.closet.application.ClosetTry
 public class ClosetPoseController {
     static final String ID = "[a-z][a-z0-9-]{1,39}";
     static final String LINE = ClosetLookController.LINE;
+    static final String KIND = "SUGGESTIVE|NUDITY|MINOR";
     private final ClosetTryContentService service;
     public ClosetPoseController(ClosetTryContentService service) { this.service = service; }
 
@@ -61,6 +64,15 @@ public class ClosetPoseController {
     public record Check(@Size(max = 48) @Pattern(regexp = LINE) String name, @NotBlank @Size(max = 600) String description) {}
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Flags(@NotNull Boolean suggestive, @NotNull Boolean nudity, @NotNull Boolean minor) {}
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record TermCreate(@NotBlank @Size(max = 20) @Pattern(regexp = LINE) String term,
+                             @NotBlank @Pattern(regexp = KIND) String kind,
+                             @NotBlank @Size(max = 60) @Pattern(regexp = LINE) String reason) {}
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record TermEdit(@Size(min = 1, max = 20) @Pattern(regexp = LINE) String term,
+                           @Pattern(regexp = KIND) String kind,
+                           @Size(min = 1, max = 60) @Pattern(regexp = LINE) String reason,
+                           Boolean enabled) {}
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record CheckSettings(@NotNull @Valid Flags user, @NotNull @Valid Flags admin, @NotNull @Min(0) Long revision) {}
 
@@ -118,6 +130,36 @@ public class ClosetPoseController {
     public JsonNode updateSettings(@Valid @RequestBody CheckSettings body) {
         String detail = "user[" + flags(body.user()) + "] admin[" + flags(body.admin()) + "] revision=" + body.revision();
         return service.put(POSE, "POSE_CHECK_SETTINGS", "check-settings", detail, POSES + "/check-settings", body);
+    }
+
+    @GetMapping("/poses/sensitive-terms") @PreAuthorize("hasAuthority('closet:poses:read')")
+    public ResponseEntity<JsonNode> terms(@RequestParam(required = false) @Pattern(regexp = KIND) String kind,
+                                          @RequestParam(required = false) Boolean enabled,
+                                          @RequestParam(required = false) @Size(max = 64) String q) {
+        var filters = new LinkedHashMap<String, String>();
+        filters.put("kind", kind);
+        filters.put("enabled", enabled == null ? null : enabled.toString());
+        filters.put("q", q);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.read(TERMS, filters));
+    }
+
+    /** Audited with the kind only; the word itself stays out of the audit trail. */
+    @PostMapping("/poses/sensitive-terms") @PreAuthorize("hasAuthority('closet:poses:write')")
+    public ResponseEntity<JsonNode> createTerm(@Valid @RequestBody TermCreate body) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(service.post(POSE, "POSE_TERM_CREATE", "sensitive-terms", "kind=" + body.kind(), TERMS, body));
+    }
+
+    @PatchMapping("/poses/sensitive-terms/{id}") @PreAuthorize("hasAuthority('closet:poses:write')")
+    public JsonNode editTerm(@PathVariable UUID id, @Valid @RequestBody TermEdit body) {
+        return service.patch(POSE, "POSE_TERM_EDIT", id.toString(), TERMS + "/" + id, body);
+    }
+
+    /** A real delete upstream (seed words included); it takes effect on the next check. */
+    @DeleteMapping("/poses/sensitive-terms/{id}") @PreAuthorize("hasAuthority('closet:poses:write')")
+    public ResponseEntity<Void> deleteTerm(@PathVariable UUID id) {
+        service.delete(POSE, "POSE_TERM_DELETE", id.toString(), TERMS + "/" + id);
+        return ResponseEntity.noContent().build();
     }
 
     private static String flags(Flags f) {

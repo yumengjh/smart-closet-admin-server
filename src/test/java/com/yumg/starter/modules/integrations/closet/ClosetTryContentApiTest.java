@@ -64,6 +64,7 @@ class ClosetTryContentApiTest {
     private static final String LOOK_ID = "11111111-2222-3333-4444-555555555555";
     private static final String PRESET_A = "aaaaaaaa-0000-0000-0000-000000000001";
     private static final String PRESET_B = "aaaaaaaa-0000-0000-0000-000000000002";
+    private static final String TERM_ID = "bbbbbbbb-0000-0000-0000-000000000001";
     private static final int LIMIT = 20 * 1024 * 1024;
     private static final AtomicInteger clientSequence = new AtomicInteger();
 
@@ -142,7 +143,12 @@ class ClosetTryContentApiTest {
                         "{\"name\":\"站立\",\"description\":\"正面自然站立\"}", 200),
                 new Route(HttpMethod.GET, "/poses/check-settings", "", "closet:poses:read", "closet:looks:write", null, 200),
                 new Route(HttpMethod.PUT, "/poses/check-settings", "", "closet:poses:write", "closet:poses:read",
-                        "{\"user\":{\"suggestive\":true,\"nudity\":true,\"minor\":false},\"admin\":{\"suggestive\":true,\"nudity\":false,\"minor\":false},\"revision\":3}", 200));
+                        "{\"user\":{\"suggestive\":true,\"nudity\":true,\"minor\":false},\"admin\":{\"suggestive\":true,\"nudity\":false,\"minor\":false},\"revision\":3}", 200),
+                new Route(HttpMethod.GET, "/poses/sensitive-terms", "", "closet:poses:read", "closet:looks:write", null, 200),
+                new Route(HttpMethod.POST, "/poses/sensitive-terms", "", "closet:poses:write", "closet:poses:read",
+                        "{\"term\":\"摸臀\",\"kind\":\"SUGGESTIVE\",\"reason\":\"带性暗示的触碰动作\"}", 201),
+                new Route(HttpMethod.PATCH, "/poses/sensitive-terms/" + TERM_ID, "", "closet:poses:write", "closet:poses:read", "{\"enabled\":false}", 200),
+                new Route(HttpMethod.DELETE, "/poses/sensitive-terms/" + TERM_ID, "", "closet:poses:write", "closet:poses:read", null, 204));
     }
 
     @ParameterizedTest @MethodSource("routes")
@@ -306,6 +312,55 @@ class ClosetTryContentApiTest {
                         .body("{\"code\":\"LOOK_NOT_FOUND\",\"detail\":\"not found\"}"));
         mvc.perform(get(GATEWAY + "/looks/" + LOOK_ID + "/image").with(jwtAs("closet:looks:read"))).andExpect(status().isNotFound());
         server.verify();
+    }
+
+    @Test void sensitiveTermsForwardFiltersValidateAndPassConflictsAndMissingThrough() throws Exception {
+        String terms = "/poses/sensitive-terms";
+        server.expect(requestTo(UPSTREAM + terms + "?kind=MINOR&enabled=false&q=%E8%90%9D"))
+                .andRespond(withSuccess("{\"items\":[],\"total\":0}", MediaType.APPLICATION_JSON));
+        mvc.perform(get(GATEWAY + terms).param("kind", "MINOR").param("enabled", "false").param("q", "萝").with(jwtAs("closet:poses:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0))
+                .andExpect(header().string("Cache-Control", "no-store"));
+        server.verify();
+        for (String query : java.util.List.of("?kind=OTHER", "?enabled=maybe"))
+            mvc.perform(get(GATEWAY + terms + query).with(jwtAs("closet:poses:read"))).andExpect(status().isBadRequest());
+        for (String bad : java.util.List.of("{\"term\":\"\",\"kind\":\"SUGGESTIVE\",\"reason\":\"空词\"}",
+                "{\"term\":\"摸臀\",\"kind\":\"SUGGESTIVE\"}",
+                "{\"term\":\"摸臀\",\"kind\":\"OTHER\",\"reason\":\"类型无效\"}",
+                "{\"term\":\"" + "长".repeat(21) + "\",\"kind\":\"MINOR\",\"reason\":\"太长\"}",
+                "{\"term\":\"摸臀\",\"kind\":\"MINOR\",\"reason\":\"" + "理".repeat(61) + "\"}",
+                "{\"term\":\"摸\\n臀\",\"kind\":\"MINOR\",\"reason\":\"换行\"}"))
+            mvc.perform(post(GATEWAY + terms).with(jwtAs("closet:poses:write")).contentType(MediaType.APPLICATION_JSON).content(bad))
+                    .andExpect(status().isBadRequest());
+        mvc.perform(request(HttpMethod.PATCH, GATEWAY + terms + "/not-a-uuid").with(jwtAs("closet:poses:write"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":true}")).andExpect(status().isBadRequest());
+        mvc.perform(request(HttpMethod.DELETE, GATEWAY + terms + "/not-a-uuid").with(jwtAs("closet:poses:write"))).andExpect(status().isBadRequest());
+        server.verify();
+        server.reset();
+        server.expect(requestTo(UPSTREAM + terms + "/" + TERM_ID)).andExpect(method(HttpMethod.PATCH))
+                .andExpect(content().string("{\"reason\":\"改了理由\"}"))
+                .andRespond(withSuccess("{\"id\":\"" + TERM_ID + "\"}", MediaType.APPLICATION_JSON));
+        mvc.perform(request(HttpMethod.PATCH, GATEWAY + terms + "/" + TERM_ID).with(jwtAs("closet:poses:write"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"改了理由\"}")).andExpect(status().isOk());
+        server.verify();
+        server.reset();
+        server.expect(requestTo(UPSTREAM + terms)).andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("{\"code\":\"POSE_TERM_EXISTS\",\"detail\":\"同类型里已经有这个词了。\"}"));
+        mvc.perform(post(GATEWAY + terms).with(jwtAs("closet:poses:write")).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"term\":\"撩裙\",\"kind\":\"SUGGESTIVE\",\"reason\":\"重复\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.message").value("同类型里已经有这个词了。"));
+        server.verify();
+        server.reset();
+        server.expect(requestTo(UPSTREAM + terms + "/" + TERM_ID)).andExpect(method(HttpMethod.DELETE))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("{\"code\":\"POSE_TERM_NOT_FOUND\",\"detail\":\"没有找到这个词。\"}"));
+        mvc.perform(request(HttpMethod.DELETE, GATEWAY + terms + "/" + TERM_ID).with(jwtAs("closet:poses:write")))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.message").value("没有找到这个词。"));
+        server.verify();
+        var audited = auditEvents.findAll().stream().filter(e -> e.getAction().startsWith("CLOSET_POSE_TERM_")).toList();
+        assertThat(audited).extracting(AuditEvent::getAction).contains("CLOSET_POSE_TERM_CREATE", "CLOSET_POSE_TERM_EDIT", "CLOSET_POSE_TERM_DELETE");
+        assertThat(audited).allSatisfy(e -> assertThat(String.valueOf(e.getMetadata())).doesNotContain("撩裙", "摸臀"));
     }
 
     @Test void lookImageIsLabelledByItsBytesAndNeverCached() throws Exception {

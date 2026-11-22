@@ -23,6 +23,7 @@ public class ClosetTryContentService {
     public static final String LOOKS = "/looks";
     public static final String CATEGORIES = "/looks/categories";
     public static final String POSES = "/poses";
+    public static final String TERMS = "/poses/sensitive-terms";
     /** Same original-image ceiling as Fish Closet (20 MiB). */
     public static final int IMAGE_LIMIT = 20 * 1024 * 1024;
     public static final String LOOK = "ClosetLook";

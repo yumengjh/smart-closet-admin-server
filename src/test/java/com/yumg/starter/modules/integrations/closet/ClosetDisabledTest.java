@@ -51,7 +51,9 @@ class ClosetDisabledTest {
     @org.junit.jupiter.params.provider.CsvSource({
             "GET, /looks/categories", "POST, /looks/categories", "GET, /looks", "POST, /looks/compose",
             "PUT, /looks/11111111-2222-3333-4444-555555555555/image", "POST, /looks/batch",
-            "GET, /poses", "POST, /poses/extract", "POST, /poses/check", "GET, /poses/check-settings", "PUT, /poses/check-settings"})
+            "GET, /poses", "POST, /poses/extract", "POST, /poses/check", "GET, /poses/check-settings", "PUT, /poses/check-settings",
+            "GET, /poses/sensitive-terms", "POST, /poses/sensitive-terms",
+            "PATCH, /poses/sensitive-terms/11111111-2222-3333-4444-555555555555", "DELETE, /poses/sensitive-terms/11111111-2222-3333-4444-555555555555"})
     void disabledTryContentRoutesDoNotExist(String method, String path) throws Exception {
         var mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         mvc.perform(request(HttpMethod.valueOf(method), "/api/v1/closet" + path)

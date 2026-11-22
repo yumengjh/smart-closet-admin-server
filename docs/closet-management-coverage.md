@@ -56,6 +56,7 @@
 - 局部修改只转发请求里出现的字段；未知字段在网关拒绝。
 - 动作没通过敏感检查时返回 422 `CLOSET_POSE_REJECTED`，`violations` 每项为 `{field: 命中类型 SUGGESTIVE/NUDITY/MINOR, message: "词：理由"}`。
 - 敏感检查开关的修改在网关审计里记录这次提交的六个布尔值与 revision。
+- 敏感词表（鱼搭设计 5.3）：`GET /poses/sensitive-terms`（`kind`、`enabled`、`q`，不分页，`no-store`）、`POST /poses/sensitive-terms`（`{term,kind,reason}` 都必填，词最多 20 字、理由最多 60 字）、`PATCH /poses/sensitive-terms/{id}`（`{term?,kind?,reason?,enabled?}`）、`DELETE /poses/sensitive-terms/{id}`（物理删除，SEED 词也可删，立即生效）。读用 `closet:poses:read`，写用 `closet:poses:write`；`id` 必须是 UUID。重复词 409、不存在 404 原样透传为 `CONFLICT` / `NOT_FOUND`。审计只记类型和 id，不记词本身。
 
 ## 版本入口
 
