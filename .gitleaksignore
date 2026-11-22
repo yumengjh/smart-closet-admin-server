@@ -3,3 +3,6 @@
 8ea1ec4e51c0b67dc3a358102fd7c17516876f35:src/test/java/com/yumg/starter/modules/integrations/closet/ClosetIntegrationApiTest.java:generic-api-key:44
 # Local DiceBear image name in an old operational note; not authentication material.
 b4e2278aa6953d20fe54412cb88c2567b01d0bf7:findings.md:generic-api-key:27
+# Same fixed fake HMAC secret (0123456789abcdef…) in the try-content proxy test's Spring test properties and signer constant; not real credentials.
+6e8ce93836feeba3e237569e00fd65ffcf1e528f:src/test/java/com/yumg/starter/modules/integrations/closet/ClosetTryContentApiTest.java:generic-api-key:54
+6e8ce93836feeba3e237569e00fd65ffcf1e528f:src/test/java/com/yumg/starter/modules/integrations/closet/ClosetTryContentApiTest.java:generic-api-key:63
