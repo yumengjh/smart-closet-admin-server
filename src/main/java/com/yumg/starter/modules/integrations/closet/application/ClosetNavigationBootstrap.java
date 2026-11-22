@@ -46,6 +46,11 @@ public class ClosetNavigationBootstrap implements ApplicationRunner {
         seed(directory, "closet-creation-showcases", "官方素材", "/creation/showcases", "closet-creation-showcases", "ri/gallery-line", 57, "closet:showcase:read");
         seed(directory, "closet-presets", "预设衣物", "/closet/presets", "closet-presets", "ri/t-shirt-2-line", 58, "closet:presets:read");
         seed(directory, "closet-onboarding", "引导封面", "/closet/onboarding", "closet-onboarding", "ri/image-add-line", 59, "closet:onboarding:read");
+        NavigationMenu tryContent = menus.findByCode("closet-try-content").orElseGet(() -> menus.save(new NavigationMenu(
+                null, "closet-try-content", "试穿内容", "/try-content", null, "ri/vidicon-line", 157,
+                NavigationMenuType.DIRECTORY, null, true, true, false, true)));
+        seed(tryContent, "closet-looks", "精选整套", "/closet/looks", "closet-looks", "ri/gallery-line", 10, "closet:looks:read");
+        seed(tryContent, "closet-poses", "动作管理", "/closet/poses", "closet-poses", "ri/user-3-line", 20, "closet:poses:read");
         NavigationMenu billing = menus.findByCode("closet-billing").orElseGet(() -> menus.save(new NavigationMenu(
                 null, "closet-billing", "收费管理", "/billing", null, "ri/money-cny-circle-line", 160,
                 NavigationMenuType.DIRECTORY, "closet:billing:read", true, true, false, true)));

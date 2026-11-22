@@ -14,7 +14,7 @@ APP_CLOSET_BASE_URL=http://127.0.0.1:8080
 APP_CLOSET_KEY_ID=primary
 APP_CLOSET_SECRET=<至少 32 个 UTF-8 字节>
 APP_CLOSET_CONNECT_TIMEOUT=2s
-APP_CLOSET_READ_TIMEOUT=10s
+APP_CLOSET_READ_TIMEOUT=90s
 ```
 
 使用独立的高熵密钥，并通过秘密管理器把匹配的 key ID 与 secret 配置到鱼搭管理接口。`.env.example` 只给出空值示例。开关开启后，启动会拒绝非 HTTP/HTTPS URL、无主机 URL、空 key ID、短 secret 或非正超时。Ready 日志输出脱敏后的鱼搭 URL，不输出 secret。

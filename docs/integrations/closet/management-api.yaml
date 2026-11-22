@@ -1,17 +1,19 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/management-api.yaml
-# source-commit: e062ab39597960c21b1cf4d47ae016035d2cc8f6
-# source-sha256: 5bf9a7dd6238b568a52b410a629b4bbeed4a0a4ee2b5ac8333205d083f43625c
+# source-commit: 6dc15840cd14ce62687b8d8c3890fed546c4e8e7
+# source-sha256: 5d00bd8f44d4cce7167ad53e389f86b453c44d45f94f8c9f5ae9221c099a3716
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
   title: Smart Closet Management API
-  version: 1.7.1
+  version: 1.8.1
   description: |
     鱼搭中立管理接口。默认关闭（`closet.management.enabled=false`），开启后供任意宿主平台以服务身份调用。
     设计说明见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md`；1.1（运维、KPI、大屏与数据出口、模板审核）见
     `docs/design/2026-10-09-管理接口二期：运维、KPI与大屏数据设计.md`；1.2（注册、邀请码、账号事件与资料字段）见
     `docs/design/2026-10-19-用户账号：注册、资料与管理设计.md`；1.3（收费：开关、档位与价格、成本、利润、兑换码、权益与点数）见
-    `docs/design/2026-11-10-收费与权益设计.md`。
+    `docs/design/2026-11-10-收费与权益设计.md`；1.8（镜头试穿精选整套、预设动作与动作敏感检查）见
+    `docs/design/2026-11-22-镜头试穿：精选整套、动作管理与敏感检查设计.md`；1.8.1 起动作敏感词表在数据库里，可通过
+    `/poses/sensitive-terms` 增删改与停用（同一设计 5.3 节）。
 
     认证：每个请求都必须携带 HMAC 签名头（见 `components.securitySchemes.closetHmac`）。
     时间字段均为 Unix 毫秒，字段名以 `AtMs` 结尾；日期参数为 `YYYY-MM-DD`，按 Asia/Shanghai 解释，`to` 含当天。
@@ -26,6 +28,10 @@ tags:
   - name: creations
   - name: presets
   - name: onboarding
+  - name: looks
+    description: 镜头试穿精选整套与分类（只由管理员维护，不进推荐、件数、大屏与数仓）
+  - name: poses
+    description: 预设动作与动作敏感检查开关（用户端、管理端各三个）
   - name: users
   - name: registration
     description: 注册模式（只读，来自部署配置）与邀请码
@@ -2076,6 +2082,291 @@ paths:
         '401': {"$ref": "#/components/responses/Problem"}
         '404': {"$ref": "#/components/responses/Problem"}
 
+  /looks/categories:
+    get:
+      tags: ["looks"]
+      operationId: listLookCategories
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"type": "object", "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/LookCategory"}}}, "required": ["items"]}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+    post:
+      tags: ["looks"]
+      operationId: createLookCategory
+      description: New categories start disabled. A key that already exists answers 409.
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LookCategoryCreate"}}}}
+      responses:
+        '201': {"description": "Created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LookCategory"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '409': {"$ref": "#/components/responses/Problem"}
+  /looks/categories/{key}:
+    patch:
+      tags: ["looks"]
+      operationId: patchLookCategory
+      parameters:
+        - {"name": "key", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/LookCategoryKey"}}
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LookCategoryEdit"}}}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LookCategory"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+    delete:
+      tags: ["looks"]
+      operationId: removeLookCategory
+      description: Only a category without looks (other than removed ones) can be deleted; otherwise 409 LOOK_CATEGORY_NOT_EMPTY.
+      parameters:
+        - {"name": "key", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/LookCategoryKey"}}
+      responses:
+        '204': {"description": "No Content"}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+        '409': {"$ref": "#/components/responses/Problem"}
+  /looks:
+    get:
+      tags: ["looks"]
+      operationId: listLooks
+      parameters:
+        - {"name": "status", "in": "query", "description": "Absent: DRAFT, LISTED and UNLISTED", "schema": {"$ref": "#/components/schemas/LookStatus"}}
+        - {"name": "category", "in": "query", "schema": {"$ref": "#/components/schemas/LookCategoryKey"}}
+        - {"name": "verified", "in": "query", "schema": {"type": "boolean"}}
+        - {"name": "q", "in": "query", "description": "Name contains", "schema": {"type": "string"}}
+        - {"name": "page", "in": "query", "schema": {"type": "integer", "minimum": 1, "default": 1}}
+        - {"name": "size", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 48}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ManagedLookPage"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+    post:
+      tags: ["looks"]
+      operationId: createLook
+      description: A DRAFT without a picture; upload it with PUT /looks/{id}/image.
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LookCreate"}}}}
+      responses:
+        '201': {"description": "Created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ManagedLook"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+  /looks/compose:
+    post:
+      tags: ["looks"]
+      operationId: composeLook
+      description: 2-6 LISTED preset garments laid out with the try-on reference grid. Zero model calls. Creates a DRAFT with source COMPOSE.
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LookCompose"}}}}
+      responses:
+        '201': {"description": "Created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ManagedLook"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+  /looks/batch:
+    post:
+      tags: ["looks"]
+      operationId: batchLooks
+      description: One transaction. LIST fails the whole batch with 400 when a look has no picture.
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LookBatch"}}}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"type": "object", "properties": {"updated": {"type": "integer"}}, "required": ["updated"]}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+  /looks/{id}:
+    patch:
+      tags: ["looks"]
+      operationId: patchLook
+      description: A look without a picture cannot be LISTED (400).
+      parameters:
+        - {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LookEdit"}}}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ManagedLook"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+    delete:
+      tags: ["looks"]
+      operationId: removeLook
+      description: Becomes a REMOVED tombstone; deleting again also answers 204. The stored picture is deleted after the commit.
+      parameters:
+        - {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+      responses:
+        '204': {"description": "No Content"}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+  /looks/{id}/image:
+    put:
+      tags: ["looks"]
+      operationId: uploadLookImage
+      description: Raw PNG, JPEG or WebP bytes, at most 20 MiB and 64 megapixels (this route alone has a 20 MiB HMAC body limit). Re-encoded without metadata, longest side 1024; transparent pictures stay PNG, others become JPEG. Each replacement increments imageVersion and clears verified.
+      parameters:
+        - {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+      requestBody: {"required": true, "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}, "image/jpeg": {"schema": {"type": "string", "format": "binary"}}, "image/webp": {"schema": {"type": "string", "format": "binary"}}}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ManagedLook"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+        '413': {"$ref": "#/components/responses/Problem"}
+    get:
+      tags: ["looks"]
+      operationId: getLookImage
+      description: The stored 1024 picture, Cache-Control no-store. REMOVED or no picture answers 404.
+      parameters:
+        - {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+      responses:
+        '200': {"description": "Success", "content": {"image/jpeg": {"schema": {"type": "string", "format": "binary"}}, "image/png": {"schema": {"type": "string", "format": "binary"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+  /poses:
+    get:
+      tags: ["poses"]
+      operationId: listPoses
+      description: Not paged; at most 200 items, total counts every match.
+      parameters:
+        - {"name": "status", "in": "query", "description": "Absent: DRAFT, LISTED and UNLISTED", "schema": {"$ref": "#/components/schemas/PoseStatus"}}
+        - {"name": "q", "in": "query", "description": "Name or description contains", "schema": {"type": "string"}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ManagedPosePage"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+    post:
+      tags: ["poses"]
+      operationId: createPose
+      description: Checked with the management-side switches first; a refusal answers 422 POSE_REJECTED with hits. Without id the server makes p- plus 8 lowercase letters or digits.
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseEdit"}}}}
+      responses:
+        '201': {"description": "Created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ManagedPose"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '409': {"$ref": "#/components/responses/Problem"}
+        '422': {"$ref": "#/components/responses/PoseRejected"}
+  /poses/{id}:
+    patch:
+      tags: ["poses"]
+      operationId: patchPose
+      description: Same fields as create; id cannot change. Changing name, description or tags checks the wording again.
+      parameters:
+        - {"name": "id", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/PoseId"}}
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseEdit"}}}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ManagedPose"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+        '422': {"$ref": "#/components/responses/PoseRejected"}
+    delete:
+      tags: ["poses"]
+      operationId: removePose
+      description: Becomes a REMOVED tombstone (the id is not reusable); deleting again also answers 204. Renders already prepared keep the pose text they froze.
+      parameters:
+        - {"name": "id", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/PoseId"}}
+      responses:
+        '204': {"description": "No Content"}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+  /poses/batch:
+    post:
+      tags: ["poses"]
+      operationId: batchPoses
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseBatch"}}}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"type": "object", "properties": {"updated": {"type": "integer"}}, "required": ["updated"]}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+  /poses/extract:
+    post:
+      tags: ["poses"]
+      operationId: extractPose
+      description: Raw PNG or JPEG bytes (20 MiB HMAC body limit on this route). One vision call with the management-side switches; nothing is saved and the picture is neither stored nor logged. At most 100 per day, counted apart from user quotas (429 POSE_DAILY_LIMIT). Save the edited draft with POST /poses.
+      requestBody: {"required": true, "content": {"image/png": {"schema": {"type": "string", "format": "binary"}}, "image/jpeg": {"schema": {"type": "string", "format": "binary"}}}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"type": "object", "properties": {"draft": {"$ref": "#/components/schemas/PoseDraft"}}, "required": ["draft"]}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '413': {"$ref": "#/components/responses/Problem"}
+        '422': {"$ref": "#/components/responses/PoseRejected"}
+        '429': {"$ref": "#/components/responses/Problem"}
+        '502': {"$ref": "#/components/responses/Problem"}
+  /poses/check:
+    post:
+      tags: ["poses"]
+      operationId: checkPose
+      description: Word-list preview of every kind, regardless of the switches. No model call.
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseCheckRequest"}}}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseCheckResult"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+  /poses/check-settings:
+    get:
+      tags: ["poses"]
+      operationId: getPoseCheckSettings
+      description: The user-side minor check starts from closet.ootd.pose-minor-check-enabled the first time it is read; afterwards this setting decides.
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseCheckSettings"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+    put:
+      tags: ["poses"]
+      operationId: putPoseCheckSettings
+      description: Optimistic lock on revision (409 POSE_CHECK_REVISION_CONFLICT). Recorded as POSE_CHECK_SETTINGS with the six values before and after. Existing cards are never deleted.
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseCheckSettingsChange"}}}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseCheckSettings"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '409': {"$ref": "#/components/responses/Problem"}
+  /poses/sensitive-terms:
+    get:
+      tags: ["poses"]
+      operationId: listPoseSensitiveTerms
+      description: The pose sensitivity word list. Not paged; at most 1000 items ordered by kind (SUGGESTIVE, NUDITY, MINOR) then by the folded word; total counts every match.
+      parameters:
+        - {"name": "kind", "in": "query", "schema": {"$ref": "#/components/schemas/PoseTermKind"}}
+        - {"name": "enabled", "in": "query", "schema": {"type": "boolean"}}
+        - {"name": "q", "in": "query", "description": "Folded word or reason contains (lower case, no whitespace, full-width folded)", "schema": {"type": "string"}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseSensitiveTermPage"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+    post:
+      tags: ["poses"]
+      operationId: createPoseSensitiveTerm
+      description: Adds an enabled ADMIN word; it applies to the next check. The same folded word in the same kind answers 409 POSE_TERM_EXISTS; an empty or too long word or reason answers 400 POSE_TERM_INVALID; more than 1000 words answers 400 POSE_TERM_LIMIT. Recorded as POSE_TERM_CREATE.
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseSensitiveTermCreate"}}}}
+      responses:
+        '201': {"description": "Created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseSensitiveTerm"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '409': {"$ref": "#/components/responses/Problem"}
+  /poses/sensitive-terms/{id}:
+    patch:
+      tags: ["poses"]
+      operationId: patchPoseSensitiveTerm
+      description: Absent fields stay; source never changes. enabled=false stops matching at once, true brings it back. Recorded as POSE_TERM_EDIT.
+      parameters:
+        - {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+      requestBody: {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseSensitiveTermEdit"}}}}
+      responses:
+        '200': {"description": "Success", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PoseSensitiveTerm"}}}}
+        '400': {"$ref": "#/components/responses/Problem"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+        '409': {"$ref": "#/components/responses/Problem"}
+    delete:
+      tags: ["poses"]
+      operationId: deletePoseSensitiveTerm
+      description: Deletes the row for good, SEED words included; it stops matching at once. An unknown id answers 404 POSE_TERM_NOT_FOUND. Recorded as POSE_TERM_DELETE.
+      parameters:
+        - {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+      responses:
+        '204': {"description": "No Content"}
+        '401': {"$ref": "#/components/responses/Problem"}
+        '404': {"$ref": "#/components/responses/Problem"}
+
 components:
   securitySchemes:
     closetHmac:
@@ -2144,6 +2435,11 @@ components:
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
+    PoseRejected:
+      description: 动作不适合试穿（code 为 POSE_REJECTED），hits 列出命中的词或识图拒收原因
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/PoseRejectedProblem' }
   schemas:
     PresetStatus:
       type: "string"
@@ -2255,6 +2551,269 @@ components:
         configured: {"type": "boolean"}
         updatedAtMs: {"type": ["integer", "null"], "format": "int64"}
       required: ["key", "style", "configured", "updatedAtMs"]
+    LookCategoryKey:
+      type: "string"
+      pattern: "^[a-z][a-z0-9-]{1,23}$"
+    LookStatus:
+      type: "string"
+      enum: ["DRAFT", "LISTED", "UNLISTED"]
+    LookCoverage:
+      type: "string"
+      description: "Body range the picture covers; decides the try-on prompt and framing"
+      enum: ["FULL", "UPPER", "LOWER"]
+    LookGender:
+      type: "string"
+      description: "Local ordering only; never in a prompt or sent to a model"
+      enum: ["FEMALE", "MALE", "UNISEX"]
+    LookCategory:
+      type: "object"
+      properties:
+        key: {"$ref": "#/components/schemas/LookCategoryKey"}
+        name: {"type": "string", "minLength": 1, "maxLength": 8}
+        sort: {"type": "integer"}
+        enabled: {"type": "boolean"}
+        lookCount: {"type": "integer", "format": "int64", "description": "Looks other than REMOVED"}
+        listedCount: {"type": "integer", "format": "int64"}
+        createdAtMs: {"type": "integer", "format": "int64"}
+        updatedAtMs: {"type": "integer", "format": "int64"}
+      required: ["key", "name", "sort", "enabled", "lookCount", "listedCount", "createdAtMs", "updatedAtMs"]
+    LookCategoryCreate:
+      type: "object"
+      properties:
+        key: {"$ref": "#/components/schemas/LookCategoryKey"}
+        name: {"type": "string", "minLength": 1, "maxLength": 8}
+        sort: {"type": "integer", "default": 0}
+      required: ["key", "name"]
+      additionalProperties: false
+    LookCategoryEdit:
+      type: "object"
+      properties:
+        name: {"type": "string", "minLength": 1, "maxLength": 8}
+        sort: {"type": "integer"}
+        enabled: {"type": "boolean"}
+      additionalProperties: false
+    ManagedLook:
+      type: "object"
+      properties:
+        id: {"type": "string", "format": "uuid"}
+        name: {"type": "string"}
+        category: {"$ref": "#/components/schemas/LookCategoryKey"}
+        categoryName: {"type": "string"}
+        categoryEnabled: {"type": "boolean"}
+        tags: {"type": "array", "items": {"type": "string"}}
+        coverage: {"$ref": "#/components/schemas/LookCoverage"}
+        gender: {"$ref": "#/components/schemas/LookGender"}
+        status: {"$ref": "#/components/schemas/LookStatus"}
+        verified: {"type": "boolean"}
+        verifiedAtMs: {"type": ["integer", "null"], "format": "int64"}
+        sort: {"type": "integer"}
+        source: {"type": "string", "enum": ["UPLOAD", "COMPOSE"]}
+        composePresetIds: {"type": "array", "items": {"type": "string", "format": "uuid"}}
+        hasImage: {"type": "boolean"}
+        imageVersion: {"type": "integer"}
+        width: {"type": ["integer", "null"]}
+        height: {"type": ["integer", "null"]}
+        tryCount: {"type": "integer", "format": "int64"}
+        createdAtMs: {"type": "integer", "format": "int64"}
+        updatedAtMs: {"type": "integer", "format": "int64"}
+      required: ["id", "name", "category", "categoryName", "categoryEnabled", "tags", "coverage", "gender", "status", "verified", "verifiedAtMs", "sort", "source", "composePresetIds", "hasImage", "imageVersion", "width", "height", "tryCount", "createdAtMs", "updatedAtMs"]
+    ManagedLookPage:
+      type: "object"
+      properties:
+        items: {"type": "array", "items": {"$ref": "#/components/schemas/ManagedLook"}}
+        total: {"type": "integer", "format": "int64"}
+      required: ["items", "total"]
+    LookCreate:
+      type: "object"
+      properties:
+        name: {"type": "string", "minLength": 1, "maxLength": 16}
+        category: {"$ref": "#/components/schemas/LookCategoryKey"}
+        tags: {"type": "array", "maxItems": 8, "items": {"type": "string", "minLength": 1, "maxLength": 8}}
+        coverage: {"$ref": "#/components/schemas/LookCoverage"}
+        gender: {"$ref": "#/components/schemas/LookGender"}
+      required: ["name", "category", "coverage"]
+      additionalProperties: false
+    LookCompose:
+      type: "object"
+      properties:
+        name: {"type": "string", "minLength": 1, "maxLength": 16}
+        category: {"$ref": "#/components/schemas/LookCategoryKey"}
+        tags: {"type": "array", "maxItems": 8, "items": {"type": "string", "minLength": 1, "maxLength": 8}}
+        coverage: {"$ref": "#/components/schemas/LookCoverage"}
+        gender: {"$ref": "#/components/schemas/LookGender"}
+        presetIds: {"type": "array", "minItems": 2, "maxItems": 6, "uniqueItems": true, "items": {"type": "string", "format": "uuid"}, "description": "LISTED preset garments only"}
+      required: ["name", "category", "coverage", "presetIds"]
+      additionalProperties: false
+    LookEdit:
+      type: "object"
+      properties:
+        name: {"type": "string", "minLength": 1, "maxLength": 16}
+        category: {"$ref": "#/components/schemas/LookCategoryKey"}
+        tags: {"type": "array", "maxItems": 8, "items": {"type": "string", "minLength": 1, "maxLength": 8}}
+        coverage: {"$ref": "#/components/schemas/LookCoverage"}
+        gender: {"$ref": "#/components/schemas/LookGender"}
+        status: {"$ref": "#/components/schemas/LookStatus"}
+        sort: {"type": "integer"}
+        verified: {"type": "boolean"}
+      additionalProperties: false
+    LookBatch:
+      type: "object"
+      properties:
+        ids: {"type": "array", "items": {"type": "string", "format": "uuid"}, "minItems": 1, "maxItems": 200}
+        action: {"type": "string", "enum": ["LIST", "UNLIST", "REMOVE", "VERIFY", "UNVERIFY"]}
+      required: ["ids", "action"]
+      additionalProperties: false
+    PoseId:
+      type: "string"
+      pattern: "^[a-z][a-z0-9-]{1,39}$"
+    PoseStatus:
+      type: "string"
+      enum: ["DRAFT", "LISTED", "UNLISTED"]
+    PoseViewAngle:
+      type: "string"
+      enum: ["FRONT", "THREE_QUARTER", "SIDE", "BACK"]
+    PoseKeypoints:
+      type: "object"
+      description: "Joint to [x, y] in 0-1 of a 3:4 frame; a joint not shown is absent"
+      propertyNames: {"enum": ["HEAD", "NECK", "L_SHOULDER", "R_SHOULDER", "L_ELBOW", "R_ELBOW", "L_WRIST", "R_WRIST", "L_HIP", "R_HIP", "L_KNEE", "R_KNEE", "L_ANKLE", "R_ANKLE"]}
+      additionalProperties: {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number", "minimum": 0, "maximum": 1}}
+    ManagedPose:
+      type: "object"
+      properties:
+        id: {"$ref": "#/components/schemas/PoseId"}
+        name: {"type": "string"}
+        description: {"type": "string"}
+        tags: {"type": "array", "items": {"type": "string"}}
+        viewAngle: {"oneOf": [{"$ref": "#/components/schemas/PoseViewAngle"}, {"type": "null"}]}
+        keypoints: {"$ref": "#/components/schemas/PoseKeypoints"}
+        status: {"$ref": "#/components/schemas/PoseStatus"}
+        sort: {"type": "integer"}
+        source: {"type": "string", "enum": ["SEED", "TEXT", "PHOTO"]}
+        createdAtMs: {"type": "integer", "format": "int64"}
+        updatedAtMs: {"type": "integer", "format": "int64"}
+      required: ["id", "name", "description", "tags", "viewAngle", "keypoints", "status", "sort", "source", "createdAtMs", "updatedAtMs"]
+    ManagedPosePage:
+      type: "object"
+      properties:
+        items: {"type": "array", "maxItems": 200, "items": {"$ref": "#/components/schemas/ManagedPose"}}
+        total: {"type": "integer", "format": "int64"}
+      required: ["items", "total"]
+    PoseEdit:
+      type: "object"
+      description: "Create: name and description required, status defaults to DRAFT, sort to the last place. Edit: absent fields stay; id cannot change. source is PHOTO when keypoints are given, else TEXT."
+      properties:
+        id: {"$ref": "#/components/schemas/PoseId"}
+        name: {"type": "string", "minLength": 1, "maxLength": 12}
+        description: {"type": "string", "minLength": 4, "maxLength": 300}
+        tags: {"type": "array", "maxItems": 4, "items": {"type": "string", "minLength": 1, "maxLength": 6}}
+        viewAngle: {"$ref": "#/components/schemas/PoseViewAngle"}
+        keypoints: {"$ref": "#/components/schemas/PoseKeypoints"}
+        status: {"$ref": "#/components/schemas/PoseStatus"}
+        sort: {"type": "integer"}
+      additionalProperties: false
+    PoseBatch:
+      type: "object"
+      properties:
+        ids: {"type": "array", "items": {"$ref": "#/components/schemas/PoseId"}, "minItems": 1, "maxItems": 200}
+        action: {"type": "string", "enum": ["LIST", "UNLIST", "REMOVE"]}
+      required: ["ids", "action"]
+      additionalProperties: false
+    PoseDraft:
+      type: "object"
+      properties:
+        name: {"type": "string"}
+        description: {"type": "string"}
+        tags: {"type": "array", "items": {"type": "string"}}
+        viewAngle: {"$ref": "#/components/schemas/PoseViewAngle"}
+        keypoints: {"$ref": "#/components/schemas/PoseKeypoints"}
+      required: ["name", "description", "tags", "viewAngle", "keypoints"]
+    PoseHit:
+      type: "object"
+      properties:
+        kind: {"type": "string", "enum": ["SUGGESTIVE", "NUDITY", "MINOR"]}
+        term: {"type": "string", "description": "The matched word; for a vision refusal the reason code"}
+        reason: {"type": "string"}
+      required: ["kind", "term", "reason"]
+    PoseCheckRequest:
+      type: "object"
+      properties:
+        name: {"type": "string"}
+        description: {"type": "string"}
+      required: ["description"]
+      additionalProperties: false
+    PoseCheckResult:
+      type: "object"
+      properties:
+        ok: {"type": "boolean"}
+        hits: {"type": "array", "items": {"$ref": "#/components/schemas/PoseHit"}}
+      required: ["ok", "hits"]
+    PoseCheckSwitches:
+      type: "object"
+      properties:
+        suggestive: {"type": "boolean"}
+        nudity: {"type": "boolean"}
+        minor: {"type": "boolean"}
+      required: ["suggestive", "nudity", "minor"]
+      additionalProperties: false
+    PoseCheckSettings:
+      type: "object"
+      properties:
+        user: {"$ref": "#/components/schemas/PoseCheckSwitches"}
+        admin: {"$ref": "#/components/schemas/PoseCheckSwitches"}
+        revision: {"type": "integer", "format": "int64"}
+        updatedAtMs: {"type": "integer", "format": "int64"}
+      required: ["user", "admin", "revision", "updatedAtMs"]
+    PoseCheckSettingsChange:
+      type: "object"
+      properties:
+        user: {"$ref": "#/components/schemas/PoseCheckSwitches"}
+        admin: {"$ref": "#/components/schemas/PoseCheckSwitches"}
+        revision: {"type": "integer", "format": "int64"}
+      required: ["user", "admin", "revision"]
+      additionalProperties: false
+    PoseTermKind:
+      type: "string"
+      enum: ["SUGGESTIVE", "NUDITY", "MINOR"]
+    PoseSensitiveTerm:
+      type: "object"
+      properties:
+        id: {"type": "string", "format": "uuid"}
+        term: {"type": "string"}
+        kind: {"$ref": "#/components/schemas/PoseTermKind"}
+        reason: {"type": "string"}
+        enabled: {"type": "boolean"}
+        source: {"type": "string", "enum": ["SEED", "ADMIN"], "description": "SEED: copied from ootd/pose-sensitive.json by the migration; ADMIN: added from the management platform"}
+        createdAtMs: {"type": "integer", "format": "int64"}
+        updatedAtMs: {"type": "integer", "format": "int64"}
+      required: ["id", "term", "kind", "reason", "enabled", "source", "createdAtMs", "updatedAtMs"]
+    PoseSensitiveTermPage:
+      type: "object"
+      properties:
+        items: {"type": "array", "maxItems": 1000, "items": {"$ref": "#/components/schemas/PoseSensitiveTerm"}}
+        total: {"type": "integer", "format": "int64"}
+      required: ["items", "total"]
+    PoseSensitiveTermCreate:
+      type: "object"
+      description: "Unique by the folded word plus kind (lower case, no whitespace, full-width folded to half-width). Leading and trailing spaces are trimmed."
+      properties:
+        term: {"type": "string", "minLength": 1, "maxLength": 20}
+        kind: {"$ref": "#/components/schemas/PoseTermKind"}
+        reason: {"type": "string", "minLength": 1, "maxLength": 60}
+      required: ["term", "kind", "reason"]
+      additionalProperties: false
+    PoseSensitiveTermEdit:
+      type: "object"
+      description: "Absent fields stay; the same rules as create."
+      properties:
+        term: {"type": "string", "minLength": 1, "maxLength": 20}
+        kind: {"$ref": "#/components/schemas/PoseTermKind"}
+        reason: {"type": "string", "minLength": 1, "maxLength": 60}
+        enabled: {"type": "boolean"}
+      additionalProperties: false
+    PoseRejectedProblem:
+      allOf:
+        - {"$ref": "#/components/schemas/Problem"}
+        - {"type": "object", "properties": {"hits": {"type": "array", "items": {"$ref": "#/components/schemas/PoseHit"}}}, "required": ["hits"]}
     ShowcaseUpload:
       type: object
       required: [uploadId, hash, width, height]

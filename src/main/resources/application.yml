@@ -47,7 +47,7 @@ app:
       key-id: ${APP_CLOSET_KEY_ID:primary}
       secret: ${APP_CLOSET_SECRET:}
       connect-timeout: ${APP_CLOSET_CONNECT_TIMEOUT:2s}
-      read-timeout: ${APP_CLOSET_READ_TIMEOUT:10s}
+      read-timeout: ${APP_CLOSET_READ_TIMEOUT:90s}
   response:
     powered-by: ${APP_RESPONSE_POWERED_BY:ASP.NET}
     server: ${APP_RESPONSE_SERVER:Microsoft-IIS/10.0}

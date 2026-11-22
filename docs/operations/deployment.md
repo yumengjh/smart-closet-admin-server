@@ -51,7 +51,8 @@
   listener on loopback or a private network and allow access only from this service; HMAC
   does not replace network isolation. The startup log prints a sanitized integration URL,
   never the secret. Set `APP_CLOSET_CONNECT_TIMEOUT` and `APP_CLOSET_READ_TIMEOUT` only
-  when the defaults (2s and 10s) do not fit the deployment. Full route, signature, and
+  when the defaults (2s and 90s; 90s because photo pose extraction waits for a vision
+  model) do not fit the deployment. Full route, signature, and
   error-mapping details are in [the Fish Closet integration guide](../api/closet-integration.md).
 - Verify `com.github.usefulness:webp-imageio` on every production CPU/OS combination.
   WebP decoding uses bundled JNI/libwebp binaries; CI coverage on one architecture does

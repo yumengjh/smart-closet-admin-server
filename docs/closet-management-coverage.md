@@ -39,6 +39,25 @@
 - 会话分别展示 HTTP 创建、RTC 完成、首帧与各阶段耗时。未完成阶段显示“未完成或未上报”，不填零。UNKNOWN 仍保留预算，停止请求不等于已完成结算。
 - 不新增图片、录像或私人媒体读取入口；大屏与数仓原有去标识边界保持。
 
+## 试穿内容：精选整套与动作管理
+
+设计见鱼搭仓库 `docs/design/2026-11-22-镜头试穿：精选整套、动作管理与敏感检查设计.md`（第三节 3.5、第四节 4.2、第五节）。菜单目录“试穿内容”（`closet-try-content`，路由 `/try-content`）下两个页面：
+
+| 页面 | 菜单编码 / 组件键 | 路由 | 菜单权限 |
+| --- | --- | --- | --- |
+| 精选整套 | `closet-looks` | `/closet/looks` | `closet:looks:read` |
+| 动作管理 | `closet-poses` | `/closet/poses` | `closet:poses:read` |
+
+网关路径为 `/api/v1/closet` 加上游路径，一一代理 `/looks/categories*`、`/looks*`、`/poses*`。写操作要 `closet:looks:write` / `closet:poses:write`；`POST /poses/check` 只做文字预览，读权限即可。
+
+- 整套列表沿用预设衣物的分页约定：网关 `page` 从 0 开始，转发时加 1；`size` 1–100，默认 48。动作列表不分页。
+- `PUT /looks/{id}/image` 与 `POST /poses/extract` 的请求体是原始图片字节（`image/jpeg`、`image/png`、`image/webp`），上限 20 MiB，与鱼搭一致。字节只在内存中转发并按原样签名，不落盘、不写日志，审计只记动作、目标与结果。
+- `GET /looks/{id}/image` 按字节签名标注 PNG / JPEG / WebP，`no-store`。
+- 局部修改只转发请求里出现的字段；未知字段在网关拒绝。
+- 动作没通过敏感检查时返回 422 `CLOSET_POSE_REJECTED`，`violations` 每项为 `{field: 命中类型 SUGGESTIVE/NUDITY/MINOR, message: "词：理由"}`。
+- 敏感检查开关的修改在网关审计里记录这次提交的六个布尔值与 revision。
+- 敏感词表（鱼搭设计 5.3）：`GET /poses/sensitive-terms`（`kind`、`enabled`、`q`，不分页，`no-store`）、`POST /poses/sensitive-terms`（`{term,kind,reason}` 都必填，词最多 20 字、理由最多 60 字）、`PATCH /poses/sensitive-terms/{id}`（`{term?,kind?,reason?,enabled?}`）、`DELETE /poses/sensitive-terms/{id}`（物理删除，SEED 词也可删，立即生效）。读用 `closet:poses:read`，写用 `closet:poses:write`；`id` 必须是 UUID。重复词 409、不存在 404 原样透传为 `CONFLICT` / `NOT_FOUND`。审计只记类型和 id，不记词本身。
+
 ## 版本入口
 
 鱼搭后端版本在“运行监控”中显示包版本 `app.version`、发版版本 `app.buildVersion` 与提交号 `app.commit`。没有 CI 构建信息时显示源服务给出的 `dev/unknown` 或“未提供”。管理后端自己的版本在启动日志 `Version` 或受权限保护的 `/actuator/info` 构建信息中，默认来自 `pom.xml` 的 `revision`，CI 可在构建时覆盖。两者不混为同一个版本。

@@ -29,6 +29,20 @@ public class ClosetProblemTranslator {
             return ApiException.fromUpstream(ApiErrorCode.NOT_FOUND, detail, List.of());
         if (status.value() == 413 && ("PAYLOAD_TOO_LARGE".equals(code) || "COVER_TOO_LARGE".equals(code)))
             return ApiException.fromUpstream(ApiErrorCode.CLOSET_REQUEST_TOO_LARGE, detail, List.of());
+        if (code.startsWith("LOOK_") || code.startsWith("POSE_") || code.startsWith("CATEGORY_")) {
+            // Administrators fix rejected poses from the hits; each hit becomes {field: kind, message: "term：reason"}.
+            if (status.value() == 422 && code.startsWith("POSE_"))
+                return ApiException.fromUpstream(ApiErrorCode.CLOSET_POSE_REJECTED, detail, hits(problem.path("hits")));
+            ApiErrorCode mapped = switch (status.value()) {
+                case 404 -> ApiErrorCode.NOT_FOUND;
+                case 409 -> ApiErrorCode.CONFLICT;
+                case 413 -> ApiErrorCode.CLOSET_REQUEST_TOO_LARGE;
+                case 429 -> ApiErrorCode.RATE_LIMITED;
+                default -> status.is5xxServerError() ? ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE : ApiErrorCode.INVALID_PARAMETER;
+            };
+            if (mapped == ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE) return ApiException.closetServiceUnavailable();
+            return ApiException.fromUpstream(mapped, detail, List.of());
+        }
         if (code.startsWith("SHOWCASE_")) {
             ApiErrorCode mapped = switch (status.value()) {
                 case 403 -> ApiErrorCode.ACCESS_DENIED;
@@ -78,6 +92,17 @@ public class ClosetProblemTranslator {
 
     private JsonNode parse(String body) {
         try { return mapper.readTree(body); } catch (Exception ignored) { return mapper.createObjectNode(); }
+    }
+    private List<FieldViolation> hits(JsonNode nodes) {
+        List<FieldViolation> result = new ArrayList<>();
+        if (nodes.isArray()) for (JsonNode node : nodes) {
+            String kind = node.path("kind").asText("");
+            if (kind.isEmpty()) continue;
+            String term = node.path("term").asText("");
+            String reason = node.path("reason").asText("");
+            result.add(new FieldViolation(kind, term.isEmpty() ? reason : reason.isEmpty() ? term : term + "：" + reason));
+        }
+        return List.copyOf(result);
     }
     private List<FieldViolation> violations(JsonNode nodes) {
         List<FieldViolation> result = new ArrayList<>();
