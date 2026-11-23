@@ -25,6 +25,7 @@ public class ClosetNavigationBootstrap implements ApplicationRunner {
         // The business screen is the home page now; drop the duplicate entry seeded earlier.
         menus.findByCode("closet-dashboard").ifPresent(menus::delete);
         seed(directory, "closet-insights", "衣柜洞察", "/closet/insights", "closet-insights", "ri/bar-chart-box-line", 10, "closet:insights:read");
+        seed(directory, "closet-feedback", "用户反馈", "/closet/feedback", "closet-feedback", "ri/feedback-line", 22, "closet:feedback:read");
         seed(directory, "closet-registration", "注册与邀请", "/closet/registration", "closet-registration", "ri/coupon-3-line", 25, "closet:registration:read");
         seed(directory, "closet-account-events", "账号审计", "/closet/account-events", "closet-account-events", "ri/file-list-3-line", 27, "closet:user:read");
         seed(directory, "closet-security-audit", "安全审计", "/closet/security-audit", "closet-security-audit", "ri/shield-check-line", 28, "closet:security:read");

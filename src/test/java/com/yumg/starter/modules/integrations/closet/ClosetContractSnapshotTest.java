@@ -48,6 +48,7 @@ class ClosetContractSnapshotTest {
             "GET /poses", "POST /poses", "PATCH /poses/{id}", "DELETE /poses/{id}", "POST /poses/batch",
             "POST /poses/extract", "POST /poses/check", "GET /poses/check-settings", "PUT /poses/check-settings",
             "GET /poses/sensitive-terms", "POST /poses/sensitive-terms", "PATCH /poses/sensitive-terms/{id}", "DELETE /poses/sensitive-terms/{id}",
+            "GET /feedback", "PATCH /feedback/{id}", "DELETE /feedback/{id}", "GET /feedback/settings", "PUT /feedback/settings",
             "GET /onboarding/style-covers", "GET /onboarding/style-covers/{key}/image",
             "PUT /onboarding/style-covers/{key}/image", "DELETE /onboarding/style-covers/{key}/image",
             "GET /creations/showcases", "POST /creations/showcases", "POST /creations/showcases/uploads",

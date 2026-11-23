@@ -10,6 +10,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -995,6 +998,62 @@ class ClosetIntegrationApiTest {
                 .anySatisfy(e -> { assertThat(e.getTargetId()).isEqualTo("多巴胺"); assertThat(e.getResult()).isEqualTo("SUCCESS"); assertThat(e.getMetadata()).contains("运动"); });
         assertThat(auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_STYLE_TERM_REJECT")))
                 .anySatisfy(e -> { assertThat(e.getResult()).isEqualTo("FAILURE"); assertThat(e.getMetadata()).contains("NOT_FOUND"); });
+    }
+
+    @Test void feedbackPermissionsAndMenuAreSeeded() {
+        for (String permission : java.util.List.of("closet:feedback:read", "closet:feedback:write")) assertThat(permissions.findByCode(permission)).isPresent();
+        assertThat(menus.findByCode("closet-feedback").orElseThrow().getRequiredPermission()).isEqualTo("closet:feedback:read");
+        assertThat(roles.findAllWithPermissions().stream().filter(role -> role.getCode().equals("SUPER_ADMIN"))
+                .findFirst().orElseThrow().getPermissions()).extracting(permission -> permission.getCode())
+                .contains("closet:feedback:read", "closet:feedback:write");
+    }
+
+    @Test void feedbackListIsSignedZeroBasedFilteredAndPermissionProtected() throws Exception {
+        mvc.perform(get("/api/v1/closet/feedback")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/closet/feedback").with(jwtAs("closet:styleterms:read"))).andExpect(status().isForbidden());
+        server.expect(requestTo(org.hamcrest.Matchers.containsString("/api/manage/v1/feedback?")))
+                .andExpect(request -> capture(request))
+                .andRespond(withSuccess("{\"items\":[{\"id\":\"00000000-0000-4000-8000-000000000001\",\"submitter\":\"ACCOUNT\",\"username\":\"alice\",\"status\":\"NEW\"}],"
+                        + "\"total\":21,\"page\":2,\"size\":10,\"counts\":{\"NEW\":5,\"PROCESSING\":1,\"RESOLVED\":12,\"CLOSED\":3}}", MediaType.APPLICATION_JSON));
+        mvc.perform(get("/api/v1/closet/feedback?page=1&size=10&status=NEW&q=%E9%BB%91%E5%B1%8F&submitter=").with(jwtAs("closet:feedback:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.page").value(1)).andExpect(jsonPath("$.data.totalElements").value(21))
+                .andExpect(jsonPath("$.data.totalPages").value(3)).andExpect(jsonPath("$.data.items[0].username").value("alice"))
+                .andExpect(jsonPath("$.data.counts.RESOLVED").value(12));
+        assertThat(recorded.get().rawQuery()).contains("page=2", "size=10", "status=NEW", "q=").doesNotContain("submitter");
+        assertThat(recorded.get().signature()).isNotBlank(); server.verify();
+        mvc.perform(get("/api/v1/closet/feedback?username=alice").with(jwtAs("closet:feedback:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/closet/feedback?size=101").with(jwtAs("closet:feedback:read"))).andExpect(status().isBadRequest());
+    }
+
+    @Test void feedbackEditsDeletesAndSwitchNeedWritePermissionAndAuditWithoutText() throws Exception {
+        String id = "00000000-0000-4000-8000-000000000002";
+        String body = "{\"revision\":3,\"status\":\"RESOLVED\",\"reply\":\"已经修好了\",\"note\":\"内部备注\"}";
+        mvc.perform(patch("/api/v1/closet/feedback/" + id).with(jwtAs("closet:feedback:read")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
+        for (String invalid : java.util.List.of("{}", "{\"revision\":1,\"status\":\"DONE\"}", "{\"revision\":1,\"reply\":\"" + "字".repeat(1001) + "\"}"))
+            mvc.perform(patch("/api/v1/closet/feedback/" + id).with(jwtAs("closet:feedback:write")).contentType(MediaType.APPLICATION_JSON).content(invalid)).andExpect(status().isBadRequest());
+        server.expect(requestTo("http://closet.test/api/manage/v1/feedback/" + id)).andExpect(method(HttpMethod.PATCH))
+                .andExpect(content().json(body, true))
+                .andRespond(withSuccess("{\"id\":\"" + id + "\",\"status\":\"RESOLVED\",\"revision\":4}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://closet.test/api/manage/v1/feedback/" + id)).andExpect(method(HttpMethod.PATCH))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("{\"code\":\"FEEDBACK_REPLY_UNAVAILABLE\",\"detail\":\"这条反馈没有附带账号，没法回复。\"}"));
+        server.expect(requestTo("http://closet.test/api/manage/v1/feedback/" + id)).andExpect(method(HttpMethod.DELETE)).andRespond(withStatus(HttpStatus.NO_CONTENT));
+        server.expect(requestTo("http://closet.test/api/manage/v1/feedback/settings")).andExpect(method(HttpMethod.PUT))
+                .andExpect(content().json("{\"anonymousEnabled\":false,\"revision\":2}", true))
+                .andRespond(withSuccess("{\"anonymousEnabled\":false,\"defaultAnonymousEnabled\":true,\"revision\":3,\"updatedAtMs\":1}", MediaType.APPLICATION_JSON));
+        mvc.perform(patch("/api/v1/closet/feedback/" + id).with(jwtAs("closet:feedback:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.revision").value(4));
+        mvc.perform(patch("/api/v1/closet/feedback/" + id).with(jwtAs("closet:feedback:write")).contentType(MediaType.APPLICATION_JSON).content("{\"revision\":4,\"reply\":\"回复\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.message").value("这条反馈没有附带账号，没法回复。"));
+        mvc.perform(delete("/api/v1/closet/feedback/" + id).with(jwtAs("closet:feedback:write"))).andExpect(status().isNoContent());
+        mvc.perform(put("/api/v1/closet/feedback/settings").with(jwtAs("closet:feedback:write")).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"anonymousEnabled\":false,\"revision\":2}")).andExpect(status().isOk()).andExpect(jsonPath("$.data.anonymousEnabled").value(false));
+        server.verify();
+        var events = auditEvents.findAll().stream().filter(e -> e.getAction().startsWith("CLOSET_FEEDBACK_")).toList();
+        assertThat(events).extracting(AuditEvent::getAction).contains("CLOSET_FEEDBACK_UPDATE", "CLOSET_FEEDBACK_DELETE", "CLOSET_FEEDBACK_SETTINGS");
+        assertThat(events).anySatisfy(e -> { assertThat(e.getResult()).isEqualTo("FAILURE"); assertThat(e.getMetadata()).contains("CONFLICT"); });
+        assertThat(events).allSatisfy(e -> assertThat(String.valueOf(e.getMetadata())).doesNotContain("修好", "内部备注", "回复"));
+        mvc.perform(delete("/api/v1/closet/feedback/not-an-id").with(jwtAs("closet:feedback:write"))).andExpect(status().isNotFound());
     }
 
     @Test void styleTermBatchDecidesEveryItemOnItsOwn() throws Exception {
