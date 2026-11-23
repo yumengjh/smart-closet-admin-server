@@ -49,6 +49,8 @@ public class ClosetPermissionBootstrap implements ApplicationRunner {
             new PermissionSeed("closet:templates:write", "审核鱼搭搭配模板"),
             new PermissionSeed("closet:styleterms:read", "查看鱼搭助手学到的待审核风格词"),
             new PermissionSeed("closet:styleterms:write", "批准或驳回鱼搭助手学到的风格词"),
+            new PermissionSeed("closet:feedback:read", "查看鱼搭用户反馈"),
+            new PermissionSeed("closet:feedback:write", "处理鱼搭用户反馈：改状态、回复、备注、删除，开关未登录反馈"),
             new PermissionSeed("closet:tryon:read", "查看实时试穿设置、策略、账户、用量与会话诊断"),
             new PermissionSeed("closet:tryon:write", "修改试穿设置、用户策略和账户调度，重置启动失败保护"),
             new PermissionSeed("closet:tryon:credentials", "登记运营账户、轮换和停用永久凭证"),

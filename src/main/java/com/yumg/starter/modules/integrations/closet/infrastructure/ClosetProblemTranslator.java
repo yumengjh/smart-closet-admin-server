@@ -29,6 +29,15 @@ public class ClosetProblemTranslator {
             return ApiException.fromUpstream(ApiErrorCode.NOT_FOUND, detail, List.of());
         if (status.value() == 413 && ("PAYLOAD_TOO_LARGE".equals(code) || "COVER_TOO_LARGE".equals(code)))
             return ApiException.fromUpstream(ApiErrorCode.CLOSET_REQUEST_TOO_LARGE, detail, List.of());
+        if (code.startsWith("FEEDBACK_")) {
+            ApiErrorCode mapped = switch (status.value()) {
+                case 404 -> ApiErrorCode.NOT_FOUND;
+                case 409 -> ApiErrorCode.CONFLICT;
+                default -> status.is5xxServerError() ? ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE : ApiErrorCode.INVALID_PARAMETER;
+            };
+            if (mapped == ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE) return ApiException.closetServiceUnavailable();
+            return ApiException.fromUpstream(mapped, detail, List.of());
+        }
         if (code.startsWith("LOOK_") || code.startsWith("POSE_") || code.startsWith("CATEGORY_")) {
             // Administrators fix rejected poses from the hits; each hit becomes {field: kind, message: "term：reason"}.
             if (status.value() == 422 && code.startsWith("POSE_"))

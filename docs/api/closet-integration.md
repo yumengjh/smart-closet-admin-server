@@ -136,3 +136,16 @@ start 使用 UTF-8 secret 计算 HMAC-SHA256，签名采用 base64url 无填充�
 ## 2026-11-11 收费与利润
 
 当前91个上游操作均有网关入口，收费新增22操作与`closet:billing:read/write`权限。总开关、档位与成本、商品订单、兑换码、利润追溯及用户点数权益的路径、边界与验证见[收费接入清单](../integrations/closet/billing.md)。默认关闭与HMAC边界保持不变。
+
+## 用户反馈（2026-11-23，鱼搭 #288）
+
+鱼搭用户在“我的 → 意见反馈”提交的问题与建议，未登录也能提交（鱼搭侧做 CSRF、工作量证明与限流）。本平台只做查看与处理；上游路径 `/api/manage/v1/feedback*`，设计见鱼搭 `docs/design/2026-11-23-用户反馈：匿名提交与后台处理设计.md`。
+
+| 路由（省略 `/api/v1/closet`） | 权限 | 说明 |
+| --- | --- | --- |
+| `GET /feedback` | `closet:feedback:read` | `page`（0 起）、`size`（1–100），筛选 `status`、`category`、`submitter`、`q`、`from`、`to`（空值忽略，其他参数 400）；响应另带 `counts`（四种状态的数量，不受 status 筛选影响）。只有 `submitter=ACCOUNT` 返回 `username` 与 `userKey` |
+| `PATCH /feedback/{id}` | `closet:feedback:write` | `{revision, status?, reply?, note?}`，回复与备注最多 1000 字、空串清空；只有附带账号的反馈能回复，鱼搭会给用户发站内通知 |
+| `DELETE /feedback/{id}` | `closet:feedback:write` | 物理删除 |
+| `GET /feedback/settings`、`PUT /feedback/settings` | read / write | 是否允许未登录提交，PUT `{anonymousEnabled, revision}` |
+
+审计动作 `CLOSET_FEEDBACK_UPDATE`（详情只有改了哪些字段与新状态）、`CLOSET_FEEDBACK_DELETE`、`CLOSET_FEEDBACK_SETTINGS`，不记正文、回复、备注与联系方式；鱼搭同步记 `FEEDBACK_EDIT`、`FEEDBACK_DELETE`、`FEEDBACK_SETTINGS`。菜单 `closet-feedback`（组件键同名，权限 `closet:feedback:read`）。上游 `FEEDBACK_*` 错误：404 转 `NOT_FOUND`，409（版本冲突、不能回复）转 `CONFLICT` 并带鱼搭的中文说明，其余 4xx 转 `INVALID_PARAMETER`。
