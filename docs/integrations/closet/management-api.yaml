@@ -1,11 +1,11 @@
-# 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/management-api.yaml
-# source-commit: d9c530f81cf26b34097022d84c1d1588615cff41
-# source-sha256: 5257f2f52ffd1d3f1a5b9196a0dbe8830185138f2614b2bf6dce8d888b68cff0
+# 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/reference/management-api.yaml
+# source-commit: 8d5796835bf9c98dc735be0e66b32f977db502ef
+# source-sha256: 2e8e0779b7112f70a1e898eb8048a75842d3aa8ac482db294116193b11c8d7b8
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
   title: Smart Closet Management API
-  version: 1.9.0
+  version: 1.9.1
   description: |
     鱼搭中立管理接口。默认关闭（`closet.management.enabled=false`），开启后供任意宿主平台以服务身份调用。
     设计说明见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md`；1.1（运维、KPI、大屏与数据出口、模板审核）见
@@ -14,7 +14,8 @@ info:
     `docs/design/2026-11-10-收费与权益设计.md`；1.8（镜头试穿精选整套、预设动作与动作敏感检查）见
     `docs/design/2026-11-22-镜头试穿：精选整套、动作管理与敏感检查设计.md`；1.8.1 起动作敏感词表在数据库里，可通过
     `/poses/sensitive-terms` 增删改与停用（同一设计 5.3 节）；1.9（用户反馈：列表、状态、回复、备注、删除与匿名开关）见
-    `docs/design/2026-11-23-用户反馈：匿名提交与后台处理设计.md`。
+    `docs/design/2026-11-23-用户反馈：匿名提交与后台处理设计.md`。1.9.1 只修正说明（issue #290）：数仓 `garment_created` 只含已拥有衣物，
+    衣物新增类指标不含种草，注册模式可由 `PUT /registration` 覆盖，`Wardrobe` 补齐 `styles`、`genderFits`。
 
     认证：每个请求都必须携带 HMAC 签名头（见 `components.securitySchemes.closetHmac`）。
     时间字段均为 Unix 毫秒，字段名以 `AtMs` 结尾；日期参数为 `YYYY-MM-DD`，按 Asia/Shanghai 解释，`to` 含当天。
@@ -37,7 +38,7 @@ tags:
     description: 用户反馈（附带账号的才返回用户名与 userKey；不进大屏与数仓）
   - name: users
   - name: registration
-    description: 注册模式（只读，来自部署配置）与邀请码
+    description: 注册模式（默认取部署配置 `CLOSET_REGISTRATION`，可由 `PUT /registration` 覆盖或恢复默认）与邀请码
   - name: insights
   - name: ops
     description: 运维状态、后台任务、管理操作日志（只读）
@@ -3454,7 +3455,7 @@ components:
           properties:
             active: { type: integer }
             draft: { type: integer }
-            createdInRange: { type: integer }
+            createdInRange: { type: integer, description: '区间内新增衣物，含整理中与回收站，不含种草（WANTED）' }
             adoptedInRange: { type: integer }
             adoptionRate: { type: [number, 'null'], description: '区间内创建且当前为 ACTIVE 的比例；无创建时为 null' }
         outfits:
@@ -3489,7 +3490,7 @@ components:
         count: { type: integer }
     Wardrobe:
       type: object
-      required: [scope, totalActive, categories, colors, seasons, unknownCategoryCount, unknownSeasonCount,
+      required: [scope, totalActive, categories, colors, seasons, styles, genderFits, unknownCategoryCount, unknownSeasonCount,
                  favoriteCount, wearingConfirmedCount, mappingVersion]
       properties:
         scope: { $ref: '#/components/schemas/Scope' }
@@ -3502,8 +3503,8 @@ components:
         favoriteCount: { type: integer }
         wearingConfirmedCount: { type: integer }
         mappingVersion: { type: string }
-        styles: { type: array, items: { $ref: '#/components/schemas/KeyCount' }, description: '风格标签前 12 项（1.2）' }
-        genderFits: { type: array, items: { $ref: '#/components/schemas/KeyCount' }, description: '男款 / 女款 / 中性（1.2）' }
+        styles: { type: array, items: { $ref: '#/components/schemas/KeyCount' }, description: '已入柜衣物的风格标签（styles 字段，一件多个风格各计一次）按件数前 12 项，其余并入“其他”（1.2）' }
+        genderFits: { type: array, items: { $ref: '#/components/schemas/KeyCount' }, description: '已入柜衣物的适穿性别（genderFit 字段：女款 / 男款 / 中性）按件数前 5 项，其余并入“其他”；未填写的不计（1.2）' }
     GarmentRef:
       type: object
       required: [garmentId, owner, family, createdAtMs]
@@ -3539,6 +3540,7 @@ components:
               usedInOutfits: { type: integer }
     TrendMetric:
       type: string
+      description: garments_created 为新增衣物（含整理中与回收站，不含种草 WANTED），garments_adopted 为其中当前已入柜（ACTIVE）的
       enum: [garments_created, garments_adopted, outfits_created, quick_intakes, image_units, agent_messages, users_created,
              active_users, recommendations_shown, recommendation_likes, recommendation_dislikes, wear_logs, model_calls, model_tokens, ootd_samples]
     Trends:
@@ -3688,7 +3690,7 @@ components:
             active30d: { type: integer }
             onlineNow: { type: integer, description: '近 5 分钟有请求的登录用户' }
             garmentsActive: { type: integer }
-            garmentsToday: { type: integer }
+            garmentsToday: { type: integer, description: '今日新增衣物，口径同 garments_created（不含种草）' }
             outfitsTotal: { type: integer }
             outfitsToday: { type: integer }
             recommendationsToday: { type: integer }
@@ -3729,7 +3731,7 @@ components:
             properties:
               atMs: { type: integer }
               kind: { type: string, enum: [GARMENT_ADDED, OUTFIT_SAVED, WEAR_LOGGED, RECOMMENDATION_LIKED, USER_REGISTERED] }
-              label: { type: [string, 'null'], description: 'GARMENT_ADDED 为衣物大类键；USER_REGISTERED 为注册来源' }
+              label: { type: [string, 'null'], description: 'GARMENT_ADDED 为衣物大类键（不含种草）；USER_REGISTERED 为注册来源' }
     DailyExport:
       type: object
       required: [from, to, columns, rows]
@@ -3763,7 +3765,7 @@ components:
               userKey: { type: string, description: 'HMAC-SHA256(盐, 用户名) 前 16 位十六进制；换盐即变' }
               attrs:
                 type: object
-                description: 'billing_order 仅含 orderId、status；billing_ledger 仅含 kind、points（带符号的余额变动），不含备注、actor、引用、渠道单号或商品名称'
+                description: 'garment_created 只含已拥有衣物（ACTIVE），不含种草、整理中与回收站，status 恒为 ACTIVE，另有 family；billing_order 仅含 orderId、status；billing_ledger 仅含 kind、points（带符号的余额变动），不含备注、actor、引用、渠道单号或商品名称'
                 additionalProperties: true
         nextCursor: { type: string }
         hasMore: { type: boolean }
