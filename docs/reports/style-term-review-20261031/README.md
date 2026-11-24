@@ -21,4 +21,4 @@
 
 ## 未做
 
-`docs/integrations/closet/management-api.yaml` 是历史快照，与鱼搭主仓 `docs/management-api.yaml` 本来就不一致（缺 token-budget 等），本次未同步；以鱼搭主仓为准。
+`docs/integrations/closet/management-api.yaml` 是历史快照，与鱼搭主仓 `docs/reference/management-api.yaml` 本来就不一致（缺 token-budget 等），本次未同步；以鱼搭主仓为准。

@@ -2,7 +2,7 @@
 
 ## 结果与范围
 
-鱼搭当前 feat/image-search 已包含 management-ops-kpi、全身穿搭、模型内存和图像检索相关更新。以当前 docs/management-api.yaml 和 Java Controller 为准，共 26 个 HTTP 操作全部接入 smart-closet-admin-server；前端为 smart-closet-admin。鱼搭业务源码无改动，原有归档文件保留，未提交或推送。
+鱼搭当前 feat/image-search 已包含 management-ops-kpi、全身穿搭、模型内存和图像检索相关更新。以当前 docs/reference/management-api.yaml 和 Java Controller 为准，共 26 个 HTTP 操作全部接入 smart-closet-admin-server；前端为 smart-closet-admin。鱼搭业务源码无改动，原有归档文件保留，未提交或推送。
 
 保留已有 16 个账号/洞察操作，新增 10 个操作：推荐 KPI、AI 用量、运维状态、任务、操作日志、大屏快照、按天宽表、增量事件、模板列表和审核。CSV 为按天出口的附加格式。默认仍关闭、使用服务端 HMAC，权限与审计由管理平台负责。内部会话型原图审核、处理器改配置与取消任务不属于中立契约，遵守现有只读运维和媒体边界。
 
