@@ -9,7 +9,7 @@
 | 相关仓库 | 内容 |
 |---|---|
 | [smart-closet-admin](https://github.com/yumengjh/smart-closet-admin) | 管理平台前端（Vue 3 + Element Plus） |
-| [smart-closet](https://github.com/yumengjh/smart-closet) · [smart-closet-server-review](https://github.com/yumengjh/smart-closet-server-review) | 鱼搭用户端、后端评审裁剪副本（管理接口契约 `docs/management-api.yaml`） |
+| [smart-closet](https://github.com/yumengjh/smart-closet) · [smart-closet-server-review](https://github.com/yumengjh/smart-closet-server-review) | 鱼搭用户端、后端评审裁剪副本（管理接口契约 `docs/reference/management-api.yaml`） |
 | [smart-closet-mp](https://github.com/yumengjh/smart-closet-mp) · [yuda-website](https://github.com/yumengjh/yuda-website) · [smart-closet-promo](https://github.com/yumengjh/smart-closet-promo) | 小程序、官网、演示视频 |
 
 本项目由 Spring Boot 后端启动模板演进而来，下面保留模板的工程说明。

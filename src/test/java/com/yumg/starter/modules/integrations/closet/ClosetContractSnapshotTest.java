@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Guards docs/integrations/closet/management-api.yaml against drifting from the Fish Closet contract
- * (smart-closet-server docs/management-api.yaml). The snapshot is a 4-line provenance header plus the
+ * (smart-closet-server docs/reference/management-api.yaml). The snapshot is a 4-line provenance header plus the
  * source verbatim, written by scripts/sync-closet-contract.sh.
  *
  * <ul>
@@ -148,7 +148,7 @@ class ClosetContractSnapshotTest {
 
     @Test void snapshotEqualsSourceWhenAvailable() throws Exception {
         String configured = System.getProperty("CLOSET_CONTRACT_SOURCE", System.getenv("CLOSET_CONTRACT_SOURCE"));
-        Path source = configured != null ? Path.of(configured) : Path.of("../smart-closet-server/docs/management-api.yaml");
+        Path source = configured != null ? Path.of(configured) : Path.of("../smart-closet-server/docs/reference/management-api.yaml");
         assumeTrue(Files.isRegularFile(source), "closet contract source not available: " + source);
         byte[] expected = Files.readAllBytes(source);
         assertThat(Arrays.equals(body(Files.readAllBytes(SNAPSHOT)), expected))

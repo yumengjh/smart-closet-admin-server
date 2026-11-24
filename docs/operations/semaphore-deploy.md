@@ -56,6 +56,6 @@ or tag pipeline. It is safe to repeat and, on the host:
 4. checks from inside the admin container that `/api/manage/v1/users` answers `401` to an unsigned request.
 
 The management API stays on the closet's loopback port and the shared compose network. If the public reverse proxy of the
-closet forwards `/api/` as a whole, also block `/api/manage/` there (see `docs/MANAGEMENT_API.md` of smart-closet-server):
+closet forwards `/api/` as a whole, also block `/api/manage/` there (see `docs/reference/management-api.md` of smart-closet-server):
 the HMAC signature proves possession of the key, it does not replace network isolation.
 Full route, signature and error-mapping details: [the Fish Closet integration guide](../api/closet-integration.md).
