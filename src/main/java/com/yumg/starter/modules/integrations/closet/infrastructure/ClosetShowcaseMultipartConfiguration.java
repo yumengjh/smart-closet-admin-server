@@ -12,6 +12,7 @@ import org.springframework.web.multipart.support.StandardServletMultipartResolve
 public class ClosetShowcaseMultipartConfiguration {
     public static final String UPLOAD_PATH = "/api/v1/closet/creations/showcases/uploads";
     public static final String TRIAL_PERSON_PATH = "/api/v1/closet/creations/trial-persons";
+    public static final String SAMPLE_PATH = "/api/v1/closet/samples";
     @Bean(name = "multipartResolver")
     StandardServletMultipartResolver multipartResolver() {
         return new StandardServletMultipartResolver() {
@@ -21,5 +22,5 @@ public class ClosetShowcaseMultipartConfiguration {
             }
         };
         }
-    private static boolean rawUpload(String path) { return UPLOAD_PATH.equals(path) || TRIAL_PERSON_PATH.equals(path); }
+    private static boolean rawUpload(String path) { return UPLOAD_PATH.equals(path) || TRIAL_PERSON_PATH.equals(path) || SAMPLE_PATH.equals(path); }
 }

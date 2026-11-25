@@ -890,11 +890,13 @@ Actuator health 保持公开以服务容器探针；其余 Actuator 路径统一
 | `GET /account-events` | `closet:user:read` |
 | `GET /security-audit`、`GET /security-audit/integrity` | `closet:security:read` |
 | `GET /insights/{overview,wardrobe,usage,trends,recommendations,ai}` | `closet:insights:read` |
-| `GET /ops/status`、`GET /ops/assistant-token-budget`、`GET /ops/tasks`、`GET /ops/operation-log` | `closet:ops:read` |
+| `GET /ops/status`、`GET /ops/mail`、`GET /ops/monitor`、`GET /ops/assistant-token-budget`、`GET /ops/tasks`、`GET /ops/operation-log` | `closet:ops:read` |
 | `GET /dashboard/snapshot` | `closet:dashboard:read` |
 | `GET /exports/daily`（JSON/CSV）、`GET /exports/events` | `closet:exports:read` |
 | `GET /templates` | `closet:templates:read` |
 | `PATCH /templates/{id}` | `closet:templates:write` |
+| `GET /samples`、`GET /samples/stats`、`GET /samples/{id}`、`GET /samples/{id}/image` | `closet:samples:read` |
+| `POST /samples`（multipart）、`PUT /samples/{id}`、`POST /samples/{id}/extract`、`POST /samples/{id}/review`、`POST /samples/{id}/template-draft`、`DELETE /samples/{id}` | `closet:samples:write` |
 | `GET /style-terms/pending` | `closet:styleterms:read` |
 | `POST /style-terms/pending/approve`、`POST /style-terms/pending/reject`、`POST /style-terms/pending/batch` | `closet:styleterms:write` |
 
