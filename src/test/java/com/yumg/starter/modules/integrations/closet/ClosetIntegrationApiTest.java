@@ -646,7 +646,7 @@ class ClosetIntegrationApiTest {
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({
             "insights/recommendations,closet:insights:read", "insights/ai,closet:insights:read",
-            "ops/status,closet:ops:read", "dashboard/snapshot,closet:dashboard:read",
+            "ops/status,closet:ops:read", "ops/mail,closet:ops:read", "ops/monitor,closet:ops:read", "dashboard/snapshot,closet:dashboard:read",
             "exports/daily,closet:exports:read", "exports/events,closet:exports:read", "templates,closet:templates:read"})
     void phaseTwoReadsAreSignedAndPermissionProtected(String path, String permission) throws Exception {
         mvc.perform(get("/api/v1/closet/" + path)).andExpect(status().isUnauthorized());
@@ -656,6 +656,18 @@ class ClosetIntegrationApiTest {
         mvc.perform(get("/api/v1/closet/" + path).with(jwtAs(permission)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.marker").value(1));
         assertThat(recorded.get().signature()).isNotBlank(); server.verify();
+    }
+
+    @Test void mailUsageForwardsDaysAndRejectsOutOfRangeOrExtraQuery() throws Exception {
+        server.expect(requestTo("http://closet.test/api/manage/v1/ops/mail?days=14"))
+                .andRespond(withSuccess("{\"enabled\":false}", MediaType.APPLICATION_JSON));
+        mvc.perform(get("/api/v1/closet/ops/mail?days=14").with(jwtAs("closet:ops:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.enabled").value(false));
+        server.verify();
+        for (String query : java.util.List.of("?days=0", "?days=31", "?days=x", "?days=1&days=2", "?x=1"))
+            mvc.perform(get("/api/v1/closet/ops/mail" + query).with(jwtAs("closet:ops:read"))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/closet/ops/monitor?x=1").with(jwtAs("closet:ops:read"))).andExpect(status().isBadRequest());
+        server.verify();
     }
 
     @Test void taskPagingPreservesRepeatedFiltersAndOperationLogPagingIsZeroBased() throws Exception {

@@ -29,6 +29,10 @@ public class ClosetManagementController {
 
     @GetMapping("/ops/status") @PreAuthorize("hasAuthority('closet:ops:read')")
     public JsonNode status(@RequestParam MultiValueMap<String, String> query) { return management.get("/ops/status", query); }
+    @GetMapping("/ops/mail") @PreAuthorize("hasAuthority('closet:ops:read')")
+    public JsonNode mail(@RequestParam MultiValueMap<String, String> query) { return management.get("/ops/mail", query); }
+    @GetMapping("/ops/monitor") @PreAuthorize("hasAuthority('closet:ops:read')")
+    public JsonNode monitor(@RequestParam MultiValueMap<String, String> query) { return management.get("/ops/monitor", query); }
     @GetMapping("/ops/assistant-token-budget") @PreAuthorize("hasAuthority('closet:ops:read')")
     public JsonNode assistantTokenBudget(@RequestParam MultiValueMap<String, String> query) { return management.get("/ops/assistant-token-budget", query); }
     @GetMapping("/security-audit") @PreAuthorize("hasAuthority('closet:security:read')")

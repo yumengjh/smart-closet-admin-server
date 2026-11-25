@@ -25,6 +25,8 @@ public class ClosetManagementService {
             Map.entry("/account-events", Set.of("from", "to", "username", "action", "actor", "page", "size")),
             Map.entry("/ops/status", Set.of()),
             Map.entry("/ops/assistant-token-budget", Set.of()),
+            Map.entry("/ops/mail", Set.of("days")),
+            Map.entry("/ops/monitor", Set.of()),
             Map.entry("/security-audit", Set.of("from", "to", "username", "category", "type", "page", "size")),
             Map.entry("/security-audit/integrity", Set.of()),
             Map.entry("/ops/tasks", Set.of("status", "kind", "page", "size")),
@@ -99,6 +101,7 @@ public class ClosetManagementService {
         Set<String> allowed = QUERIES.get(path);
         if (allowed == null) throw ApiException.notFound();
         if (query.keySet().stream().anyMatch(key -> !allowed.contains(key))) throw ApiException.invalidParameter();
+        if (path.equals("/ops/mail")) integer(query, "days", 7, 1, 30);
         if (path.equals("/invites") || path.equals("/account-events") || path.equals("/security-audit")) {
             if (query.values().stream().anyMatch(values -> values.size() != 1)) throw ApiException.invalidParameter();
             if (path.equals("/invites")) {

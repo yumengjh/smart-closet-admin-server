@@ -52,6 +52,17 @@ public class ClosetProblemTranslator {
             if (mapped == ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE) return ApiException.closetServiceUnavailable();
             return ApiException.fromUpstream(mapped, detail, List.of());
         }
+        if (code.startsWith("SAMPLE_") || code.startsWith("OOTD_SAMPLE_")) {
+            ApiErrorCode mapped = switch (status.value()) {
+                case 404 -> ApiErrorCode.NOT_FOUND;
+                case 409 -> ApiErrorCode.CONFLICT;
+                case 413 -> ApiErrorCode.CLOSET_REQUEST_TOO_LARGE;
+                case 429 -> ApiErrorCode.RATE_LIMITED;
+                default -> status.is5xxServerError() ? ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE : ApiErrorCode.INVALID_PARAMETER;
+            };
+            if (mapped == ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE) return ApiException.closetServiceUnavailable();
+            return ApiException.fromUpstream(mapped, detail, List.of());
+        }
         if (code.startsWith("SHOWCASE_")) {
             ApiErrorCode mapped = switch (status.value()) {
                 case 403 -> ApiErrorCode.ACCESS_DENIED;

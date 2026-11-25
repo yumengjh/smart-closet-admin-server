@@ -1,11 +1,11 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/reference/management-api.yaml
-# source-commit: 8d5796835bf9c98dc735be0e66b32f977db502ef
-# source-sha256: 2e8e0779b7112f70a1e898eb8048a75842d3aa8ac482db294116193b11c8d7b8
+# source-commit: 59ab2ae5af885786826bdf149b908c2a4f5115d1
+# source-sha256: 935b304853dc92fbaba6f362fee5b63e65ab2afabd6a9fa6c1f8769a38c3615c
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
   title: Smart Closet Management API
-  version: 1.9.1
+  version: 1.11.0
   description: |
     鱼搭中立管理接口。默认关闭（`closet.management.enabled=false`），开启后供任意宿主平台以服务身份调用。
     设计说明见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md`；1.1（运维、KPI、大屏与数据出口、模板审核）见
@@ -15,7 +15,9 @@ info:
     `docs/design/2026-11-22-镜头试穿：精选整套、动作管理与敏感检查设计.md`；1.8.1 起动作敏感词表在数据库里，可通过
     `/poses/sensitive-terms` 增删改与停用（同一设计 5.3 节）；1.9（用户反馈：列表、状态、回复、备注、删除与匿名开关）见
     `docs/design/2026-11-23-用户反馈：匿名提交与后台处理设计.md`。1.9.1 只修正说明（issue #290）：数仓 `garment_created` 只含已拥有衣物，
-    衣物新增类指标不含种草，注册模式可由 `PUT /registration` 覆盖，`Wardrobe` 补齐 `styles`、`genderFits`。
+    衣物新增类指标不含种草，注册模式可由 `PUT /registration` 覆盖，`Wardrobe` 补齐 `styles`、`genderFits`。1.10（issue #296）用户列表与详情
+    增加 `emailBound` 与打码的 `emailMasked`，不返回邮箱全文，见 `docs/design/2026-11-24-邮件模块：邮箱注册、找回密码与监控告警设计.md`。1.11 补齐运维与内容：`/ops/status` 增加 `database`，
+    新增只读 `/ops/mail`、`/ops/monitor`，以及整套穿搭样本 `/samples`（与鱼搭内管理页共用存储，见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md` 末尾 1.11 一节）。
 
     认证：每个请求都必须携带 HMAC 签名头（见 `components.securitySchemes.closetHmac`）。
     时间字段均为 Unix 毫秒，字段名以 `AtMs` 结尾；日期参数为 `YYYY-MM-DD`，按 Asia/Shanghai 解释，`to` 含当天。
@@ -48,6 +50,8 @@ tags:
     description: 数仓出口：按天宽表与去标识明细事件
   - name: templates
     description: 搭配模板审核
+  - name: samples
+    description: 整套穿搭样本（原图审核完成即删除；不进大屏与数仓）
   - name: billing
     description: 收费：运行时开关、档位与点数价格、上游成本、利润报表、兑换码批次、用户权益与点数。用户只以 userKey 出现；不提供退款、重试或支付密钥接口
   - name: style-terms
@@ -1393,6 +1397,37 @@ paths:
               schema: { $ref: '#/components/schemas/OperationLogPage' }
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Problem' }
+  /ops/mail:
+    get:
+      tags: [ops]
+      operationId: opsMail
+      description: |
+        邮件模块用量与结果统计（只读）。邮件模块关闭时也返回 200，`enabled=false`，其余计数照常（表里可能有历史行）。
+        日期按 Asia/Shanghai，与每日额度同口径。**不返回**收件人摘要、地址、主机、端口、用户名、授权码、主题、正文和验证码。
+      parameters:
+        - { name: days, in: query, description: '统计最近几天（含今天），默认 7', schema: { type: integer, minimum: 1, maximum: 30, default: 7 } }
+      responses:
+        '200':
+          description: 邮件统计
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OpsMail' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /ops/monitor:
+    get:
+      tags: [ops]
+      operationId: opsMonitor
+      description: |
+        服务监控各规则的当前状态（只读）。监控未启用时返回 `enabled=false` 与空的 `rules`。只给是否配置了告警收件人，**不返回**地址；
+        读数与阈值只是数字描述，不含用户名、userKey 与用户内容。不提供改规则、静音或重发的写接口。
+      responses:
+        '200':
+          description: 监控状态
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OpsMonitor' }
+        '401': { $ref: '#/components/responses/Problem' }
   /dashboard/snapshot:
     get:
       tags: [dashboard]
@@ -1490,6 +1525,199 @@ paths:
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
+  /samples:
+    get:
+      tags: [samples]
+      operationId: listSamples
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [PENDING, EXTRACTED, FAILED, APPROVED, REJECTED] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 200 } }
+      responses:
+        '200':
+          description: 样本列表（新的在前）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Sample' } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+    post:
+      tags: [samples]
+      operationId: uploadSample
+      description: |
+        上传整套穿搭样本并立即提取一次（调用识图模型）。图片只保留重新编码后的副本，重复图片返回 409；疑似未成年等情形自动拒收并立即删除原图。
+        写操作记管理操作日志，操作人记为 manage:{keyId}:{X-Operator}；日志不含图片与提取正文。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image: { type: string, format: binary, description: 'JPEG 或 PNG，最大 10 MB' }
+                sourceUrl: { type: string, maxLength: 1000, description: 'http(s) 来源链接' }
+                license: { type: string, enum: [OWN, PERMITTED, OPEN, RESEARCH, UNKNOWN], description: '默认 UNKNOWN' }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '201':
+          description: 已创建的样本
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sample' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+  /samples/stats:
+    get:
+      tags: [samples]
+      operationId: sampleStats
+      description: 只统计已通过的样本；结构与鱼搭内管理页一致（各位置占比、常见搭配、风格、季节、场合、姿势与取景分布等）。
+      parameters:
+        - { name: presentation, in: query, schema: { type: string, pattern: '^[A-Za-z_]{1,24}$' } }
+      responses:
+        '200':
+          description: 样本统计
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /samples/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9-]{1,64}$' } }
+    get:
+      tags: [samples]
+      operationId: getSample
+      responses:
+        '200':
+          description: 样本
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sample' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    put:
+      tags: [samples]
+      operationId: editSample
+      description: 修改待审核（EXTRACTED）样本的提取结果；服务端按 ootd-v1 结构规范化，不含人脸、身份、年龄、身材。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true, description: '编辑后的提取结果' }
+      responses:
+        '200':
+          description: 更新后的样本
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sample' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [samples]
+      operationId: deleteSample
+      responses:
+        '204': { description: No Content }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /samples/{id}/image:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9-]{1,64}$' } }
+    get:
+      tags: [samples]
+      operationId: getSampleImage
+      description: '样本原图（PNG，`Cache-Control: private, no-store`）。审核完成或自动拒收后原图已删除，返回 404。'
+      responses:
+        '200':
+          description: 图片
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /samples/{id}/extract:
+    post:
+      tags: [samples]
+      operationId: extractSample
+      description: 对待提取或提取失败的样本重新调用一次识图模型。
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9-]{1,64}$' } }
+      responses:
+        '200':
+          description: 提取后的样本
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sample' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /samples/{id}/review:
+    post:
+      tags: [samples]
+      operationId: reviewSample
+      description: 通过或拒绝；无论结果，原图立即删除。通过要求样本可用且物品清单非空。
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9-]{1,64}$' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [APPROVED, REJECTED] }
+      responses:
+        '200':
+          description: 审核后的样本
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sample' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /samples/{id}/template-draft:
+    post:
+      tags: [samples]
+      operationId: sampleTemplateDraft
+      description: 由已通过且许可已知的样本生成搭配模板草稿（待审核，须经 `/templates` 审核后才生效）。
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9-]{1,64}$' } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                kind: { type: string, enum: [CLASSIC, TREND] }
+                text: { type: string, maxLength: 60 }
+      responses:
+        '200':
+          description: 草稿模板编号与定义
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [templateId, definition]
+                properties:
+                  templateId: { type: string }
+                  definition: { type: object, additionalProperties: true }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
   /style-terms/pending:
     get:
       tags: [style-terms]
@@ -3243,6 +3471,8 @@ components:
         registeredVia: { type: string, enum: [ADMIN, INVITE, OPEN], description: '账号来源' }
         lastLoginAtMs: { type: [integer, 'null'], format: int64, description: '最近一次密码登录或注册时间' }
         deactivatedAtMs: { type: [integer, 'null'], format: int64, description: '用户自助注销时间；重新启用后清空' }
+        emailBound: { type: boolean, description: '是否绑定了验证过的邮箱（#296）；不返回邮箱全文' }
+        emailMasked: { type: [string, 'null'], description: '打码邮箱，如 y***@qq.com；未绑定为 null' }
     UserPage:
       type: object
       required: [items, total, page, size]
@@ -3280,6 +3510,8 @@ components:
         registeredVia: { type: string, enum: [ADMIN, INVITE, OPEN], description: '账号来源' }
         lastLoginAtMs: { type: [integer, 'null'], format: int64, description: '最近一次密码登录或注册时间' }
         deactivatedAtMs: { type: [integer, 'null'], format: int64, description: '用户自助注销时间；重新启用后清空' }
+        emailBound: { type: boolean, description: '是否绑定了验证过的邮箱（#296）；不返回邮箱全文' }
+        emailMasked: { type: [string, 'null'], description: '打码邮箱，如 y***@qq.com；未绑定为 null' }
     CreateUserRequest:
       type: object
       additionalProperties: false
@@ -3627,7 +3859,87 @@ components:
         queue: { type: object, properties: { byStatus: { type: object }, byKind: { type: array, items: { type: object } }, oldestQueuedAgeMs: { type: [integer, 'null'] }, failed24h: { type: integer } } }
         providers: { type: object }
         sessions: { type: object, properties: { active: { type: integer }, onlineLast5Min: { type: integer } } }
+        database:
+          type: object
+          description: 数据库类型与迁移版本（1.11）；不含连接串、主机与用户名
+          properties:
+            vendor: { type: string, enum: [H2, POSTGRESQL] }
+            schemaVersion: { type: [string, 'null'], description: 'Flyway 当前版本，取不到为 null' }
         generatedAtMs: { type: integer }
+    OpsMail:
+      type: object
+      required: [enabled, available, dailyLimit, ordinaryLimit, usedToday, logRetentionDays, days, byDay, errors]
+      description: 不含收件人摘要、地址、主机、端口、用户名、授权码、主题、正文与验证码
+      properties:
+        enabled: { type: boolean, description: 'closet.mail.enabled' }
+        available: { type: boolean, description: '配置齐全、可以发信' }
+        dailyLimit: { type: integer }
+        ordinaryLimit: { type: integer, description: '非告警邮件的每日上限（总量减告警预留）' }
+        usedToday: { type: integer }
+        logRetentionDays: { type: integer }
+        days: { type: integer }
+        byDay:
+          type: array
+          description: 按 date、purpose、status 排序
+          items:
+            type: object
+            required: [date, purpose, status, count]
+            properties:
+              date: { type: string, format: date }
+              purpose: { type: string, enum: [REGISTER_CODE, REGISTER_EXISTS, BIND_CODE, RESET_CODE, SECURITY_NOTICE, ALERT, TEST] }
+              status: { type: string, enum: [PENDING, SENT, FAILED, DROPPED_LIMIT] }
+              count: { type: integer }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [errorKind, count]
+            properties:
+              errorKind: { type: string, enum: [AUTH, CONNECT, REJECTED, TIMEOUT, OTHER] }
+              count: { type: integer }
+    OpsMonitor:
+      type: object
+      required: [enabled, alertConfigured, intervalSeconds, rules]
+      properties:
+        enabled: { type: boolean, description: 'closet.monitor.enabled；未启用时 rules 为空' }
+        alertConfigured: { type: boolean, description: '是否配置了告警收件人（不返回地址）' }
+        intervalSeconds: { type: integer }
+        rules:
+          type: array
+          items:
+            type: object
+            required: [rule, firing]
+            properties:
+              rule: { type: string, enum: [memory, heap, disk, database, agent, model-calls, jobs, errors] }
+              firing: { type: boolean }
+              sinceMs: { type: [integer, 'null'], description: '开始告警的时间，未告警为 null' }
+              lastCheckedMs: { type: [integer, 'null'], description: '最近一次检查，未检查过为 null' }
+              reading: { type: [string, 'null'], description: '最近读数的文字描述；被跳过的规则为 null' }
+              threshold: { type: [string, 'null'], description: '阈值的文字描述' }
+    Sample:
+      type: object
+      description: 整套穿搭样本。提取结果不含人脸、身份、年龄、身材；原图审核完成即删除（hasImage=false）。
+      required: [id, status, license, hasImage, createdAtMs, updatedAtMs]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [PENDING, EXTRACTED, FAILED, APPROVED, REJECTED] }
+        sourceUrl: { type: [string, 'null'] }
+        license: { type: string, enum: [OWN, PERMITTED, OPEN, RESEARCH, UNKNOWN] }
+        note: { type: [string, 'null'] }
+        hasImage: { type: boolean }
+        extractorVersion: { type: [string, 'null'] }
+        model: { type: [string, 'null'] }
+        extraction: { type: [object, 'null'], additionalProperties: true, description: '模型提取结果' }
+        reviewed: { type: [object, 'null'], additionalProperties: true, description: '管理员编辑或审核后的结果，优先于 extraction' }
+        error: { type: [string, 'null'] }
+        rejectReason: { type: [string, 'null'] }
+        presentation: { type: [string, 'null'] }
+        createdBy: { type: string, description: '上传的管理员，manage:{keyId}:{operator} 或鱼搭管理员账号' }
+        createdAtMs: { type: integer }
+        updatedAtMs: { type: integer }
+        reviewedBy: { type: [string, 'null'] }
+        reviewedAtMs: { type: [integer, 'null'] }
+        templateId: { type: [string, 'null'] }
     TaskPage:
       type: object
       required: [items, total, page, size]

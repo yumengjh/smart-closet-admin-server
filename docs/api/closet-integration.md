@@ -71,6 +71,10 @@ start 使用 UTF-8 secret 计算 HMAC-SHA256，签名采用 base64url 无填充�
 | `GET /exports/daily?format=json` | `closet:exports:read` | 按天宽表封装在 `data` 中，支持 from/to。 |
 | `GET /exports/daily?format=csv` | `closet:exports:read` | 保持认证，直接返回 UTF-8 CSV 与 Content-Disposition，不加 JSON 信封。 |
 | `GET /exports/events` | `closet:exports:read` | cursor/since/limit/types，types 可重复，游标不改写。 |
+| `GET /ops/mail` | `closet:ops:read` | 邮件模块开关、今日用量、近 days（1–30，默认 7）天分用途与状态计数、错误分类计数；不含收件人、地址、主题与正文。 |
+| `GET /ops/monitor` | `closet:ops:read` | 监控规则状态、读数、阈值与最近检查时间；只读，不含告警地址。 |
+| `GET /samples`、`GET /samples/stats`、`GET /samples/{id}`、`GET /samples/{id}/image` | `closet:samples:read` | 整套穿搭样本列表（status、limit 1–500）、统计、详情与原图（`no-store`，审核完成后原图已删除则 404）。 |
+| `POST /samples`（multipart）、`PUT /samples/{id}`、`POST /samples/{id}/extract`、`POST /samples/{id}/review`、`POST /samples/{id}/template-draft`、`DELETE /samples/{id}` | `closet:samples:write` | 上传、编辑提取结果、模型提取、审核（APPROVED/REJECTED）、生成模板草稿、删除；上传按签名原始字节转发，审计只记动作、样本 id 与结果，不记图片和提取正文。 |
 | `GET /templates` | `closet:templates:read` | 查看内置和样本模板。 |
 | `PATCH /templates/{id}` | `closet:templates:write` | reviewStatus/enabled/bonus 三选至少一项，bonus 0–5，部分更新省略 null；成功/失败记录 `CLOSET_TEMPLATE_REVIEW`，鱼搭同步记录 TEMPLATE_REVIEW。 |
 
@@ -78,7 +82,7 @@ start 使用 UTF-8 secret 计算 HMAC-SHA256，签名采用 base64url 无填充�
 
 大屏与数仓出口保持鱼搭的隐私契约，只给汇总或 userKey；AI topUsers、任务所属用户仅在具备对应洞察/运维权限的管理页面展示。大屏不会复用这类明细接口。网关只允许已知路径和参数，不提供任意 URL 代理。
 
-前端新增组件键为 `closet-ops`、`closet-exports`、`closet-templates`，和原有两个键一起注册到路由及菜单编辑器。大屏按 refreshAfterMs 刷新，最少 30 秒；页面隐藏/退出时暂停，读取失败后由管理员点击重试。模板审核查看与写入权限分离。
+前端新增组件键为 `closet-ops`、`closet-exports`、`closet-templates`、`closet-samples`（整套样本，菜单“鱼搭业务”下，排序 52），和原有两个键一起注册到路由及菜单编辑器。大屏按 refreshAfterMs 刷新，最少 30 秒；页面隐藏/退出时暂停，读取失败后由管理员点击重试。模板审核查看与写入权限分离。
 
 ## 风格词审核（2026-10-31，鱼搭 #173）
 
@@ -117,7 +121,7 @@ start 使用 UTF-8 secret 计算 HMAC-SHA256，签名采用 base64url 无填充�
 
 ### 鱼搭内部管理页面的边界
 
-鱼搭还存在使用本产品登录会话的 `/api/admin/ootd-samples`（含原图审核与模型提取）、`/api/admin/processing/config`、任务取消及生图能力配置等内部 API。它们不在中立管理契约中，不通过本平台代理；二期完整接入指 1.1 契约中的全部 26 个操作。原图和私密媒体不开放给中立管理接口，运维接口只读。内置 `/api/admin/outfit-templates` 的审核行为已由中立 `/templates` 覆盖并共用存储。
+鱼搭还存在使用本产品登录会话的 `/api/admin/ootd-samples` 的同名能力已由中立 `/samples`（1.11）接入，其余内部 API 如`/api/admin/processing/config`、任务取消及生图能力配置等内部 API。它们不在中立管理契约中，不通过本平台代理；二期完整接入指 1.1 契约中的全部 26 个操作。原图和私密媒体不开放给中立管理接口，运维接口只读。内置 `/api/admin/outfit-templates` 的审核行为已由中立 `/templates` 覆盖并共用存储。
 
 
 ## 1.2 完整账号控制（2026-10-20）
