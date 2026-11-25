@@ -1,5 +1,5 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/reference/management-api.yaml
-# source-commit: uncommitted
+# source-commit: 59ab2ae5af885786826bdf149b908c2a4f5115d1
 # source-sha256: 935b304853dc92fbaba6f362fee5b63e65ab2afabd6a9fa6c1f8769a38c3615c
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
