@@ -39,6 +39,7 @@ public class ClosetModelsService {
     public JsonNode createEntry(JsonNode body) { return audited("ENTRY_CREATE", "entries", () -> client.post(BASE + "/entries", body)); }
     public JsonNode updateEntry(String id, JsonNode body) { return audited("ENTRY_UPDATE", id, () -> client.patch(path("entries", id), body)); }
     public JsonNode setReferences(String id, JsonNode body) { return audited("ENTRY_REFERENCES_UPDATE", id, () -> client.put(path("entries", id) + "/references", body)); }
+    public JsonNode setTimeout(String id, JsonNode body) { return audited("ENTRY_TIMEOUT_UPDATE", id, () -> client.put(path("entries", id) + "/timeout", body)); }
     public void deleteEntry(String id) { audited("ENTRY_DELETE", id, () -> { client.delete(path("entries", id)); return null; }); }
     public JsonNode resume(String id) { return audited("ENTRY_RESUME", id, () -> client.post(path("entries", id) + "/resume", null)); }
     public JsonNode test(String id) { return audited("ENTRY_TEST", id, () -> client.post(path("entries", id) + "/test", null)); }

@@ -1,6 +1,6 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/reference/management-api.yaml
-# source-commit: e5e6d1da54c82ad9e25362fea49cf162b3da7b80
-# source-sha256: c3f2eaa0043c26fd478154af662f970ab3c88ca6cdb62c16eaa2722658850e98
+# source-commit: 3a9b28224392cf548a55542e4c92e7c68933bb99
+# source-sha256: 0d2c0b902b77c967ba086906d6453a21eb899da71b7e75e0849affbcd3c6a1b1
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
@@ -2855,6 +2855,34 @@ paths:
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
+  /models/entries/{id}/timeout:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, maxLength: 300 } }
+    put:
+      tags: [models]
+      operationId: setModelEntryTimeout
+      description: 按模型的等待上限（5～600 秒；null 表示用服务商的等待上限）。部署配置的模型也可以改；对话模型不支持（由助手整轮时限控制）。不改变任务指纹，排队中的任务按新上限执行。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision]
+              properties:
+                timeoutSeconds: { type: [integer, 'null'], minimum: 5, maximum: 600 }
+                revision: { type: integer, format: int64, description: 与 references 共用的设置版本（timeout.revision）}
+      responses:
+        '200':
+          description: 模型
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelEntry' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
   /models/entries/{id}/test:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, maxLength: 300 } }
@@ -4519,6 +4547,15 @@ components:
         editable: { type: boolean }
         deletable: { type: boolean }
         health: { $ref: '#/components/schemas/ModelHealth' }
+        timeout:
+          type: object
+          description: 等待上限。seconds 为实际生效值，custom 为本模型单独设置（null 表示用服务商的 providerSeconds）。
+          properties:
+            seconds: { type: integer }
+            custom: { type: [integer, 'null'] }
+            providerSeconds: { type: integer }
+            appliesToChat: { type: boolean, description: false 表示对话模型，等待由助手整轮时限控制 }
+            revision: { type: integer, format: int64 }
         references:
           type: object
           description: 只有生图模型有。limit 是实际生效的上限。
@@ -4567,7 +4604,7 @@ components:
         lastCallAtMs: { type: [integer, 'null'], format: int64 }
     ModelUsageModel:
       type: object
-      required: [capability, providerId, model, entryId, label, calls, requests, ok, failed, cancelled, successRate, avgLatencyMs, p95LatencyMs, inputTokens, outputTokens, images, costs, unpricedCalls, reroutedCalls, stitchedCalls, lastCallAtMs]
+      required: [capability, providerId, model, entryId, label, calls, requests, ok, failed, cancelled, successRate, avgLatencyMs, p95LatencyMs, inputTokens, outputTokens, images, costs, unpricedCalls, reroutedCalls, stitchedCalls, timeoutSeconds, lastCallAtMs]
       properties:
         capability: { type: string, enum: [VISION, IMAGE, CHAT] }
         providerId: { type: string }
@@ -4589,6 +4626,7 @@ components:
         unpricedCalls: { type: integer, format: int64 }
         reroutedCalls: { type: integer, format: int64, description: 因改道或备用而发往该模型的调用数 }
         stitchedCalls: { type: integer, format: int64, description: 参考图超出上限、拼了图的调用数 }
+        timeoutSeconds: { type: [integer, 'null'], description: 该模型当前的等待上限（对话为 null） }
         lastCallAtMs: { type: [integer, 'null'], format: int64 }
     ModelUsage:
       type: object
@@ -4644,7 +4682,7 @@ components:
           maxItems: 50
           items:
             type: object
-            required: [atMs, capability, providerId, model, purpose, outcome, errorCode, latencyMs, requests, inputTokens, outputTokens, images, rerouted, stitched, costMicro, costCurrency]
+            required: [atMs, capability, providerId, model, purpose, outcome, errorCode, latencyMs, requests, inputTokens, outputTokens, images, rerouted, stitched, timeoutSeconds, costMicro, costCurrency]
             properties:
               atMs: { type: integer, format: int64 }
               capability: { type: string }
@@ -4660,6 +4698,7 @@ components:
               images: { type: integer }
               rerouted: { type: boolean }
               stitched: { type: integer, description: 这次被拼进拼图的参考图张数，0 表示没拼图 }
+              timeoutSeconds: { type: [integer, 'null'], description: 调用当时的等待上限；错误码 PROVIDER_TIMEOUT 表示等满了这个时间 }
               costMicro: { type: [integer, 'null'], format: int64 }
               costCurrency: { type: [string, 'null'] }
         note: { type: string }

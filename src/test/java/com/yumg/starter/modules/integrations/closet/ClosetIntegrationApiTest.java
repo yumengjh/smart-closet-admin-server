@@ -1050,6 +1050,42 @@ class ClosetIntegrationApiTest {
                 && e.getTargetId().equals(id))).allSatisfy(e -> assertThat(e.getMetadata()).isEqualTo("{}"));
     }
 
+    @Test void modelTimeoutRequiresWriteAndForwardsSettingsAndErrorsWithoutAuditingBody() throws Exception {
+        String id = "cfg:image:vendor:timeout-test";
+        String local = "/api/v1/closet/models/entries/" + id + "/timeout";
+        String upstream = "http://closet.test/api/manage/v1/models/entries/cfg%3Aimage%3Avendor%3Atimeout-test/timeout";
+        String body = "{\"timeoutSeconds\":180,\"revision\":7}";
+        String reset = "{\"timeoutSeconds\":null,\"revision\":8}";
+        mvc.perform(put(local).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isUnauthorized());
+        mvc.perform(put(local).with(jwtAs("closet:models:read")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.PUT)).andExpect(content().json(body, true))
+                .andRespond(withSuccess("{\"id\":\"" + id + "\",\"timeout\":{\"seconds\":180,\"custom\":180,\"providerSeconds\":120,\"appliesToChat\":false,\"revision\":8}}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.PUT)).andExpect(content().json(reset, true))
+                .andRespond(withSuccess("{\"id\":\"" + id + "\",\"timeout\":{\"seconds\":120,\"custom\":null,\"providerSeconds\":120,\"appliesToChat\":false,\"revision\":9}}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.PUT)).andExpect(content().json(body, true))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("{\"code\":\"MODEL_CONFLICT\",\"detail\":\"stale revision\"}"));
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.PUT)).andExpect(content().json(body, true))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("{\"code\":\"MODEL_INVALID\",\"detail\":\"unsupported model\"}"));
+        mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.timeout.seconds").value(180))
+                .andExpect(jsonPath("$.data.timeout.revision").value(8));
+        mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(reset))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.timeout.seconds").value(120))
+                .andExpect(jsonPath("$.data.timeout.revision").value(9));
+        mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict());
+        mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+        server.verify();
+        var events = auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_MODELS_ENTRY_TIMEOUT_UPDATE")
+                && e.getTargetId().equals(id)).toList();
+        assertThat(events).extracting(AuditEvent::getResult).containsExactlyInAnyOrder("SUCCESS", "SUCCESS", "FAILURE", "FAILURE");
+        assertThat(events).allSatisfy(e -> assertThat(e.getMetadata()).isEqualTo("{}"));
+    }
+
     @Test void existingModelMenuIsMovedFirstAndLegacyIconIsUpgraded() throws Exception {
         var menu = menus.findByCode("closet-models").orElseThrow();
         menu.update(menu.getParentId(), menu.getTitle(), menu.getRoutePath(), menu.getComponentKey(),
@@ -1083,12 +1119,14 @@ class ClosetIntegrationApiTest {
                             Long.parseLong(h.getFirst("X-Closet-Timestamp")), h.getFirst("X-Closet-Nonce"),
                             h.getFirst("X-Operator"), h.getFirst("X-Request-Id"), new byte[0]);
                     assertThat(h.getFirst("X-Closet-Signature")).isEqualTo(signer.sign(canonical, "0123456789abcdef0123456789abcdef"));
-                }).andRespond(withSuccess("{\"totals\":{\"calls\":3},\"byModel\":[{\"model\":\"qwen\"}]}", MediaType.APPLICATION_JSON));
+                }).andRespond(withSuccess("{\"totals\":{\"calls\":3},\"byModel\":[{\"model\":\"qwen\",\"timeoutSeconds\":180}],\"recent\":[{\"timeoutSeconds\":120}]}", MediaType.APPLICATION_JSON));
         mvc.perform(get(local).with(jwtAs("closet:models:read"))
                         .param("from", "2026-11-20").param("to", "2026-11-26").param("capability", "VISION")
                         .param("providerId", "阿里 & cloud").param("model", "qwen/视觉+v1").param("ignored", "value"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.totals.calls").value(3))
-                .andExpect(jsonPath("$.data.byModel[0].model").value("qwen"));
+                .andExpect(jsonPath("$.data.byModel[0].model").value("qwen"))
+                .andExpect(jsonPath("$.data.byModel[0].timeoutSeconds").value(180))
+                .andExpect(jsonPath("$.data.recent[0].timeoutSeconds").value(120));
         server.verify();
         assertThat(auditEvents.count()).isEqualTo(before);
     }
