@@ -2,6 +2,7 @@ package com.yumg.starter.modules.integrations.closet.api;
 
 import com.yumg.starter.modules.integrations.closet.application.ClosetModelsService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +19,7 @@ public class ClosetModelsController {
     public JsonNode overview() { return models.overview(); }
 
     @PostMapping("/providers") @PreAuthorize("hasAuthority('closet:models:write')")
+    @ResponseStatus(HttpStatus.CREATED)
     public JsonNode createProvider(@RequestBody JsonNode body) { return models.createProvider(body); }
     @PatchMapping("/providers/{id}") @PreAuthorize("hasAuthority('closet:models:write')")
     public JsonNode updateProvider(@PathVariable String id, @RequestBody JsonNode body) { return models.updateProvider(id, body); }
@@ -27,6 +29,7 @@ public class ClosetModelsController {
     public JsonNode probe(@PathVariable String id) { return models.probe(id); }
 
     @PostMapping("/entries") @PreAuthorize("hasAuthority('closet:models:write')")
+    @ResponseStatus(HttpStatus.CREATED)
     public JsonNode createEntry(@RequestBody JsonNode body) { return models.createEntry(body); }
     @PatchMapping("/entries/{id}") @PreAuthorize("hasAuthority('closet:models:write')")
     public JsonNode updateEntry(@PathVariable String id, @RequestBody JsonNode body) { return models.updateEntry(id, body); }
@@ -40,5 +43,5 @@ public class ClosetModelsController {
     @PutMapping("/routing/{capability}") @PreAuthorize("hasAuthority('closet:models:write')")
     public JsonNode route(@PathVariable String capability, @RequestBody JsonNode body) { return models.route(capability, body); }
     @DeleteMapping("/routing/{capability}") @PreAuthorize("hasAuthority('closet:models:write')")
-    public ResponseEntity<Void> resetRoute(@PathVariable String capability) { models.resetRoute(capability); return ResponseEntity.noContent().build(); }
+    public JsonNode resetRoute(@PathVariable String capability) { return models.resetRoute(capability); }
 }

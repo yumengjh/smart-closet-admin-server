@@ -33,15 +33,15 @@ public class ClosetModelsService {
     public JsonNode resume(String id) { return audited("ENTRY_RESUME", id, () -> client.post(path("entries", id) + "/resume", null)); }
     public JsonNode test(String id) { return audited("ENTRY_TEST", id, () -> client.post(path("entries", id) + "/test", null)); }
     public JsonNode route(String capability, JsonNode body) { return audited("ROUTING_UPDATE", capability, () -> client.put(routePath(capability), body)); }
-    public void resetRoute(String capability) { audited("ROUTING_RESET", capability, () -> { client.delete(routePath(capability)); return null; }); }
+    public JsonNode resetRoute(String capability) { return audited("ROUTING_RESET", capability, () -> client.deleteWithResponse(routePath(capability))); }
 
     private String path(String type, String id) {
-        if (id == null || !id.matches("[A-Za-z0-9_.:~-]{1,220}")) throw ApiException.notFound();
+        if (id == null || id.isEmpty() || id.length() > 300 || id.equals(".") || id.equals("..")) throw ApiException.notFound();
         return BASE + "/" + type + "/" + ClosetRequestSigner.encodeComponent(id);
     }
 
     private String routePath(String capability) {
-        if (!java.util.Set.of("VISION", "IMAGE", "CHAT").contains(capability)) throw ApiException.notFound();
+        if (!java.util.Set.of("VISION", "IMAGE", "CHAT").contains(capability)) throw ApiException.invalidParameter();
         return BASE + "/routing/" + capability;
     }
 

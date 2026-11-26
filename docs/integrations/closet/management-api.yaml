@@ -1,11 +1,11 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/reference/management-api.yaml
-# source-commit: 59ab2ae5af885786826bdf149b908c2a4f5115d1
-# source-sha256: 935b304853dc92fbaba6f362fee5b63e65ab2afabd6a9fa6c1f8769a38c3615c
+# source-commit: 659f1b2918131ba04dabb1a416ed8a75ff09dfea
+# source-sha256: 01d0dd08d0a73a5518d529c108e3c834fe0a5ca7abb45757f7df7b66883d9c80
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
   title: Smart Closet Management API
-  version: 1.11.0
+  version: 1.12.0
   description: |
     鱼搭中立管理接口。默认关闭（`closet.management.enabled=false`），开启后供任意宿主平台以服务身份调用。
     设计说明见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md`；1.1（运维、KPI、大屏与数据出口、模板审核）见
@@ -17,7 +17,7 @@ info:
     `docs/design/2026-11-23-用户反馈：匿名提交与后台处理设计.md`。1.9.1 只修正说明（issue #290）：数仓 `garment_created` 只含已拥有衣物，
     衣物新增类指标不含种草，注册模式可由 `PUT /registration` 覆盖，`Wardrobe` 补齐 `styles`、`genderFits`。1.10（issue #296）用户列表与详情
     增加 `emailBound` 与打码的 `emailMasked`，不返回邮箱全文，见 `docs/design/2026-11-24-邮件模块：邮箱注册、找回密码与监控告警设计.md`。1.11 补齐运维与内容：`/ops/status` 增加 `database`，
-    新增只读 `/ops/mail`、`/ops/monitor`，以及整套穿搭样本 `/samples`（与鱼搭内管理页共用存储，见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md` 末尾 1.11 一节）。
+    新增只读 `/ops/mail`、`/ops/monitor`，以及整套穿搭样本 `/samples`（与鱼搭内管理页共用存储，见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md` 末尾 1.11 一节）。1.12（issue #298）新增模型调配 `/models`：服务商、模型、生效与备用路由、免费探测与试用，`/ops/status` 的 `providers` 增加 `routing`，见 `docs/design/2026-11-26-模型调配：多服务商、生效模型与自动备用设计.md`。
 
     认证：每个请求都必须携带 HMAC 签名头（见 `components.securitySchemes.closetHmac`）。
     时间字段均为 Unix 毫秒，字段名以 `AtMs` 结尾；日期参数为 `YYYY-MM-DD`，按 Asia/Shanghai 解释，`to` 含当天。
@@ -50,6 +50,8 @@ tags:
     description: 数仓出口：按天宽表与去标识明细事件
   - name: templates
     description: 搭配模板审核
+  - name: models
+    description: 模型调配：服务商、模型、生效与备用路由（密钥只写不读）
   - name: samples
     description: 整套穿搭样本（原图审核完成即删除；不进大屏与数仓）
   - name: billing
@@ -2660,6 +2662,198 @@ paths:
         '401': {"$ref": "#/components/responses/Problem"}
         '404': {"$ref": "#/components/responses/Problem"}
 
+  /models:
+    get:
+      tags: [models]
+      operationId: getModels
+      description: 模型调配总览：服务商（密钥只给打码提示）、模型、三类能力的路由与健康状态、最近切换记录。部署配置来源的行 editable=false。
+      responses:
+        '200':
+          description: 总览
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelOverview' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /models/providers:
+    post:
+      tags: [models]
+      operationId: createModelProvider
+      description: 新增服务商。密钥只写不读，响应只含 apiKeyHint。未设置主密钥时 409 MODEL_KEY_NOT_CONFIGURED。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModelProviderInput' }
+      responses:
+        '201':
+          description: 已创建的服务商（不含密钥）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelProvider' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /models/providers/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z0-9][a-z0-9-]{1,31}$' } }
+    patch:
+      tags: [models]
+      operationId: updateModelProvider
+      description: 改名称、地址、超时、图片域名，或传 apiKey 换密钥。revision 必填；部署配置服务商 409 MODEL_SOURCE_READ_ONLY，revision 不一致 409 MODEL_CONFLICT。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModelProviderPatch' }
+      responses:
+        '200':
+          description: 更新后的服务商
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelProvider' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [models]
+      operationId: deleteModelProvider
+      description: 只能删数据库服务商且它下面没有模型（409 MODEL_PROVIDER_HAS_ENTRIES）；部署配置服务商 409 MODEL_SOURCE_READ_ONLY。
+      responses:
+        '204': { description: No Content }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /models/providers/{id}/probe:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z0-9][a-z0-9-]{1,31}$' } }
+    post:
+      tags: [models]
+      operationId: probeModelProvider
+      description: 免费探测：调用服务商的列模型接口，不调用任何计费接口。
+      responses:
+        '200':
+          description: 探测结果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelProbeResult' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /models/entries:
+    post:
+      tags: [models]
+      operationId: createModelEntry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModelEntryInput' }
+      responses:
+        '201':
+          description: 已创建的模型
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelEntry' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /models/entries/{id}:
+    parameters:
+      - { name: id, in: path, required: true, description: '模型 id，部署配置的形如 cfg:vision:yumg:gpt-6-luna（含冒号）', schema: { type: string, maxLength: 300 } }
+    patch:
+      tags: [models]
+      operationId: updateModelEntry
+      description: 改显示名、地址、参数、开关；模型名、能力、服务商、协议不可改。revision 必填。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModelEntryPatch' }
+      responses:
+        '200':
+          description: 更新后的模型
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelEntry' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [models]
+      operationId: deleteModelEntry
+      description: 只能删数据库模型，且它不是任何能力的生效或备用（409 MODEL_IN_USE）。
+      responses:
+        '204': { description: No Content }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /models/entries/{id}/resume:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, maxLength: 300 } }
+    post:
+      tags: [models]
+      operationId: resumeModelEntry
+      description: 清除该模型的暂停状态。
+      responses:
+        '200':
+          description: 模型
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelEntry' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /models/entries/{id}/test:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, maxLength: 300 } }
+    post:
+      tags: [models]
+      operationId: testModelEntry
+      description: 对该模型发一次最小真实请求（识图：64×64 纯色图；对话：一句“回复 ok”），会产生一次调用费用并计入全站模型预算。生图模型不提供（400 MODEL_INVALID）。
+      responses:
+        '200':
+          description: 试用结果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelTestResult' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /models/routing/{capability}:
+    parameters:
+      - { name: capability, in: path, required: true, schema: { type: string, enum: [VISION, IMAGE, CHAT] } }
+    put:
+      tags: [models]
+      operationId: setModelRouting
+      description: 设生效与备用。两者须同能力、已开启、服务商可用且互不相同。revision 可选，给了必须与当前一致。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModelRoutingInput' }
+      responses:
+        '200':
+          description: 该能力的路由
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelRouting' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [models]
+      operationId: clearModelRouting
+      description: 删除路由行，回到部署默认。
+      responses:
+        '200':
+          description: 回到默认后的路由
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelRouting' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
 components:
   securitySchemes:
     closetHmac:
@@ -3857,7 +4051,7 @@ components:
         models: { type: object }
         indexes: { type: object }
         queue: { type: object, properties: { byStatus: { type: object }, byKind: { type: array, items: { type: object } }, oldestQueuedAgeMs: { type: [integer, 'null'] }, failed24h: { type: integer } } }
-        providers: { type: object }
+        providers: { type: object, description: '识图、生图、助手运行时；1.12 起含 routing（VISION、IMAGE、CHAT 各自的 active、fallback、effective 与 health）' }
         sessions: { type: object, properties: { active: { type: integer }, onlineLast5Min: { type: integer } } }
         database:
           type: object
@@ -4230,3 +4424,148 @@ components:
         revision: {"type": "integer", "format": "int64"}
       required: ["anonymousEnabled", "revision"]
       additionalProperties: false
+    ModelProvider:
+      type: object
+      description: 服务商；不含密钥，只有打码提示
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [OPENAI_COMPATIBLE, GEMINI] }
+        source: { type: string, enum: [CONFIG, DATABASE] }
+        baseUrl: { type: string }
+        apiKeyConfigured: { type: boolean }
+        apiKeyHint: { type: [string, 'null'], description: '形如 ****a1b2' }
+        timeoutSeconds: { type: integer }
+        imageHosts: { type: array, items: { type: string } }
+        status: { type: string, enum: [READY, NO_KEY, KEY_UNREADABLE, SHADOWED] }
+        revision: { type: integer, format: int64 }
+        editable: { type: boolean }
+        deletable: { type: boolean }
+    ModelHealth:
+      type: object
+      properties:
+        state: { type: string, enum: [OK, PAUSED] }
+        consecutiveFailures: { type: integer }
+        lastFailureCode: { type: [string, 'null'] }
+        lastFailureAtMs: { type: [integer, 'null'], format: int64 }
+        pausedUntilMs: { type: [integer, 'null'], format: int64 }
+        lastSuccessAtMs: { type: [integer, 'null'], format: int64 }
+    ModelEntry:
+      type: object
+      properties:
+        id: { type: string }
+        capability: { type: string, enum: [VISION, IMAGE, CHAT] }
+        providerId: { type: string }
+        protocol: { type: string }
+        model: { type: string }
+        label: { type: [string, 'null'] }
+        baseUrl: { type: [string, 'null'] }
+        options: { type: object, additionalProperties: true }
+        enabled: { type: boolean }
+        source: { type: string, enum: [CONFIG, DATABASE] }
+        revision: { type: integer, format: int64 }
+        inUse: { type: [string, 'null'], enum: [ACTIVE, FALLBACK, null] }
+        editable: { type: boolean }
+        deletable: { type: boolean }
+        health: { $ref: '#/components/schemas/ModelHealth' }
+    ModelRouting:
+      type: object
+      properties:
+        active: { type: [string, 'null'] }
+        fallback: { type: [string, 'null'] }
+        effective: { type: [string, 'null'], description: '当前实际在用的模型 id（生效模型暂停时为备用）' }
+        configured: { type: boolean, description: 'false 表示没有路由行，用的是部署默认' }
+        revision: { type: integer, format: int64 }
+        updatedAtMs: { type: [integer, 'null'], format: int64 }
+    ModelOverview:
+      type: object
+      required: [masterKeyConfigured, failoverEnabled, providers, entries, routing, events]
+      properties:
+        masterKeyConfigured: { type: boolean }
+        failoverEnabled: { type: boolean }
+        providers: { type: array, items: { $ref: '#/components/schemas/ModelProvider' } }
+        entries: { type: array, items: { $ref: '#/components/schemas/ModelEntry' } }
+        routing:
+          type: object
+          properties:
+            VISION: { $ref: '#/components/schemas/ModelRouting' }
+            IMAGE: { $ref: '#/components/schemas/ModelRouting' }
+            CHAT: { $ref: '#/components/schemas/ModelRouting' }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              atMs: { type: integer, format: int64 }
+              capability: { type: string }
+              entryId: { type: string }
+              kind: { type: string }
+              code: { type: [string, 'null'] }
+    ModelProviderInput:
+      type: object
+      required: [id, kind, baseUrl, apiKey]
+      additionalProperties: false
+      properties:
+        id: { type: string, pattern: '^[a-z0-9][a-z0-9-]{1,31}$', description: '不能以 cfg 开头，不能与部署配置服务商重名' }
+        name: { type: string, maxLength: 80, description: '缺省用 id' }
+        kind: { type: string, enum: [OPENAI_COMPATIBLE, GEMINI] }
+        baseUrl: { type: string, maxLength: 300, description: 'https（本机测试可用 http://localhost），不能指向内网' }
+        apiKey: { type: string, minLength: 8, maxLength: 400, writeOnly: true }
+        timeoutSeconds: { type: integer, description: '缺省 180' }
+        imageHosts: { type: array, items: { type: string } }
+    ModelProviderPatch:
+      type: object
+      required: [revision]
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 80 }
+        baseUrl: { type: string, maxLength: 300 }
+        apiKey: { type: string, minLength: 8, maxLength: 400, writeOnly: true, description: '传入则换密钥' }
+        timeoutSeconds: { type: integer }
+        imageHosts: { type: array, items: { type: string } }
+        revision: { type: integer, format: int64 }
+    ModelEntryInput:
+      type: object
+      required: [capability, providerId, protocol, model]
+      additionalProperties: false
+      properties:
+        capability: { type: string, enum: [VISION, IMAGE, CHAT] }
+        providerId: { type: string }
+        protocol: { type: string, description: 'OPENAI_CHAT、OPENAI_IMAGES、DASHSCOPE_IMAGE、GEMINI 等，须与能力和服务商类型匹配' }
+        model: { type: string, maxLength: 160 }
+        label: { type: string }
+        baseUrl: { type: string, description: '覆盖服务商地址，可选' }
+        options: { type: object, additionalProperties: true }
+        enabled: { type: boolean, description: '缺省 true' }
+    ModelEntryPatch:
+      type: object
+      required: [revision]
+      additionalProperties: false
+      properties:
+        label: { type: string }
+        baseUrl: { type: string }
+        options: { type: object, additionalProperties: true }
+        enabled: { type: boolean }
+        revision: { type: integer, format: int64 }
+    ModelRoutingInput:
+      type: object
+      required: [active]
+      additionalProperties: false
+      properties:
+        active: { type: string }
+        fallback: { type: [string, 'null'] }
+        revision: { type: integer, format: int64 }
+    ModelProbeResult:
+      type: object
+      properties:
+        ok: { type: boolean }
+        httpStatus: { type: [integer, 'null'] }
+        code: { type: string, description: '失败时的错误代码' }
+        models: { type: array, maxItems: 200, items: { type: string } }
+        latencyMs: { type: integer, format: int64 }
+    ModelTestResult:
+      type: object
+      properties:
+        ok: { type: boolean }
+        code: { type: [string, 'null'] }
+        latencyMs: { type: integer, format: int64 }

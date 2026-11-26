@@ -1029,12 +1029,12 @@ class ClosetIntegrationApiTest {
         server.expect(requestTo("http://closet.test/api/manage/v1/models")).andExpect(method(HttpMethod.GET))
                 .andExpect(request -> capture(request)).andRespond(withSuccess("{\"providers\":[]}", MediaType.APPLICATION_JSON));
         server.expect(requestTo("http://closet.test/api/manage/v1/models/providers")).andExpect(method(HttpMethod.POST)).andExpect(content().json(body, true))
-                .andRespond(withSuccess("{\"id\":\"vendor\",\"apiKeyHint\":\"****y-123\"}", MediaType.APPLICATION_JSON));
+                .andRespond(withStatus(HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON).body("{\"id\":\"vendor\",\"apiKeyHint\":\"****y-123\"}"));
         server.expect(requestTo("http://closet.test/api/manage/v1/models/providers/vendor")).andExpect(method(HttpMethod.PATCH))
                 .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON).body("{\"code\":\"MODEL_CONFLICT\",\"detail\":\"conflict\"}"));
         mvc.perform(get("/api/v1/closet/models").with(jwtAs("closet:models:read"))).andExpect(status().isOk());
         assertThat(recorded.get().signature()).isNotBlank();
-        mvc.perform(post("/api/v1/closet/models/providers").with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk());
+        mvc.perform(post("/api/v1/closet/models/providers").with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isCreated());
         mvc.perform(patch("/api/v1/closet/models/providers/vendor").with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isConflict());
         server.verify();
         var events = auditEvents.findAll().stream().filter(e -> e.getAction().startsWith("CLOSET_MODELS_")).toList();
@@ -1047,20 +1047,69 @@ class ClosetIntegrationApiTest {
         String root = "http://closet.test/api/manage/v1/models";
         String local = "/api/v1/closet/models";
         String body = "{\"revision\":1}";
-        for (String path : java.util.List.of("/providers/vendor/probe", "/entries", "/entries/entry/test", "/entries/entry/resume"))
+        for (String path : java.util.List.of("/providers/vendor/probe", "/entries/entry/test", "/entries/entry/resume"))
             server.expect(requestTo(root + path)).andExpect(method(HttpMethod.POST)).andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(root + "/entries")).andExpect(method(HttpMethod.POST)).andExpect(content().json(body, true))
+                .andRespond(withStatus(HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON).body("{\"id\":\"entry\"}"));
         server.expect(requestTo(root + "/entries/entry")).andExpect(method(HttpMethod.PATCH)).andExpect(content().json(body, true)).andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
         server.expect(requestTo(root + "/routing/VISION")).andExpect(method(HttpMethod.PUT)).andExpect(content().json(body, true)).andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
-        for (String path : java.util.List.of("/entries/entry", "/providers/vendor", "/routing/VISION"))
+        for (String path : java.util.List.of("/entries/entry", "/providers/vendor"))
             server.expect(requestTo(root + path)).andExpect(method(HttpMethod.DELETE)).andRespond(withStatus(HttpStatus.NO_CONTENT));
+        server.expect(requestTo(root + "/routing/VISION")).andExpect(method(HttpMethod.DELETE))
+                .andRespond(withSuccess("{\"active\":\"cfg:vision:vendor:model\",\"fallback\":null,\"configured\":false,\"revision\":0}", MediaType.APPLICATION_JSON));
         mvc.perform(post(local + "/providers/vendor/probe").with(jwtAs("closet:models:write"))).andExpect(status().isOk());
-        mvc.perform(post(local + "/entries").with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk());
+        mvc.perform(post(local + "/entries").with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isCreated()).andExpect(jsonPath("$.data.id").value("entry"));
         mvc.perform(post(local + "/entries/entry/test").with(jwtAs("closet:models:write"))).andExpect(status().isOk());
         mvc.perform(post(local + "/entries/entry/resume").with(jwtAs("closet:models:write"))).andExpect(status().isOk());
         mvc.perform(patch(local + "/entries/entry").with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk());
         mvc.perform(put(local + "/routing/VISION").with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk());
-        for (String path : java.util.List.of("/entries/entry", "/providers/vendor", "/routing/VISION"))
+        for (String path : java.util.List.of("/entries/entry", "/providers/vendor"))
             mvc.perform(delete(local + path).with(jwtAs("closet:models:write"))).andExpect(status().isNoContent());
+        mvc.perform(delete(local + "/routing/VISION").with(jwtAs("closet:models:write")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.active").value("cfg:vision:vendor:model"))
+                .andExpect(jsonPath("$.data.configured").value(false));
+        server.verify();
+    }
+
+    @Test void modelIdsWithColonsAreEncodedAndModelErrorsKeepTheirStatuses() throws Exception {
+        String local = "/api/v1/closet/models";
+        String id = "cfg:vision:yumg:gpt-6-luna";
+        String upstream = "http://closet.test/api/manage/v1/models/entries/cfg%3Avision%3Ayumg%3Agpt-6-luna";
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.PATCH))
+                .andExpect(content().json("{\"revision\":1}", true))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON).body("{\"code\":\"MODEL_SOURCE_READ_ONLY\",\"detail\":\"read only\"}"));
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.DELETE))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON).body("{\"code\":\"MODEL_IN_USE\",\"detail\":\"in use\"}"));
+        server.expect(requestTo(upstream + "/resume")).andExpect(method(HttpMethod.POST))
+                .andExpect(req -> {
+                    var h = req.getHeaders();
+                    var signer = new com.yumg.starter.modules.integrations.closet.infrastructure.ClosetRequestSigner();
+                    String canonical = signer.canonical("POST", req.getURI().getRawPath(), java.util.Map.of(),
+                            Long.parseLong(h.getFirst("X-Closet-Timestamp")), h.getFirst("X-Closet-Nonce"),
+                            h.getFirst("X-Operator"), h.getFirst("X-Request-Id"), new byte[0]);
+                    assertThat(h.getFirst("X-Closet-Signature")).isEqualTo(signer.sign(canonical, "0123456789abcdef0123456789abcdef"));
+                })
+                .andRespond(withSuccess("{\"id\":\"" + id + "\"}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(upstream + "/test")).andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_PROBLEM_JSON).body("{\"code\":\"MODEL_NOT_FOUND\",\"detail\":\"not found\"}"));
+        mvc.perform(patch(local + "/entries/" + id).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content("{\"revision\":1}"))
+                .andExpect(status().isConflict());
+        mvc.perform(delete(local + "/entries/" + id).with(jwtAs("closet:models:write"))).andExpect(status().isConflict());
+        mvc.perform(post(local + "/entries/" + id + "/resume").with(jwtAs("closet:models:write")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(id));
+        mvc.perform(post(local + "/entries/" + id + "/test").with(jwtAs("closet:models:write"))).andExpect(status().isNotFound());
+        mvc.perform(delete(local + "/routing/INVALID").with(jwtAs("closet:models:write"))).andExpect(status().isBadRequest());
+        server.verify();
+    }
+
+    @Test void modelEntryIdAcceptsContractMaximumLength() throws Exception {
+        String id = "a".repeat(300);
+        String local = "/api/v1/closet/models/entries/";
+        server.expect(requestTo("http://closet.test/api/manage/v1/models/entries/" + id + "/resume"))
+                .andExpect(method(HttpMethod.POST)).andRespond(withSuccess("{\"id\":\"" + id + "\"}", MediaType.APPLICATION_JSON));
+        mvc.perform(post(local + id + "/resume").with(jwtAs("closet:models:write")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(id));
+        mvc.perform(post(local + id + "a/resume").with(jwtAs("closet:models:write"))).andExpect(status().isNotFound());
         server.verify();
     }
 
