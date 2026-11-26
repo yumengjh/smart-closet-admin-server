@@ -152,7 +152,7 @@ class ClosetIntegrationApiTest {
                 .findFirst().orElseThrow().getPermissions()).extracting(permission -> permission.getCode())
                 .contains("closet:creation:read", "closet:creation:write", "closet:creation:publish");
         var parent = menus.findByCode("closet-creation").orElseThrow();
-        for (String key : java.util.List.of("templates", "capabilities", "usage")) {
+        for (String key : java.util.List.of("templates", "usage")) {
             var page = menus.findByCode("closet-creation-" + key).orElseThrow();
             assertThat(page.getParentId()).isEqualTo(parent.getId());
             assertThat(page.getRequiredPermission()).isEqualTo("closet:creation:read");
@@ -161,11 +161,10 @@ class ClosetIntegrationApiTest {
         assertThat(effects.getTitle()).isEqualTo("创作效果");
         assertThat(effects.getSortOrder()).isZero();
         assertThat(effects.isVisible()).isTrue();
-        for (String hidden : java.util.List.of("guide", "capabilities")) {
-            var page = menus.findByCode("closet-creation-" + hidden).orElseThrow();
-            assertThat(page.isVisible()).isFalse();
-            assertThat(page.getComponentKey()).isEqualTo("closet-creation-" + hidden);
-        }
+        var guide = menus.findByCode("closet-creation-guide").orElseThrow();
+        assertThat(guide.isVisible()).isFalse();
+        assertThat(guide.getComponentKey()).isEqualTo("closet-creation-guide");
+        assertThat(menus.findByCode("closet-creation-capabilities")).isEmpty();
         assertThat(menus.findByCode("closet-creation-usage").orElseThrow().isVisible()).isTrue();
         var business = menus.findByCode("closet").orElseThrow();
         var showcase = menus.findByCode("closet-creation-showcases").orElseThrow();
@@ -414,9 +413,7 @@ class ClosetIntegrationApiTest {
                 new CreationRoute(HttpMethod.POST, version + "/verify", "write", "{\"revision\":1,\"evidence\":\"fixture evidence\"}"),
                 new CreationRoute(HttpMethod.POST, version + "/publish", "publish", "{\"revision\":1}"),
                 new CreationRoute(HttpMethod.POST, template + "/retire", "publish", "{\"revision\":1}"),
-                new CreationRoute(HttpMethod.GET, "/creations/generation-options", "read", null),
-                new CreationRoute(HttpMethod.GET, "/creations/capabilities", "read", null),
-                new CreationRoute(HttpMethod.PUT, "/creations/capabilities", "write", "{\"purpose\":\"ART_CREATION\"}"));
+                new CreationRoute(HttpMethod.GET, "/creations/generation-options", "read", null));
     }
 
     @org.junit.jupiter.params.ParameterizedTest
@@ -436,6 +433,15 @@ class ClosetIntegrationApiTest {
         mvc.perform(allowed).andExpect(status().isOk());
         server.verify();
         assertThat(recorded.get().signature()).isNotBlank();
+    }
+
+    @Test void retiredCreationCapabilitiesAreNotExposed() throws Exception {
+        mvc.perform(get("/api/v1/closet/creations/capabilities").with(jwtAs("closet:creation:read")))
+                .andExpect(status().isNotFound());
+        mvc.perform(put("/api/v1/closet/creations/capabilities").with(jwtAs("closet:creation:write"))
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isNotFound());
+        server.verify();
     }
 
     @Test void creationUsageRejectsInvalidDateRangeBeforeForwarding() throws Exception {
@@ -1012,6 +1018,250 @@ class ClosetIntegrationApiTest {
                 .anySatisfy(e -> { assertThat(e.getResult()).isEqualTo("FAILURE"); assertThat(e.getMetadata()).contains("NOT_FOUND"); });
     }
 
+    @Test void modelsPermissionsAndMenuAreSeeded() {
+        for (String permission : java.util.List.of("closet:models:read", "closet:models:write")) assertThat(permissions.findByCode(permission)).isPresent();
+        assertThat(menus.findByCode("closet-models").orElseThrow().getRequiredPermission()).isEqualTo("closet:models:read");
+        assertThat(roles.findAllWithPermissions().stream().filter(role -> role.getCode().equals("SUPER_ADMIN"))
+                .findFirst().orElseThrow().getPermissions()).extracting(permission -> permission.getCode())
+                .contains("closet:models:read", "closet:models:write");
+    }
+
+    @Test void modelReferencesRequireWriteAndForwardSettingsAndConflictsWithoutAuditingBody() throws Exception {
+        String id = "cfg:image:vendor:reference-test";
+        String local = "/api/v1/closet/models/entries/" + id + "/references";
+        String upstream = "http://closet.test/api/manage/v1/models/entries/cfg%3Aimage%3Avendor%3Areference-test/references";
+        String body = "{\"maxReferenceImages\":null,\"overLimit\":\"REJECT\",\"revision\":7}";
+        mvc.perform(put(local).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isUnauthorized());
+        mvc.perform(put(local).with(jwtAs("closet:models:read")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.PUT)).andExpect(content().json(body, true))
+                .andRespond(withSuccess("{\"id\":\"" + id + "\",\"references\":{\"limit\":3,\"revision\":8}}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.PUT)).andExpect(content().json(body, true))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("{\"code\":\"MODEL_CONFLICT\",\"detail\":\"stale revision\"}"));
+        mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.references.revision").value(8));
+        mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict());
+        server.verify();
+        assertThat(auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_MODELS_ENTRY_REFERENCES_UPDATE")
+                && e.getTargetId().equals(id)).toList()).extracting(AuditEvent::getResult).contains("SUCCESS", "FAILURE");
+        assertThat(auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_MODELS_ENTRY_REFERENCES_UPDATE")
+                && e.getTargetId().equals(id))).allSatisfy(e -> assertThat(e.getMetadata()).isEqualTo("{}"));
+    }
+
+    @Test void modelTimeoutRequiresWriteAndForwardsSettingsAndErrorsWithoutAuditingBody() throws Exception {
+        String id = "cfg:image:vendor:timeout-test";
+        String local = "/api/v1/closet/models/entries/" + id + "/timeout";
+        String upstream = "http://closet.test/api/manage/v1/models/entries/cfg%3Aimage%3Avendor%3Atimeout-test/timeout";
+        String body = "{\"timeoutSeconds\":180,\"revision\":7}";
+        String reset = "{\"timeoutSeconds\":null,\"revision\":8}";
+        mvc.perform(put(local).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isUnauthorized());
+        mvc.perform(put(local).with(jwtAs("closet:models:read")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.PUT)).andExpect(content().json(body, true))
+                .andRespond(withSuccess("{\"id\":\"" + id + "\",\"timeout\":{\"seconds\":180,\"custom\":180,\"providerSeconds\":120,\"appliesToChat\":false,\"revision\":8}}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.PUT)).andExpect(content().json(reset, true))
+                .andRespond(withSuccess("{\"id\":\"" + id + "\",\"timeout\":{\"seconds\":120,\"custom\":null,\"providerSeconds\":120,\"appliesToChat\":false,\"revision\":9}}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.PUT)).andExpect(content().json(body, true))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("{\"code\":\"MODEL_CONFLICT\",\"detail\":\"stale revision\"}"));
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.PUT)).andExpect(content().json(body, true))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("{\"code\":\"MODEL_INVALID\",\"detail\":\"unsupported model\"}"));
+        mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.timeout.seconds").value(180))
+                .andExpect(jsonPath("$.data.timeout.revision").value(8));
+        mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(reset))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.timeout.seconds").value(120))
+                .andExpect(jsonPath("$.data.timeout.revision").value(9));
+        mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict());
+        mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+        server.verify();
+        var events = auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_MODELS_ENTRY_TIMEOUT_UPDATE")
+                && e.getTargetId().equals(id)).toList();
+        assertThat(events).extracting(AuditEvent::getResult).containsExactlyInAnyOrder("SUCCESS", "SUCCESS", "FAILURE", "FAILURE");
+        assertThat(events).allSatisfy(e -> assertThat(e.getMetadata()).isEqualTo("{}"));
+    }
+
+    @Test void existingModelMenuIsMovedFirstAndLegacyIconIsUpgraded() throws Exception {
+        var menu = menus.findByCode("closet-models").orElseThrow();
+        menu.update(menu.getParentId(), menu.getTitle(), menu.getRoutePath(), menu.getComponentKey(),
+                "ri/settings-3-line", 31, menu.getMenuType(), menu.getRequiredPermission(),
+                menu.isVisible(), menu.isEnabled(), menu.isKeepAlive());
+        menus.save(menu);
+        navigationBootstrap.run(null);
+        var upgraded = menus.findByCode("closet-models").orElseThrow();
+        assertThat(upgraded.getSortOrder()).isZero();
+        assertThat(upgraded.getIcon()).isEqualTo("ri/robot-2-line");
+        assertThat(menus.findByCode("closet-insights").orElseThrow().getSortOrder()).isGreaterThan(upgraded.getSortOrder());
+    }
+
+    @Test void modelUsageRequiresReadPermissionAndForwardsEncodedFiltersWithSignatureWithoutAudit() throws Exception {
+        String local = "/api/v1/closet/models/usage";
+        long before = auditEvents.count();
+        mvc.perform(get(local)).andExpect(status().isUnauthorized());
+        mvc.perform(get(local).with(jwtAs("closet:models:write"))).andExpect(status().isForbidden());
+        mvc.perform(get(local).with(jwtAs("closet:feedback:read"))).andExpect(status().isForbidden());
+
+        var query = java.util.Map.of(
+                "from", java.util.List.of("2026-11-20"), "to", java.util.List.of("2026-11-26"),
+                "capability", java.util.List.of("VISION"), "providerId", java.util.List.of("阿里 & cloud"),
+                "model", java.util.List.of("qwen/视觉+v1"));
+        server.expect(requestTo("http://closet.test/api/manage/v1/models/usage?from=2026-11-20&to=2026-11-26"
+                        + "&capability=VISION&providerId=%E9%98%BF%E9%87%8C%20%26%20cloud&model=qwen%2F%E8%A7%86%E8%A7%89%2Bv1"))
+                .andExpect(method(HttpMethod.GET)).andExpect(req -> {
+                    var h = req.getHeaders();
+                    var signer = new com.yumg.starter.modules.integrations.closet.infrastructure.ClosetRequestSigner();
+                    String canonical = signer.canonical("GET", req.getURI().getRawPath(), query,
+                            Long.parseLong(h.getFirst("X-Closet-Timestamp")), h.getFirst("X-Closet-Nonce"),
+                            h.getFirst("X-Operator"), h.getFirst("X-Request-Id"), new byte[0]);
+                    assertThat(h.getFirst("X-Closet-Signature")).isEqualTo(signer.sign(canonical, "0123456789abcdef0123456789abcdef"));
+                }).andRespond(withSuccess("{\"totals\":{\"calls\":3},\"byModel\":[{\"model\":\"qwen\",\"timeoutSeconds\":180}],\"recent\":[{\"timeoutSeconds\":120}]}", MediaType.APPLICATION_JSON));
+        mvc.perform(get(local).with(jwtAs("closet:models:read"))
+                        .param("from", "2026-11-20").param("to", "2026-11-26").param("capability", "VISION")
+                        .param("providerId", "阿里 & cloud").param("model", "qwen/视觉+v1").param("ignored", "value"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.totals.calls").value(3))
+                .andExpect(jsonPath("$.data.byModel[0].model").value("qwen"))
+                .andExpect(jsonPath("$.data.byModel[0].timeoutSeconds").value(180))
+                .andExpect(jsonPath("$.data.recent[0].timeoutSeconds").value(120));
+        server.verify();
+        assertThat(auditEvents.count()).isEqualTo(before);
+    }
+
+    @Test void modelUsagePassesThroughDefaultsAndUpstreamErrorsWithoutAudit() throws Exception {
+        String local = "/api/v1/closet/models/usage";
+        String upstream = "http://closet.test/api/manage/v1/models/usage";
+        long before = auditEvents.count();
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"totals\":{\"calls\":0}}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(upstream + "?from=invalid")).andExpect(method(HttpMethod.GET))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("{\"code\":\"INVALID_PARAMETER\",\"detail\":\"invalid date\"}"));
+        mvc.perform(get(local).with(jwtAs("closet:models:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.totals.calls").value(0));
+        mvc.perform(get(local).with(jwtAs("closet:models:read")).param("from", "invalid"))
+                .andExpect(status().isBadRequest());
+        server.verify();
+        assertThat(auditEvents.count()).isEqualTo(before);
+    }
+
+    @Test void modelsForwardSignedRequestsAndAuditWithoutSecrets() throws Exception {
+        String secret = "secret-model-key-123";
+        String body = "{\"id\":\"vendor\",\"name\":\"Vendor\",\"kind\":\"OPENAI_COMPATIBLE\",\"baseUrl\":\"https://example.com/v1\",\"apiKey\":\"" + secret + "\"}";
+        mvc.perform(get("/api/v1/closet/models")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/closet/models").with(jwtAs("closet:feedback:read"))).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/closet/models/providers").with(jwtAs("closet:models:read")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
+        server.expect(requestTo("http://closet.test/api/manage/v1/models")).andExpect(method(HttpMethod.GET))
+                .andExpect(request -> capture(request)).andRespond(withSuccess("{\"providers\":[]}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://closet.test/api/manage/v1/models/providers")).andExpect(method(HttpMethod.POST)).andExpect(content().json(body, true))
+                .andRespond(withStatus(HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON).body("{\"id\":\"vendor\",\"apiKeyHint\":\"****y-123\"}"));
+        server.expect(requestTo("http://closet.test/api/manage/v1/models/providers/vendor")).andExpect(method(HttpMethod.PATCH))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON).body("{\"code\":\"MODEL_CONFLICT\",\"detail\":\"conflict\"}"));
+        mvc.perform(get("/api/v1/closet/models").with(jwtAs("closet:models:read"))).andExpect(status().isOk());
+        assertThat(recorded.get().signature()).isNotBlank();
+        mvc.perform(post("/api/v1/closet/models/providers").with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isCreated());
+        mvc.perform(patch("/api/v1/closet/models/providers/vendor").with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isConflict());
+        server.verify();
+        var events = auditEvents.findAll().stream().filter(e -> e.getAction().startsWith("CLOSET_MODELS_")).toList();
+        assertThat(events).extracting(AuditEvent::getAction).contains("CLOSET_MODELS_PROVIDER_CREATE", "CLOSET_MODELS_PROVIDER_UPDATE");
+        assertThat(events).anySatisfy(e -> assertThat(e.getResult()).isEqualTo("FAILURE"));
+        assertThat(events).allSatisfy(e -> assertThat(String.valueOf(e.getMetadata()) + e.getTargetId()).doesNotContain(secret));
+    }
+
+    @Test void modelsForwardEntryRoutingAndOperations() throws Exception {
+        String root = "http://closet.test/api/manage/v1/models";
+        String local = "/api/v1/closet/models";
+        String body = "{\"revision\":1}";
+        for (String path : java.util.List.of("/providers/vendor/probe", "/entries/entry/test", "/entries/entry/resume"))
+            server.expect(requestTo(root + path)).andExpect(method(HttpMethod.POST)).andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(root + "/entries")).andExpect(method(HttpMethod.POST)).andExpect(content().json(body, true))
+                .andRespond(withStatus(HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON).body("{\"id\":\"entry\"}"));
+        server.expect(requestTo(root + "/entries/entry")).andExpect(method(HttpMethod.PATCH)).andExpect(content().json(body, true)).andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(root + "/routing/VISION")).andExpect(method(HttpMethod.PUT)).andExpect(content().json(body, true)).andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+        for (String path : java.util.List.of("/entries/entry", "/providers/vendor"))
+            server.expect(requestTo(root + path)).andExpect(method(HttpMethod.DELETE)).andRespond(withStatus(HttpStatus.NO_CONTENT));
+        server.expect(requestTo(root + "/routing/VISION")).andExpect(method(HttpMethod.DELETE))
+                .andRespond(withSuccess("{\"active\":\"cfg:vision:vendor:model\",\"fallback\":null,\"configured\":false,\"revision\":0}", MediaType.APPLICATION_JSON));
+        mvc.perform(post(local + "/providers/vendor/probe").with(jwtAs("closet:models:write"))).andExpect(status().isOk());
+        mvc.perform(post(local + "/entries").with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isCreated()).andExpect(jsonPath("$.data.id").value("entry"));
+        mvc.perform(post(local + "/entries/entry/test").with(jwtAs("closet:models:write"))).andExpect(status().isOk());
+        mvc.perform(post(local + "/entries/entry/resume").with(jwtAs("closet:models:write"))).andExpect(status().isOk());
+        mvc.perform(patch(local + "/entries/entry").with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk());
+        mvc.perform(put(local + "/routing/VISION").with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk());
+        for (String path : java.util.List.of("/entries/entry", "/providers/vendor"))
+            mvc.perform(delete(local + path).with(jwtAs("closet:models:write"))).andExpect(status().isNoContent());
+        mvc.perform(delete(local + "/routing/VISION").with(jwtAs("closet:models:write")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.active").value("cfg:vision:vendor:model"))
+                .andExpect(jsonPath("$.data.configured").value(false));
+        server.verify();
+    }
+
+    @Test void portraitRoutingForwardsRevisionAndResetResponse() throws Exception {
+        String local = "/api/v1/closet/models/routing/PORTRAIT";
+        String upstream = "http://closet.test/api/manage/v1/models/routing/PORTRAIT";
+        String body = "{\"active\":\"cfg:image:vendor:model\",\"fallback\":null,\"revision\":3}";
+        mvc.perform(put(local).with(jwtAs("closet:models:read")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete(local).with(jwtAs("closet:models:read"))).andExpect(status().isForbidden());
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.PUT)).andExpect(content().json(body, true))
+                .andExpect(ClosetIntegrationApiTest::capture)
+                .andRespond(withSuccess("{\"active\":\"cfg:image:vendor:model\",\"revision\":4}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.DELETE))
+                .andRespond(withSuccess("{\"active\":null,\"configured\":false,\"followsImage\":true,\"revision\":0}", MediaType.APPLICATION_JSON));
+        mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.revision").value(4));
+        assertThat(recorded.get().signature()).isNotBlank();
+        mvc.perform(delete(local).with(jwtAs("closet:models:write")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.followsImage").value(true))
+                .andExpect(jsonPath("$.data.revision").value(0));
+        server.verify();
+    }
+
+    @Test void modelIdsWithColonsAreEncodedAndModelErrorsKeepTheirStatuses() throws Exception {
+        String local = "/api/v1/closet/models";
+        String id = "cfg:vision:yumg:gpt-6-luna";
+        String upstream = "http://closet.test/api/manage/v1/models/entries/cfg%3Avision%3Ayumg%3Agpt-6-luna";
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.PATCH))
+                .andExpect(content().json("{\"revision\":1}", true))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON).body("{\"code\":\"MODEL_SOURCE_READ_ONLY\",\"detail\":\"read only\"}"));
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.DELETE))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON).body("{\"code\":\"MODEL_IN_USE\",\"detail\":\"in use\"}"));
+        server.expect(requestTo(upstream + "/resume")).andExpect(method(HttpMethod.POST))
+                .andExpect(req -> {
+                    var h = req.getHeaders();
+                    var signer = new com.yumg.starter.modules.integrations.closet.infrastructure.ClosetRequestSigner();
+                    String canonical = signer.canonical("POST", req.getURI().getRawPath(), java.util.Map.of(),
+                            Long.parseLong(h.getFirst("X-Closet-Timestamp")), h.getFirst("X-Closet-Nonce"),
+                            h.getFirst("X-Operator"), h.getFirst("X-Request-Id"), new byte[0]);
+                    assertThat(h.getFirst("X-Closet-Signature")).isEqualTo(signer.sign(canonical, "0123456789abcdef0123456789abcdef"));
+                })
+                .andRespond(withSuccess("{\"id\":\"" + id + "\"}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(upstream + "/test")).andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_PROBLEM_JSON).body("{\"code\":\"MODEL_NOT_FOUND\",\"detail\":\"not found\"}"));
+        mvc.perform(patch(local + "/entries/" + id).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content("{\"revision\":1}"))
+                .andExpect(status().isConflict());
+        mvc.perform(delete(local + "/entries/" + id).with(jwtAs("closet:models:write"))).andExpect(status().isConflict());
+        mvc.perform(post(local + "/entries/" + id + "/resume").with(jwtAs("closet:models:write")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(id));
+        mvc.perform(post(local + "/entries/" + id + "/test").with(jwtAs("closet:models:write"))).andExpect(status().isNotFound());
+        mvc.perform(delete(local + "/routing/INVALID").with(jwtAs("closet:models:write"))).andExpect(status().isBadRequest());
+        server.verify();
+    }
+
+    @Test void modelEntryIdAcceptsContractMaximumLength() throws Exception {
+        String id = "a".repeat(300);
+        String local = "/api/v1/closet/models/entries/";
+        server.expect(requestTo("http://closet.test/api/manage/v1/models/entries/" + id + "/resume"))
+                .andExpect(method(HttpMethod.POST)).andRespond(withSuccess("{\"id\":\"" + id + "\"}", MediaType.APPLICATION_JSON));
+        mvc.perform(post(local + id + "/resume").with(jwtAs("closet:models:write")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(id));
+        mvc.perform(post(local + id + "a/resume").with(jwtAs("closet:models:write"))).andExpect(status().isNotFound());
+        server.verify();
+    }
+
     @Test void feedbackPermissionsAndMenuAreSeeded() {
         for (String permission : java.util.List.of("closet:feedback:read", "closet:feedback:write")) assertThat(permissions.findByCode(permission)).isPresent();
         assertThat(menus.findByCode("closet-feedback").orElseThrow().getRequiredPermission()).isEqualTo("closet:feedback:read");
@@ -1323,8 +1573,11 @@ class ClosetIntegrationApiTest {
             }
         }
         var expected = ClosetContractSnapshotTest.operations(java.nio.file.Files.readString(
-                java.nio.file.Path.of("docs/integrations/closet/management-api.yaml"))).stream()
-                .map(operation -> operation.replaceAll("\\{[^}]+}", "{}")).collect(java.util.stream.Collectors.toSet());
+                java.nio.file.Path.of("docs/integrations/closet/management-api.yaml")));
+        assertThat(expected).containsAll(ClosetContractSnapshotTest.UPSTREAM_ONLY);
+        expected.removeAll(ClosetContractSnapshotTest.UPSTREAM_ONLY);
+        expected = expected.stream().map(operation -> operation.replaceAll("\\{[^}]+}", "{}"))
+                .collect(java.util.stream.Collectors.toSet());
         // Six insight reports deliberately share one whitelisted dynamic mapping. Exercise every declared report.
         if (actual.remove("GET /insights/{}")) {
             var reports = expected.stream().filter(operation -> operation.startsWith("GET /insights/")).sorted().toList();
@@ -1426,16 +1679,22 @@ class ClosetIntegrationApiTest {
 
     @Autowired com.yumg.starter.modules.integrations.closet.application.ClosetNavigationBootstrap navigationBootstrap;
 
-    @Test void upgradingAnOldDatabaseHidesGuideAndCapabilitiesAndRenamesTemplates() throws Exception {
-        for (String code : java.util.List.of("closet-creation-guide", "closet-creation-capabilities", "closet-creation-templates")) {
+    @Test void upgradingAnOldDatabaseRemovesCapabilitiesAndRenamesTemplates() throws Exception {
+        for (String code : java.util.List.of("closet-creation-guide", "closet-creation-templates")) {
             var menu = menus.findByCode(code).orElseThrow();
             menu.setVisible(true);
             if (code.endsWith("templates")) { menu.rename("模板"); menu.reorder(10); }
             menus.save(menu);
         }
+        var parent = menus.findByCode("closet-creation").orElseThrow();
+        menus.save(new com.yumg.starter.entities.NavigationMenu(parent.getId(), "closet-creation-capabilities",
+                "模型能力", "/creation/capabilities", "closet-creation-capabilities", "ri/settings-3-line", 20,
+                com.yumg.starter.entities.NavigationMenuType.PAGE, "closet:creation:read", true, true, false, true));
         navigationBootstrap.run(null);
         assertThat(menus.findByCode("closet-creation-guide").orElseThrow().isVisible()).isFalse();
-        assertThat(menus.findByCode("closet-creation-capabilities").orElseThrow().isVisible()).isFalse();
+        assertThat(menus.findByCode("closet-creation-capabilities")).isEmpty();
+        navigationBootstrap.run(null);
+        assertThat(menus.findByCode("closet-creation-capabilities")).isEmpty();
         var effects = menus.findByCode("closet-creation-templates").orElseThrow();
         assertThat(effects.getTitle()).isEqualTo("创作效果");
         assertThat(effects.getSortOrder()).isZero();

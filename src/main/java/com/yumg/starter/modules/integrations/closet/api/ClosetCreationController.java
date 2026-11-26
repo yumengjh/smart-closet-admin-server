@@ -70,14 +70,8 @@ public class ClosetCreationController {
         return service.write("TEMPLATE_RETIRED", "POST", template(id) + "/retire", body);
     }
 
-    @GetMapping("/capabilities") @PreAuthorize("hasAuthority('closet:creation:read')")
-    public JsonNode capabilities() { return service.read("/capabilities", Map.of()); }
-
     @GetMapping("/generation-options") @PreAuthorize("hasAuthority('closet:creation:read')")
     public JsonNode generationOptions() { return service.read("/generation-options", Map.of()); }
-
-    @PutMapping("/capabilities") @PreAuthorize("hasAuthority('closet:creation:write')")
-    public JsonNode capabilities(@RequestBody JsonNode body) { return service.write("CAPABILITY_UPDATED", "PUT", "/capabilities", body); }
 
     @GetMapping("/usage") @PreAuthorize("hasAuthority('closet:creation:read')")
     public JsonNode usage(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,

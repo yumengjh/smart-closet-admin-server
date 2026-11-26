@@ -30,6 +30,13 @@ public class ClosetNavigationBootstrap implements ApplicationRunner {
         seed(directory, "closet-account-events", "账号审计", "/closet/account-events", "closet-account-events", "ri/file-list-3-line", 27, "closet:user:read");
         seed(directory, "closet-security-audit", "安全审计", "/closet/security-audit", "closet-security-audit", "ri/shield-check-line", 28, "closet:security:read");
         seed(directory, "closet-ops", "运行监控", "/closet/ops", "closet-ops", "ri/pulse-line", 30, "closet:ops:read");
+        NavigationMenu models = seed(directory, "closet-models", "模型调配", "/closet/models", "closet-models", "ri/robot-2-line", 0, "closet:models:read");
+        models.reorder(0);
+        if ("ri/settings-3-line".equals(models.getIcon())) {
+            models.update(models.getParentId(), models.getTitle(), models.getRoutePath(), models.getComponentKey(),
+                    "ri/robot-2-line", models.getSortOrder(), models.getMenuType(), models.getRequiredPermission(),
+                    models.isVisible(), models.isEnabled(), models.isKeepAlive());
+        }
         seed(directory, "closet-exports", "数据导出", "/closet/exports", "closet-exports", "ri/download-2-line", 40, "closet:exports:read");
         seed(directory, "closet-templates", "模板审核", "/closet/templates", "closet-templates", "ri/checkbox-multiple-line", 50, "closet:templates:read");
         seed(directory, "closet-samples", "整套样本", "/closet/samples", "closet-samples", "ri/image-edit-line", 52, "closet:samples:read");
@@ -38,12 +45,12 @@ public class ClosetNavigationBootstrap implements ApplicationRunner {
         NavigationMenu creation = menus.findByCode("closet-creation").orElseGet(() -> menus.save(new NavigationMenu(
                 null, "closet-creation", "穿搭创作", "/creation", null, "ri/image-line", 155,
                 NavigationMenuType.DIRECTORY, "closet:creation:read", true, true, false, true)));
-        // Guide and model capabilities stay routable pages but leave the menu (the editor links to them).
+        // The guide stays routable but leaves the menu (the editor links to it).
         seed(creation, "closet-creation-guide", "使用指南", "/creation/guide", "closet-creation-guide", "ri/book-open-line", 0, "closet:creation:read").setVisible(false);
         NavigationMenu effects = seed(creation, "closet-creation-templates", "创作效果", "/creation/templates", "closet-creation-templates", "ri/image-line", 0, "closet:creation:read");
         if ("模板".equals(effects.getTitle())) effects.rename("创作效果");
         if (effects.getSortOrder() == 10) effects.reorder(0);
-        seed(creation, "closet-creation-capabilities", "模型能力", "/creation/capabilities", "closet-creation-capabilities", "ri/settings-3-line", 20, "closet:creation:read").setVisible(false);
+        menus.findByCode("closet-creation-capabilities").ifPresent(menus::delete);
         seed(creation, "closet-creation-usage", "用量", "/creation/usage", "closet-creation-usage", "ri/bar-chart-line", 30, "closet:creation:read");
         seed(directory, "closet-creation-showcases", "官方素材", "/creation/showcases", "closet-creation-showcases", "ri/gallery-line", 57, "closet:showcase:read");
         seed(directory, "closet-presets", "预设衣物", "/closet/presets", "closet-presets", "ri/t-shirt-2-line", 58, "closet:presets:read");

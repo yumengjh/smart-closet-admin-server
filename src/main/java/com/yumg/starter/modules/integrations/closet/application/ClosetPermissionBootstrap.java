@@ -43,6 +43,8 @@ public class ClosetPermissionBootstrap implements ApplicationRunner {
             new PermissionSeed("closet:insights:read", "查看鱼搭衣柜洞察与推荐 AI 指标"),
             new PermissionSeed("closet:ops:read", "查看鱼搭运维状态、邮件用量、监控规则、任务、操作日志与助手 token 预算"),
             new PermissionSeed("closet:security:read", "查看鱼搭安全审计时间线并执行防篡改校验"),
+            new PermissionSeed("closet:models:read", "查看鱼搭模型调配"),
+            new PermissionSeed("closet:models:write", "管理鱼搭模型服务商、模型和路由"),
             new PermissionSeed("closet:dashboard:read", "查看鱼搭汇总大屏"),
             new PermissionSeed("closet:exports:read", "导出鱼搭去标识数据"),
             new PermissionSeed("closet:templates:read", "查看鱼搭搭配模板"),
