@@ -1,6 +1,6 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/reference/management-api.yaml
-# source-commit: 659f1b2918131ba04dabb1a416ed8a75ff09dfea
-# source-sha256: 01d0dd08d0a73a5518d529c108e3c834fe0a5ca7abb45757f7df7b66883d9c80
+# source-commit: f9a9e5b8749a299afa9a2ba556603e2ba1850b7d
+# source-sha256: 5bf2c286baf304178037234ef217e02356150f1f63c955360e98eac49f148174
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
@@ -17,7 +17,7 @@ info:
     `docs/design/2026-11-23-用户反馈：匿名提交与后台处理设计.md`。1.9.1 只修正说明（issue #290）：数仓 `garment_created` 只含已拥有衣物，
     衣物新增类指标不含种草，注册模式可由 `PUT /registration` 覆盖，`Wardrobe` 补齐 `styles`、`genderFits`。1.10（issue #296）用户列表与详情
     增加 `emailBound` 与打码的 `emailMasked`，不返回邮箱全文，见 `docs/design/2026-11-24-邮件模块：邮箱注册、找回密码与监控告警设计.md`。1.11 补齐运维与内容：`/ops/status` 增加 `database`，
-    新增只读 `/ops/mail`、`/ops/monitor`，以及整套穿搭样本 `/samples`（与鱼搭内管理页共用存储，见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md` 末尾 1.11 一节）。1.12（issue #298）新增模型调配 `/models`：服务商、模型、生效与备用路由、免费探测与试用，`/ops/status` 的 `providers` 增加 `routing`，见 `docs/design/2026-11-26-模型调配：多服务商、生效模型与自动备用设计.md`。
+    新增只读 `/ops/mail`、`/ops/monitor`，以及整套穿搭样本 `/samples`（与鱼搭内管理页共用存储，见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md` 末尾 1.11 一节）。1.12（issue #298）新增模型调配 `/models`：服务商、模型、生效与备用路由、免费探测与试用、调用与消耗 `/models/usage`，`/ops/status` 的 `providers` 增加 `routing`，见 `docs/design/2026-11-26-模型调配：多服务商、生效模型与自动备用设计.md`。
 
     认证：每个请求都必须携带 HMAC 签名头（见 `components.securitySchemes.closetHmac`）。
     时间字段均为 Unix 毫秒，字段名以 `AtMs` 结尾；日期参数为 `YYYY-MM-DD`，按 Asia/Shanghai 解释，`to` 含当天。
@@ -2674,6 +2674,25 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ModelOverview' }
         '401': { $ref: '#/components/responses/Problem' }
+  /models/usage:
+    get:
+      tags: [models]
+      operationId: getModelUsage
+      description: 模型调用与消耗：按服务商、模型、用途、每日汇总调用账本（model_call），含成功率、耗时、token、出图、费用快照、错误码排行与最近调用。日期按 Asia/Shanghai，含两端，默认最近 7 天，最长 92 天。账本不含用户、提示词、图片与回复内容。
+      parameters:
+        - { name: from, in: query, required: false, schema: { type: string, format: date } }
+        - { name: to, in: query, required: false, schema: { type: string, format: date } }
+        - { name: capability, in: query, required: false, schema: { type: string, enum: [VISION, IMAGE, CHAT] } }
+        - { name: providerId, in: query, required: false, schema: { type: string, minLength: 1, maxLength: 32 } }
+        - { name: model, in: query, required: false, schema: { type: string, minLength: 1, maxLength: 160 } }
+      responses:
+        '200':
+          description: 汇总
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelUsage' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
   /models/providers:
     post:
       tags: [models]
@@ -4468,6 +4487,139 @@ components:
         editable: { type: boolean }
         deletable: { type: boolean }
         health: { $ref: '#/components/schemas/ModelHealth' }
+    ModelCost:
+      type: object
+      required: [currency, amountMicro]
+      properties:
+        currency: { type: string }
+        amountMicro: { type: integer, format: int64, description: 百万分之一货币单位 }
+    ModelUsageTotals:
+      type: object
+      required: [calls, requests, ok, failed, cancelled, successRate, inputTokens, outputTokens, images, costs, unpricedCalls]
+      properties:
+        calls: { type: integer, format: int64 }
+        requests: { type: integer, format: int64 }
+        ok: { type: integer, format: int64 }
+        failed: { type: integer, format: int64 }
+        cancelled: { type: integer, format: int64 }
+        successRate: { type: [number, 'null'], description: ok / (ok + failed)，三位小数；没有调用时为 null }
+        inputTokens: { type: integer, format: int64 }
+        outputTokens: { type: integer, format: int64 }
+        images: { type: integer, format: int64 }
+        costs: { type: array, items: { $ref: '#/components/schemas/ModelCost' } }
+        unpricedCalls: { type: integer, format: int64, description: 成功但没有成本价的调用数 }
+    ModelUsageProvider:
+      type: object
+      required: [providerId, providerName, calls, ok, failed, successRate, inputTokens, outputTokens, images, costs, unpricedCalls, lastCallAtMs]
+      properties:
+        providerId: { type: string }
+        providerName: { type: string, description: 取当前注册表，已删除的服务商回落为 id }
+        calls: { type: integer, format: int64 }
+        ok: { type: integer, format: int64 }
+        failed: { type: integer, format: int64 }
+        successRate: { type: [number, 'null'] }
+        inputTokens: { type: integer, format: int64 }
+        outputTokens: { type: integer, format: int64 }
+        images: { type: integer, format: int64 }
+        costs: { type: array, items: { $ref: '#/components/schemas/ModelCost' } }
+        unpricedCalls: { type: integer, format: int64 }
+        lastCallAtMs: { type: [integer, 'null'], format: int64 }
+    ModelUsageModel:
+      type: object
+      required: [capability, providerId, model, entryId, label, calls, requests, ok, failed, cancelled, successRate, avgLatencyMs, p95LatencyMs, inputTokens, outputTokens, images, costs, unpricedCalls, reroutedCalls, lastCallAtMs]
+      properties:
+        capability: { type: string, enum: [VISION, IMAGE, CHAT] }
+        providerId: { type: string }
+        model: { type: string }
+        entryId: { type: [string, 'null'] }
+        label: { type: [string, 'null'] }
+        calls: { type: integer, format: int64 }
+        requests: { type: integer, format: int64 }
+        ok: { type: integer, format: int64 }
+        failed: { type: integer, format: int64 }
+        cancelled: { type: integer, format: int64 }
+        successRate: { type: [number, 'null'] }
+        avgLatencyMs: { type: [integer, 'null'], format: int64, description: 成功调用的平均耗时 }
+        p95LatencyMs: { type: [integer, 'null'], format: int64, description: 成功调用耗时的第 95 百分位（最近秩） }
+        inputTokens: { type: integer, format: int64 }
+        outputTokens: { type: integer, format: int64 }
+        images: { type: integer, format: int64 }
+        costs: { type: array, items: { $ref: '#/components/schemas/ModelCost' } }
+        unpricedCalls: { type: integer, format: int64 }
+        reroutedCalls: { type: integer, format: int64, description: 因改道或备用而发往该模型的调用数 }
+        lastCallAtMs: { type: [integer, 'null'], format: int64 }
+    ModelUsage:
+      type: object
+      required: [scope, totals, byProvider, byModel, byPurpose, errors, daily, recent, note]
+      properties:
+        scope:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date }
+            to: { type: string, format: date }
+        totals: { $ref: '#/components/schemas/ModelUsageTotals' }
+        byProvider: { type: array, items: { $ref: '#/components/schemas/ModelUsageProvider' } }
+        byModel: { type: array, items: { $ref: '#/components/schemas/ModelUsageModel' } }
+        byPurpose:
+          type: array
+          items:
+            type: object
+            required: [capability, purpose, calls, failed]
+            properties:
+              capability: { type: string }
+              purpose: { type: string }
+              calls: { type: integer, format: int64 }
+              failed: { type: integer, format: int64 }
+        errors:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            required: [providerId, model, errorCode, count, lastAtMs]
+            properties:
+              providerId: { type: string }
+              model: { type: string }
+              errorCode: { type: [string, 'null'] }
+              count: { type: integer, format: int64 }
+              lastAtMs: { type: integer, format: int64 }
+        daily:
+          type: array
+          description: 范围内每一天，没有调用的日子为 0
+          items:
+            type: object
+            required: [date, calls, failed, inputTokens, outputTokens, images, costs]
+            properties:
+              date: { type: string, format: date }
+              calls: { type: integer, format: int64 }
+              failed: { type: integer, format: int64 }
+              inputTokens: { type: integer, format: int64 }
+              outputTokens: { type: integer, format: int64 }
+              images: { type: integer, format: int64 }
+              costs: { type: array, items: { $ref: '#/components/schemas/ModelCost' } }
+        recent:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            required: [atMs, capability, providerId, model, purpose, outcome, errorCode, latencyMs, requests, inputTokens, outputTokens, images, rerouted, costMicro, costCurrency]
+            properties:
+              atMs: { type: integer, format: int64 }
+              capability: { type: string }
+              providerId: { type: string }
+              model: { type: string }
+              purpose: { type: string }
+              outcome: { type: string, enum: [OK, FAILED, CANCELLED] }
+              errorCode: { type: [string, 'null'] }
+              latencyMs: { type: integer, format: int64 }
+              requests: { type: integer }
+              inputTokens: { type: [integer, 'null'], format: int64 }
+              outputTokens: { type: [integer, 'null'], format: int64 }
+              images: { type: integer }
+              rerouted: { type: boolean }
+              costMicro: { type: [integer, 'null'], format: int64 }
+              costCurrency: { type: [string, 'null'] }
+        note: { type: string }
     ModelRouting:
       type: object
       properties:
