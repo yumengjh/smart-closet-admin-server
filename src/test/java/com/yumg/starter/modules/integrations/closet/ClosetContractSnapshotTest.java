@@ -49,7 +49,7 @@ class ClosetContractSnapshotTest {
             "POST /poses/extract", "POST /poses/check", "GET /poses/check-settings", "PUT /poses/check-settings",
             "GET /poses/sensitive-terms", "POST /poses/sensitive-terms", "PATCH /poses/sensitive-terms/{id}", "DELETE /poses/sensitive-terms/{id}",
             "GET /feedback", "PATCH /feedback/{id}", "DELETE /feedback/{id}", "GET /feedback/settings", "PUT /feedback/settings",
-            "GET /models", "POST /models/providers", "PATCH /models/providers/{id}", "DELETE /models/providers/{id}",
+            "GET /models", "GET /models/usage", "POST /models/providers", "PATCH /models/providers/{id}", "DELETE /models/providers/{id}",
             "POST /models/providers/{id}/probe", "POST /models/entries", "PATCH /models/entries/{id}",
             "DELETE /models/entries/{id}", "POST /models/entries/{id}/resume", "POST /models/entries/{id}/test",
             "PUT /models/routing/{capability}", "DELETE /models/routing/{capability}",

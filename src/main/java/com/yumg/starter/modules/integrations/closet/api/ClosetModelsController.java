@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
 import tools.jackson.databind.JsonNode;
 
@@ -17,6 +18,9 @@ public class ClosetModelsController {
 
     @GetMapping @PreAuthorize("hasAuthority('closet:models:read')")
     public JsonNode overview() { return models.overview(); }
+
+    @GetMapping("/usage") @PreAuthorize("hasAuthority('closet:models:read')")
+    public JsonNode usage(@RequestParam MultiValueMap<String, String> query) { return models.usage(query); }
 
     @PostMapping("/providers") @PreAuthorize("hasAuthority('closet:models:write')")
     @ResponseStatus(HttpStatus.CREATED)

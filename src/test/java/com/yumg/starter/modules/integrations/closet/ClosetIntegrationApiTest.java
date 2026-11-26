@@ -1020,6 +1020,53 @@ class ClosetIntegrationApiTest {
                 .contains("closet:models:read", "closet:models:write");
     }
 
+    @Test void modelUsageRequiresReadPermissionAndForwardsEncodedFiltersWithSignatureWithoutAudit() throws Exception {
+        String local = "/api/v1/closet/models/usage";
+        long before = auditEvents.count();
+        mvc.perform(get(local)).andExpect(status().isUnauthorized());
+        mvc.perform(get(local).with(jwtAs("closet:models:write"))).andExpect(status().isForbidden());
+        mvc.perform(get(local).with(jwtAs("closet:feedback:read"))).andExpect(status().isForbidden());
+
+        var query = java.util.Map.of(
+                "from", java.util.List.of("2026-11-20"), "to", java.util.List.of("2026-11-26"),
+                "capability", java.util.List.of("VISION"), "providerId", java.util.List.of("阿里 & cloud"),
+                "model", java.util.List.of("qwen/视觉+v1"));
+        server.expect(requestTo("http://closet.test/api/manage/v1/models/usage?from=2026-11-20&to=2026-11-26"
+                        + "&capability=VISION&providerId=%E9%98%BF%E9%87%8C%20%26%20cloud&model=qwen%2F%E8%A7%86%E8%A7%89%2Bv1"))
+                .andExpect(method(HttpMethod.GET)).andExpect(req -> {
+                    var h = req.getHeaders();
+                    var signer = new com.yumg.starter.modules.integrations.closet.infrastructure.ClosetRequestSigner();
+                    String canonical = signer.canonical("GET", req.getURI().getRawPath(), query,
+                            Long.parseLong(h.getFirst("X-Closet-Timestamp")), h.getFirst("X-Closet-Nonce"),
+                            h.getFirst("X-Operator"), h.getFirst("X-Request-Id"), new byte[0]);
+                    assertThat(h.getFirst("X-Closet-Signature")).isEqualTo(signer.sign(canonical, "0123456789abcdef0123456789abcdef"));
+                }).andRespond(withSuccess("{\"totals\":{\"calls\":3},\"byModel\":[{\"model\":\"qwen\"}]}", MediaType.APPLICATION_JSON));
+        mvc.perform(get(local).with(jwtAs("closet:models:read"))
+                        .param("from", "2026-11-20").param("to", "2026-11-26").param("capability", "VISION")
+                        .param("providerId", "阿里 & cloud").param("model", "qwen/视觉+v1").param("ignored", "value"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.totals.calls").value(3))
+                .andExpect(jsonPath("$.data.byModel[0].model").value("qwen"));
+        server.verify();
+        assertThat(auditEvents.count()).isEqualTo(before);
+    }
+
+    @Test void modelUsagePassesThroughDefaultsAndUpstreamErrorsWithoutAudit() throws Exception {
+        String local = "/api/v1/closet/models/usage";
+        String upstream = "http://closet.test/api/manage/v1/models/usage";
+        long before = auditEvents.count();
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"totals\":{\"calls\":0}}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(upstream + "?from=invalid")).andExpect(method(HttpMethod.GET))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("{\"code\":\"INVALID_PARAMETER\",\"detail\":\"invalid date\"}"));
+        mvc.perform(get(local).with(jwtAs("closet:models:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.totals.calls").value(0));
+        mvc.perform(get(local).with(jwtAs("closet:models:read")).param("from", "invalid"))
+                .andExpect(status().isBadRequest());
+        server.verify();
+        assertThat(auditEvents.count()).isEqualTo(before);
+    }
+
     @Test void modelsForwardSignedRequestsAndAuditWithoutSecrets() throws Exception {
         String secret = "secret-model-key-123";
         String body = "{\"id\":\"vendor\",\"name\":\"Vendor\",\"kind\":\"OPENAI_COMPATIBLE\",\"baseUrl\":\"https://example.com/v1\",\"apiKey\":\"" + secret + "\"}";

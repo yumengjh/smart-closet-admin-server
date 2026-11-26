@@ -4,6 +4,8 @@ import com.yumg.starter.common.api.ApiException;
 import com.yumg.starter.modules.integrations.closet.infrastructure.ClosetManagementClient;
 import com.yumg.starter.modules.integrations.closet.infrastructure.ClosetRequestSigner;
 import com.yumg.starter.modules.security.application.AuditService;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -23,6 +25,13 @@ public class ClosetModelsService {
     }
 
     public JsonNode overview() { return client.get(BASE, Map.of()); }
+    public JsonNode usage(Map<String, List<String>> query) {
+        var upstream = new LinkedHashMap<String, List<String>>();
+        for (String key : List.of("from", "to", "capability", "providerId", "model")) {
+            if (query.containsKey(key)) upstream.put(key, query.get(key));
+        }
+        return client.get(BASE + "/usage", upstream);
+    }
     public JsonNode createProvider(JsonNode body) { return audited("PROVIDER_CREATE", "providers", () -> client.post(BASE + "/providers", body)); }
     public JsonNode updateProvider(String id, JsonNode body) { return audited("PROVIDER_UPDATE", id, () -> client.patch(path("providers", id), body)); }
     public void deleteProvider(String id) { audited("PROVIDER_DELETE", id, () -> { client.delete(path("providers", id)); return null; }); }
