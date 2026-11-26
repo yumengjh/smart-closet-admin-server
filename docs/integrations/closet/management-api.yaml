@@ -1,6 +1,6 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/reference/management-api.yaml
-# source-commit: 7d15e1371607a90b18eb077726146e325f854d93
-# source-sha256: 4ae05ab6e9ea0b8c9659ee70bd46a958006c256eabddd0340e2664c633b7ea09
+# source-commit: 5d0db2a2543e76d71377f898fe4cb28e8f28ecbe
+# source-sha256: 08de207f977febdc640afbb72ae97a2d0114500d7bdc1deaf3792fd599a69739
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
@@ -2826,6 +2826,35 @@ paths:
               schema: { $ref: '#/components/schemas/ModelEntry' }
         '401': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
+  /models/entries/{id}/references:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, maxLength: 300 } }
+    put:
+      tags: [models]
+      operationId: setModelEntryReferences
+      description: 生图模型的参考图设置：单次最多几张参考图，超出时把多出的拼成一张编号拼图（STITCH，默认）还是直接报错（REJECT）。部署配置的模型也可以改。maxReferenceImages 为 null 时用协议默认值（百炼 Qwen-Image 3、Gemini 14、OpenAI Images 16）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision]
+              properties:
+                maxReferenceImages: { type: [integer, 'null'], minimum: 1, maximum: 20 }
+                overLimit: { type: [string, 'null'], enum: [STITCH, REJECT, null] }
+                revision: { type: integer, format: int64, description: references.revision，没保存过为 0 }
+      responses:
+        '200':
+          description: 模型
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelEntry' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
   /models/entries/{id}/test:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, maxLength: 300 } }
@@ -4490,6 +4519,15 @@ components:
         editable: { type: boolean }
         deletable: { type: boolean }
         health: { $ref: '#/components/schemas/ModelHealth' }
+        references:
+          type: object
+          description: 只有生图模型有。limit 是实际生效的上限。
+          properties:
+            limit: { type: integer }
+            defaultLimit: { type: integer }
+            customLimit: { type: [integer, 'null'] }
+            overLimit: { type: string, enum: [STITCH, REJECT] }
+            revision: { type: integer, format: int64 }
     ModelCost:
       type: object
       required: [currency, amountMicro]
@@ -4529,7 +4567,7 @@ components:
         lastCallAtMs: { type: [integer, 'null'], format: int64 }
     ModelUsageModel:
       type: object
-      required: [capability, providerId, model, entryId, label, calls, requests, ok, failed, cancelled, successRate, avgLatencyMs, p95LatencyMs, inputTokens, outputTokens, images, costs, unpricedCalls, reroutedCalls, lastCallAtMs]
+      required: [capability, providerId, model, entryId, label, calls, requests, ok, failed, cancelled, successRate, avgLatencyMs, p95LatencyMs, inputTokens, outputTokens, images, costs, unpricedCalls, reroutedCalls, stitchedCalls, lastCallAtMs]
       properties:
         capability: { type: string, enum: [VISION, IMAGE, CHAT] }
         providerId: { type: string }
@@ -4550,6 +4588,7 @@ components:
         costs: { type: array, items: { $ref: '#/components/schemas/ModelCost' } }
         unpricedCalls: { type: integer, format: int64 }
         reroutedCalls: { type: integer, format: int64, description: 因改道或备用而发往该模型的调用数 }
+        stitchedCalls: { type: integer, format: int64, description: 参考图超出上限、拼了图的调用数 }
         lastCallAtMs: { type: [integer, 'null'], format: int64 }
     ModelUsage:
       type: object
@@ -4605,7 +4644,7 @@ components:
           maxItems: 50
           items:
             type: object
-            required: [atMs, capability, providerId, model, purpose, outcome, errorCode, latencyMs, requests, inputTokens, outputTokens, images, rerouted, costMicro, costCurrency]
+            required: [atMs, capability, providerId, model, purpose, outcome, errorCode, latencyMs, requests, inputTokens, outputTokens, images, rerouted, stitched, costMicro, costCurrency]
             properties:
               atMs: { type: integer, format: int64 }
               capability: { type: string }
@@ -4620,6 +4659,7 @@ components:
               outputTokens: { type: [integer, 'null'], format: int64 }
               images: { type: integer }
               rerouted: { type: boolean }
+              stitched: { type: integer, description: 这次被拼进拼图的参考图张数，0 表示没拼图 }
               costMicro: { type: [integer, 'null'], format: int64 }
               costCurrency: { type: [string, 'null'] }
         note: { type: string }

@@ -37,6 +37,8 @@ public class ClosetModelsController {
     public JsonNode createEntry(@RequestBody JsonNode body) { return models.createEntry(body); }
     @PatchMapping("/entries/{id}") @PreAuthorize("hasAuthority('closet:models:write')")
     public JsonNode updateEntry(@PathVariable String id, @RequestBody JsonNode body) { return models.updateEntry(id, body); }
+    @PutMapping("/entries/{id}/references") @PreAuthorize("hasAuthority('closet:models:write')")
+    public JsonNode setReferences(@PathVariable String id, @RequestBody JsonNode body) { return models.setReferences(id, body); }
     @DeleteMapping("/entries/{id}") @PreAuthorize("hasAuthority('closet:models:write')")
     public ResponseEntity<Void> deleteEntry(@PathVariable String id) { models.deleteEntry(id); return ResponseEntity.noContent().build(); }
     @PostMapping("/entries/{id}/resume") @PreAuthorize("hasAuthority('closet:models:write')")

@@ -1042,6 +1042,43 @@ class ClosetIntegrationApiTest {
                 .contains("closet:models:read", "closet:models:write");
     }
 
+    @Test void modelReferencesRequireWriteAndForwardSettingsAndConflictsWithoutAuditingBody() throws Exception {
+        String id = "cfg:image:vendor:reference-test";
+        String local = "/api/v1/closet/models/entries/" + id + "/references";
+        String upstream = "http://closet.test/api/manage/v1/models/entries/cfg%3Aimage%3Avendor%3Areference-test/references";
+        String body = "{\"maxReferenceImages\":null,\"overLimit\":\"REJECT\",\"revision\":7}";
+        mvc.perform(put(local).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isUnauthorized());
+        mvc.perform(put(local).with(jwtAs("closet:models:read")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.PUT)).andExpect(content().json(body, true))
+                .andRespond(withSuccess("{\"id\":\"" + id + "\",\"references\":{\"limit\":3,\"revision\":8}}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.PUT)).andExpect(content().json(body, true))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("{\"code\":\"MODEL_CONFLICT\",\"detail\":\"stale revision\"}"));
+        mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.references.revision").value(8));
+        mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict());
+        server.verify();
+        assertThat(auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_MODELS_ENTRY_REFERENCES_UPDATE")
+                && e.getTargetId().equals(id)).toList()).extracting(AuditEvent::getResult).contains("SUCCESS", "FAILURE");
+        assertThat(auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_MODELS_ENTRY_REFERENCES_UPDATE")
+                && e.getTargetId().equals(id))).allSatisfy(e -> assertThat(e.getMetadata()).isEqualTo("{}"));
+    }
+
+    @Test void existingModelMenuIsMovedFirstAndLegacyIconIsUpgraded() throws Exception {
+        var menu = menus.findByCode("closet-models").orElseThrow();
+        menu.update(menu.getParentId(), menu.getTitle(), menu.getRoutePath(), menu.getComponentKey(),
+                "ri/settings-3-line", 31, menu.getMenuType(), menu.getRequiredPermission(),
+                menu.isVisible(), menu.isEnabled(), menu.isKeepAlive());
+        menus.save(menu);
+        navigationBootstrap.run(null);
+        var upgraded = menus.findByCode("closet-models").orElseThrow();
+        assertThat(upgraded.getSortOrder()).isZero();
+        assertThat(upgraded.getIcon()).isEqualTo("ri/robot-2-line");
+        assertThat(menus.findByCode("closet-insights").orElseThrow().getSortOrder()).isGreaterThan(upgraded.getSortOrder());
+    }
+
     @Test void modelUsageRequiresReadPermissionAndForwardsEncodedFiltersWithSignatureWithoutAudit() throws Exception {
         String local = "/api/v1/closet/models/usage";
         long before = auditEvents.count();

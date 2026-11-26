@@ -52,6 +52,7 @@ class ClosetContractSnapshotTest {
             "GET /models", "GET /models/usage", "POST /models/providers", "PATCH /models/providers/{id}", "DELETE /models/providers/{id}",
             "POST /models/providers/{id}/probe", "POST /models/entries", "PATCH /models/entries/{id}",
             "DELETE /models/entries/{id}", "POST /models/entries/{id}/resume", "POST /models/entries/{id}/test",
+            "PUT /models/entries/{id}/references",
             "PUT /models/routing/{capability}", "DELETE /models/routing/{capability}",
             "GET /onboarding/style-covers", "GET /onboarding/style-covers/{key}/image",
             "PUT /onboarding/style-covers/{key}/image", "DELETE /onboarding/style-covers/{key}/image",
