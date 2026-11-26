@@ -1,6 +1,6 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/reference/management-api.yaml
-# source-commit: eb405945205e6064760bb5bb5025937593146f9a
-# source-sha256: 0d2c0b902b77c967ba086906d6453a21eb899da71b7e75e0849affbcd3c6a1b1
+# source-commit: 8513d2c85b74d9db0c69bb30a2522f4597e74d73
+# source-sha256: ddf2b61985939cc54503eee53355922320418d9b86b60f14dfa75bd0e7578a96
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
@@ -4515,7 +4515,12 @@ components:
         apiKeyConfigured: { type: boolean }
         apiKeyHint: { type: [string, 'null'], description: '形如 ****a1b2' }
         timeoutSeconds: { type: integer }
-        imageHosts: { type: array, items: { type: string } }
+        imageHosts: { type: array, items: { type: string }, description: '上游返回图片地址时只从这些主机下载；* 只代表一段；单独一个 * 表示任意公网 https 主机（仍禁止内网、只走 443、不跟随跳转）' }
+        anyPublicImageHost: { type: boolean, description: 'imageHosts 里有单独的 *' }
+        rejectedImageHosts:
+          type: array
+          description: 这个服务商返回过、但还不在可信图片域名里的主机（最近 10 个，只有主机名），可一键加入 imageHosts
+          items: { type: object, properties: { host: { type: string }, count: { type: integer }, lastAtMs: { type: integer, format: int64 } } }
         status: { type: string, enum: [READY, NO_KEY, KEY_UNREADABLE, SHADOWED] }
         revision: { type: integer, format: int64 }
         editable: { type: boolean }
@@ -4748,7 +4753,7 @@ components:
         baseUrl: { type: string, maxLength: 300, description: 'https（本机测试可用 http://localhost），不能指向内网' }
         apiKey: { type: string, minLength: 8, maxLength: 400, writeOnly: true }
         timeoutSeconds: { type: integer, description: '缺省 180' }
-        imageHosts: { type: array, items: { type: string } }
+        imageHosts: { type: array, items: { type: string }, description: '单独一个 * 表示任意公网 https 主机' }
     ModelProviderPatch:
       type: object
       required: [revision]
@@ -4758,7 +4763,7 @@ components:
         baseUrl: { type: string, maxLength: 300 }
         apiKey: { type: string, minLength: 8, maxLength: 400, writeOnly: true, description: '传入则换密钥' }
         timeoutSeconds: { type: integer }
-        imageHosts: { type: array, items: { type: string } }
+        imageHosts: { type: array, items: { type: string }, description: '单独一个 * 表示任意公网 https 主机' }
         revision: { type: integer, format: int64 }
     ModelEntryInput:
       type: object
