@@ -438,6 +438,28 @@ class ClosetIntegrationApiTest {
         assertThat(recorded.get().signature()).isNotBlank();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"ART_CREATION", "OOTD", "BASELINE", "ALL"})
+    void creationCapabilitiesForwardPurpose(String purpose) throws Exception {
+        server.expect(requestTo("http://closet.test/api/manage/v1/creations/capabilities?purpose=" + purpose))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[{\"purpose\":\"" + purpose + "\"}]", MediaType.APPLICATION_JSON));
+        mvc.perform(get("/api/v1/closet/creations/capabilities").param("purpose", purpose)
+                .with(jwtAs("closet:creation:read")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].purpose").value(purpose));
+        server.verify();
+    }
+
+    @Test void creationCapabilitiesRejectInvalidPurposeBeforeForwarding() throws Exception {
+        for (String purpose : java.util.List.of("", "ootd", "INVALID", "ART_CREATION,OOTD")) {
+            mvc.perform(get("/api/v1/closet/creations/capabilities").param("purpose", purpose)
+                    .with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
+        }
+        mvc.perform(get("/api/v1/closet/creations/capabilities").param("purpose", "OOTD", "INVALID")
+                .with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
+        server.verify();
+    }
+
     @Test void creationUsageRejectsInvalidDateRangeBeforeForwarding() throws Exception {
         mvc.perform(get("/api/v1/closet/creations/usage?from=2026-01-01&to=2026-02-01")
                 .with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());

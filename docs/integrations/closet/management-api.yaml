@@ -1,6 +1,6 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/reference/management-api.yaml
-# source-commit: f9a9e5b8749a299afa9a2ba556603e2ba1850b7d
-# source-sha256: 5bf2c286baf304178037234ef217e02356150f1f63c955360e98eac49f148174
+# source-commit: 7d15e1371607a90b18eb077726146e325f854d93
+# source-sha256: 4ae05ab6e9ea0b8c9659ee70bd46a958006c256eabddd0340e2664c633b7ea09
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
@@ -605,9 +605,12 @@ paths:
     get:
       operationId: listCreationCapabilities
       tags: [creations]
+      description: 已验证的出图用途。默认只列 ART_CREATION（创作）；1.12 起可用 purpose=OOTD（上身图）、BASELINE（形象图）或 ALL，供新接入的生图模型在“试穿”页使用。
+      parameters:
+        - { name: purpose, in: query, schema: { type: string, enum: [ART_CREATION, OOTD, BASELINE, ALL], default: ART_CREATION } }
       responses:
         '200':
-          description: ART_CREATION capabilities
+          description: Render capabilities of the requested purpose
           content:
             application/json:
               schema:
@@ -3600,7 +3603,7 @@ components:
       properties:
         provider: { type: string }
         model: { type: string }
-        purpose: { type: string, enum: [ART_CREATION] }
+        purpose: { type: string, enum: [ART_CREATION, OOTD, BASELINE] }
         maxReferences: { type: integer, minimum: 1, maximum: 20 }
         verified: { type: boolean }
         version: { type: integer, format: int64, minimum: 0 }
@@ -3612,7 +3615,7 @@ components:
       properties:
         provider: { type: string }
         model: { type: string }
-        purpose: { type: string, enum: [ART_CREATION] }
+        purpose: { type: string, enum: [ART_CREATION, OOTD, BASELINE] }
         maxReferences: { type: integer, minimum: 1, maximum: 20 }
         verified: { type: boolean }
         version: { type: integer, format: int64 }

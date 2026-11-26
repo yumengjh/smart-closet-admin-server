@@ -71,7 +71,13 @@ public class ClosetCreationController {
     }
 
     @GetMapping("/capabilities") @PreAuthorize("hasAuthority('closet:creation:read')")
-    public JsonNode capabilities() { return service.read("/capabilities", Map.of()); }
+    public JsonNode capabilities(@RequestParam org.springframework.util.MultiValueMap<String, String> query) {
+        List<String> purposes = query.get("purpose");
+        if (purposes == null) return service.read("/capabilities", Map.of());
+        if (purposes.size() != 1 || !List.of("ART_CREATION", "OOTD", "BASELINE", "ALL").contains(purposes.get(0)))
+            throw ApiException.invalidParameter();
+        return service.read("/capabilities", Map.of("purpose", purposes));
+    }
 
     @GetMapping("/generation-options") @PreAuthorize("hasAuthority('closet:creation:read')")
     public JsonNode generationOptions() { return service.read("/generation-options", Map.of()); }
