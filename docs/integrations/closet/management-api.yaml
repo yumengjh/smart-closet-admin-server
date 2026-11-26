@@ -1,6 +1,6 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/reference/management-api.yaml
-# source-commit: 5d0db2a2543e76d71377f898fe4cb28e8f28ecbe
-# source-sha256: 08de207f977febdc640afbb72ae97a2d0114500d7bdc1deaf3792fd599a69739
+# source-commit: e5e6d1da54c82ad9e25362fea49cf162b3da7b80
+# source-sha256: c3f2eaa0043c26fd478154af662f970ab3c88ca6cdb62c16eaa2722658850e98
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
@@ -2874,7 +2874,7 @@ paths:
         '409': { $ref: '#/components/responses/Problem' }
   /models/routing/{capability}:
     parameters:
-      - { name: capability, in: path, required: true, schema: { type: string, enum: [VISION, IMAGE, CHAT] } }
+      - { name: capability, in: path, required: true, description: PORTRAIT 为形象图槽位，选生图模型；删除后跟随 IMAGE, schema: { type: string, enum: [VISION, IMAGE, CHAT, PORTRAIT] } }
     put:
       tags: [models]
       operationId: setModelRouting
@@ -4515,7 +4515,7 @@ components:
         enabled: { type: boolean }
         source: { type: string, enum: [CONFIG, DATABASE] }
         revision: { type: integer, format: int64 }
-        inUse: { type: [string, 'null'], enum: [ACTIVE, FALLBACK, null] }
+        inUse: { type: [string, 'null'], enum: [ACTIVE, FALLBACK, PORTRAIT_ACTIVE, PORTRAIT_FALLBACK, null], description: 'PORTRAIT_* 表示只被形象图槽位选用' }
         editable: { type: boolean }
         deletable: { type: boolean }
         health: { $ref: '#/components/schemas/ModelHealth' }
@@ -4672,6 +4672,7 @@ components:
         configured: { type: boolean, description: 'false 表示没有路由行，用的是部署默认' }
         revision: { type: integer, format: int64 }
         updatedAtMs: { type: [integer, 'null'], format: int64 }
+        followsImage: { type: boolean, description: '只在 PORTRAIT 上出现：true 表示没单独选，跟随生图路由' }
     ModelOverview:
       type: object
       required: [masterKeyConfigured, failoverEnabled, providers, entries, routing, events]
@@ -4686,6 +4687,7 @@ components:
             VISION: { $ref: '#/components/schemas/ModelRouting' }
             IMAGE: { $ref: '#/components/schemas/ModelRouting' }
             CHAT: { $ref: '#/components/schemas/ModelRouting' }
+            PORTRAIT: { $ref: '#/components/schemas/ModelRouting' }
         events:
           type: array
           items:

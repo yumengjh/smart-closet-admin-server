@@ -51,7 +51,7 @@ public class ClosetModelsService {
     }
 
     private String routePath(String capability) {
-        if (!java.util.Set.of("VISION", "IMAGE", "CHAT").contains(capability)) throw ApiException.invalidParameter();
+        if (!java.util.Set.of("VISION", "IMAGE", "CHAT", "PORTRAIT").contains(capability)) throw ApiException.invalidParameter();
         return BASE + "/routing/" + capability;
     }
 

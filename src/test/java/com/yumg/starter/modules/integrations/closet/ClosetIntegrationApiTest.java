@@ -152,7 +152,7 @@ class ClosetIntegrationApiTest {
                 .findFirst().orElseThrow().getPermissions()).extracting(permission -> permission.getCode())
                 .contains("closet:creation:read", "closet:creation:write", "closet:creation:publish");
         var parent = menus.findByCode("closet-creation").orElseThrow();
-        for (String key : java.util.List.of("templates", "capabilities", "usage")) {
+        for (String key : java.util.List.of("templates", "usage")) {
             var page = menus.findByCode("closet-creation-" + key).orElseThrow();
             assertThat(page.getParentId()).isEqualTo(parent.getId());
             assertThat(page.getRequiredPermission()).isEqualTo("closet:creation:read");
@@ -161,11 +161,10 @@ class ClosetIntegrationApiTest {
         assertThat(effects.getTitle()).isEqualTo("创作效果");
         assertThat(effects.getSortOrder()).isZero();
         assertThat(effects.isVisible()).isTrue();
-        for (String hidden : java.util.List.of("guide", "capabilities")) {
-            var page = menus.findByCode("closet-creation-" + hidden).orElseThrow();
-            assertThat(page.isVisible()).isFalse();
-            assertThat(page.getComponentKey()).isEqualTo("closet-creation-" + hidden);
-        }
+        var guide = menus.findByCode("closet-creation-guide").orElseThrow();
+        assertThat(guide.isVisible()).isFalse();
+        assertThat(guide.getComponentKey()).isEqualTo("closet-creation-guide");
+        assertThat(menus.findByCode("closet-creation-capabilities")).isEmpty();
         assertThat(menus.findByCode("closet-creation-usage").orElseThrow().isVisible()).isTrue();
         var business = menus.findByCode("closet").orElseThrow();
         var showcase = menus.findByCode("closet-creation-showcases").orElseThrow();
@@ -414,9 +413,7 @@ class ClosetIntegrationApiTest {
                 new CreationRoute(HttpMethod.POST, version + "/verify", "write", "{\"revision\":1,\"evidence\":\"fixture evidence\"}"),
                 new CreationRoute(HttpMethod.POST, version + "/publish", "publish", "{\"revision\":1}"),
                 new CreationRoute(HttpMethod.POST, template + "/retire", "publish", "{\"revision\":1}"),
-                new CreationRoute(HttpMethod.GET, "/creations/generation-options", "read", null),
-                new CreationRoute(HttpMethod.GET, "/creations/capabilities", "read", null),
-                new CreationRoute(HttpMethod.PUT, "/creations/capabilities", "write", "{\"purpose\":\"ART_CREATION\"}"));
+                new CreationRoute(HttpMethod.GET, "/creations/generation-options", "read", null));
     }
 
     @org.junit.jupiter.params.ParameterizedTest
@@ -438,25 +435,12 @@ class ClosetIntegrationApiTest {
         assertThat(recorded.get().signature()).isNotBlank();
     }
 
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"ART_CREATION", "OOTD", "BASELINE", "ALL"})
-    void creationCapabilitiesForwardPurpose(String purpose) throws Exception {
-        server.expect(requestTo("http://closet.test/api/manage/v1/creations/capabilities?purpose=" + purpose))
-                .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("[{\"purpose\":\"" + purpose + "\"}]", MediaType.APPLICATION_JSON));
-        mvc.perform(get("/api/v1/closet/creations/capabilities").param("purpose", purpose)
-                .with(jwtAs("closet:creation:read")))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].purpose").value(purpose));
-        server.verify();
-    }
-
-    @Test void creationCapabilitiesRejectInvalidPurposeBeforeForwarding() throws Exception {
-        for (String purpose : java.util.List.of("", "ootd", "INVALID", "ART_CREATION,OOTD")) {
-            mvc.perform(get("/api/v1/closet/creations/capabilities").param("purpose", purpose)
-                    .with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
-        }
-        mvc.perform(get("/api/v1/closet/creations/capabilities").param("purpose", "OOTD", "INVALID")
-                .with(jwtAs("closet:creation:read"))).andExpect(status().isBadRequest());
+    @Test void retiredCreationCapabilitiesAreNotExposed() throws Exception {
+        mvc.perform(get("/api/v1/closet/creations/capabilities").with(jwtAs("closet:creation:read")))
+                .andExpect(status().isNotFound());
+        mvc.perform(put("/api/v1/closet/creations/capabilities").with(jwtAs("closet:creation:write"))
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isNotFound());
         server.verify();
     }
 
@@ -1177,6 +1161,27 @@ class ClosetIntegrationApiTest {
         server.verify();
     }
 
+    @Test void portraitRoutingForwardsRevisionAndResetResponse() throws Exception {
+        String local = "/api/v1/closet/models/routing/PORTRAIT";
+        String upstream = "http://closet.test/api/manage/v1/models/routing/PORTRAIT";
+        String body = "{\"active\":\"cfg:image:vendor:model\",\"fallback\":null,\"revision\":3}";
+        mvc.perform(put(local).with(jwtAs("closet:models:read")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete(local).with(jwtAs("closet:models:read"))).andExpect(status().isForbidden());
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.PUT)).andExpect(content().json(body, true))
+                .andExpect(ClosetIntegrationApiTest::capture)
+                .andRespond(withSuccess("{\"active\":\"cfg:image:vendor:model\",\"revision\":4}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(upstream)).andExpect(method(HttpMethod.DELETE))
+                .andRespond(withSuccess("{\"active\":null,\"configured\":false,\"followsImage\":true,\"revision\":0}", MediaType.APPLICATION_JSON));
+        mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.revision").value(4));
+        assertThat(recorded.get().signature()).isNotBlank();
+        mvc.perform(delete(local).with(jwtAs("closet:models:write")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.followsImage").value(true))
+                .andExpect(jsonPath("$.data.revision").value(0));
+        server.verify();
+    }
+
     @Test void modelIdsWithColonsAreEncodedAndModelErrorsKeepTheirStatuses() throws Exception {
         String local = "/api/v1/closet/models";
         String id = "cfg:vision:yumg:gpt-6-luna";
@@ -1530,8 +1535,11 @@ class ClosetIntegrationApiTest {
             }
         }
         var expected = ClosetContractSnapshotTest.operations(java.nio.file.Files.readString(
-                java.nio.file.Path.of("docs/integrations/closet/management-api.yaml"))).stream()
-                .map(operation -> operation.replaceAll("\\{[^}]+}", "{}")).collect(java.util.stream.Collectors.toSet());
+                java.nio.file.Path.of("docs/integrations/closet/management-api.yaml")));
+        assertThat(expected).containsAll(ClosetContractSnapshotTest.UPSTREAM_ONLY);
+        expected.removeAll(ClosetContractSnapshotTest.UPSTREAM_ONLY);
+        expected = expected.stream().map(operation -> operation.replaceAll("\\{[^}]+}", "{}"))
+                .collect(java.util.stream.Collectors.toSet());
         // Six insight reports deliberately share one whitelisted dynamic mapping. Exercise every declared report.
         if (actual.remove("GET /insights/{}")) {
             var reports = expected.stream().filter(operation -> operation.startsWith("GET /insights/")).sorted().toList();
@@ -1633,16 +1641,22 @@ class ClosetIntegrationApiTest {
 
     @Autowired com.yumg.starter.modules.integrations.closet.application.ClosetNavigationBootstrap navigationBootstrap;
 
-    @Test void upgradingAnOldDatabaseHidesGuideAndCapabilitiesAndRenamesTemplates() throws Exception {
-        for (String code : java.util.List.of("closet-creation-guide", "closet-creation-capabilities", "closet-creation-templates")) {
+    @Test void upgradingAnOldDatabaseRemovesCapabilitiesAndRenamesTemplates() throws Exception {
+        for (String code : java.util.List.of("closet-creation-guide", "closet-creation-templates")) {
             var menu = menus.findByCode(code).orElseThrow();
             menu.setVisible(true);
             if (code.endsWith("templates")) { menu.rename("模板"); menu.reorder(10); }
             menus.save(menu);
         }
+        var parent = menus.findByCode("closet-creation").orElseThrow();
+        menus.save(new com.yumg.starter.entities.NavigationMenu(parent.getId(), "closet-creation-capabilities",
+                "模型能力", "/creation/capabilities", "closet-creation-capabilities", "ri/settings-3-line", 20,
+                com.yumg.starter.entities.NavigationMenuType.PAGE, "closet:creation:read", true, true, false, true));
         navigationBootstrap.run(null);
         assertThat(menus.findByCode("closet-creation-guide").orElseThrow().isVisible()).isFalse();
-        assertThat(menus.findByCode("closet-creation-capabilities").orElseThrow().isVisible()).isFalse();
+        assertThat(menus.findByCode("closet-creation-capabilities")).isEmpty();
+        navigationBootstrap.run(null);
+        assertThat(menus.findByCode("closet-creation-capabilities")).isEmpty();
         var effects = menus.findByCode("closet-creation-templates").orElseThrow();
         assertThat(effects.getTitle()).isEqualTo("创作效果");
         assertThat(effects.getSortOrder()).isZero();

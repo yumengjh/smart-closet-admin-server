@@ -70,20 +70,8 @@ public class ClosetCreationController {
         return service.write("TEMPLATE_RETIRED", "POST", template(id) + "/retire", body);
     }
 
-    @GetMapping("/capabilities") @PreAuthorize("hasAuthority('closet:creation:read')")
-    public JsonNode capabilities(@RequestParam org.springframework.util.MultiValueMap<String, String> query) {
-        List<String> purposes = query.get("purpose");
-        if (purposes == null) return service.read("/capabilities", Map.of());
-        if (purposes.size() != 1 || !List.of("ART_CREATION", "OOTD", "BASELINE", "ALL").contains(purposes.get(0)))
-            throw ApiException.invalidParameter();
-        return service.read("/capabilities", Map.of("purpose", purposes));
-    }
-
     @GetMapping("/generation-options") @PreAuthorize("hasAuthority('closet:creation:read')")
     public JsonNode generationOptions() { return service.read("/generation-options", Map.of()); }
-
-    @PutMapping("/capabilities") @PreAuthorize("hasAuthority('closet:creation:write')")
-    public JsonNode capabilities(@RequestBody JsonNode body) { return service.write("CAPABILITY_UPDATED", "PUT", "/capabilities", body); }
 
     @GetMapping("/usage") @PreAuthorize("hasAuthority('closet:creation:read')")
     public JsonNode usage(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,

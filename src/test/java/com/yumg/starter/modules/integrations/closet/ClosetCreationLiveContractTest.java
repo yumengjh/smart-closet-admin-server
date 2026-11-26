@@ -3,7 +3,6 @@ package com.yumg.starter.modules.integrations.closet;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -30,17 +29,11 @@ class ClosetCreationLiveContractTest {
         return SecurityMockMvcRequestPostProcessors.jwt().jwt(j -> j.claim("username", "fixture"))
                 .authorities(() -> permission);
     }
-    @Test void signedGatewayTalksToRealTemplateAndCapabilityEndpoints() throws Exception {
+    @Test void signedGatewayTalksToRealTemplateEndpoints() throws Exception {
         var mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         var base = "/api/v1/closet/creations";
         mvc.perform(get(base + "/templates").with(jwt("closet:creation:read")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.items.length()").value(3));
-        mvc.perform(get(base + "/capabilities").with(jwt("closet:creation:read")))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items").isArray());
-        mvc.perform(put(base + "/capabilities").with(jwt("closet:creation:write"))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"provider\":\"fixture\",\"model\":\"fixture-image\",\"purpose\":\"ART_CREATION\",\"maxReferences\":4,\"verified\":false,\"version\":0,\"notes\":\"local test\",\"outputOptions\":{}}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.pricingKey").value(org.hamcrest.Matchers.matchesPattern("art:[a-f0-9]{64}")));
         mvc.perform(get(base + "/usage?from=2026-11-01&to=2026-11-02").with(jwt("closet:creation:read")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.timeZone").value("Asia/Shanghai"))
                 .andExpect(jsonPath("$.data.items").isArray());

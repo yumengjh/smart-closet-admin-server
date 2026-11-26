@@ -62,7 +62,7 @@ class ClosetContractSnapshotTest {
             "GET /creations/templates", "POST /creations/templates/{id}/versions",
             "GET /creations/templates/{id}/versions/{versionId}", "PUT /creations/templates/{id}/versions/{versionId}",
             "POST /creations/templates/{id}/versions/{versionId}/verify", "POST /creations/templates/{id}/versions/{versionId}/publish",
-            "POST /creations/templates/{id}/retire", "GET /creations/capabilities", "PUT /creations/capabilities",
+            "POST /creations/templates/{id}/retire",
             "GET /creations/generation-options", "GET /creations/usage",
             "GET /creations/templates/{id}/versions/{versionId}/preview-image", "GET /creations/prompt-samples", "POST /creations/templates", "DELETE /creations/templates/{id}",
             "PUT /creations/templates/order", "GET /creations/trial-garments", "GET /creations/trial-garments/{id}/image",
@@ -139,6 +139,9 @@ class ClosetContractSnapshotTest {
             "POST /tryon/sessions/{id}/stop",
             "POST /tryon/accounts/{id}/stop-sessions");
 
+    // These operations remain upstream, but the retired admin capability page no longer uses them.
+    static final Set<String> UPSTREAM_ONLY = Set.of("GET /creations/capabilities", "PUT /creations/capabilities");
+
     @Test void snapshotBodyMatchesRecordedHash() throws Exception {
         byte[] all = Files.readAllBytes(SNAPSHOT);
         String header = header(all);
@@ -151,7 +154,8 @@ class ClosetContractSnapshotTest {
 
     @Test void everyCalledOperationExistsInSnapshot() throws Exception {
         Set<String> contract = operations(new String(body(Files.readAllBytes(SNAPSHOT)), StandardCharsets.UTF_8));
-        assertThat(contract).as("upstream operations used by the admin service").containsExactlyInAnyOrderElementsOf(USED);
+        assertThat(contract).as("upstream operations used by the admin service or explicitly upstream-only")
+                .containsExactlyInAnyOrderElementsOf(java.util.stream.Stream.concat(USED.stream(), UPSTREAM_ONLY.stream()).toList());
     }
 
     @Test void snapshotEqualsSourceWhenAvailable() throws Exception {
