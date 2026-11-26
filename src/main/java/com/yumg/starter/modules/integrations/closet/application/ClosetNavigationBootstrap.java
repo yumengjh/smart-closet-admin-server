@@ -30,6 +30,7 @@ public class ClosetNavigationBootstrap implements ApplicationRunner {
         seed(directory, "closet-account-events", "账号审计", "/closet/account-events", "closet-account-events", "ri/file-list-3-line", 27, "closet:user:read");
         seed(directory, "closet-security-audit", "安全审计", "/closet/security-audit", "closet-security-audit", "ri/shield-check-line", 28, "closet:security:read");
         seed(directory, "closet-ops", "运行监控", "/closet/ops", "closet-ops", "ri/pulse-line", 30, "closet:ops:read");
+        seed(directory, "closet-models", "模型调配", "/closet/models", "closet-models", "ri/settings-3-line", 31, "closet:models:read");
         seed(directory, "closet-exports", "数据导出", "/closet/exports", "closet-exports", "ri/download-2-line", 40, "closet:exports:read");
         seed(directory, "closet-templates", "模板审核", "/closet/templates", "closet-templates", "ri/checkbox-multiple-line", 50, "closet:templates:read");
         seed(directory, "closet-samples", "整套样本", "/closet/samples", "closet-samples", "ri/image-edit-line", 52, "closet:samples:read");
