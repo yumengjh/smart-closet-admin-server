@@ -1052,6 +1052,8 @@ class ClosetIntegrationApiTest {
 
     @Test void modelTimeoutRequiresWriteAndForwardsSettingsAndErrorsWithoutAuditingBody() throws Exception {
         String id = "cfg:image:vendor:timeout-test";
+        // The SQLite test file in target/ survives between runs: count only the audit rows this test writes.
+        var earlier = auditEvents.findAll().stream().map(AuditEvent::getId).collect(java.util.stream.Collectors.toSet());
         String local = "/api/v1/closet/models/entries/" + id + "/timeout";
         String upstream = "http://closet.test/api/manage/v1/models/entries/cfg%3Aimage%3Avendor%3Atimeout-test/timeout";
         String body = "{\"timeoutSeconds\":180,\"revision\":7}";
@@ -1080,8 +1082,8 @@ class ClosetIntegrationApiTest {
         mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest());
         server.verify();
-        var events = auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_MODELS_ENTRY_TIMEOUT_UPDATE")
-                && e.getTargetId().equals(id)).toList();
+        var events = auditEvents.findAll().stream().filter(e -> !earlier.contains(e.getId())
+                && e.getAction().equals("CLOSET_MODELS_ENTRY_TIMEOUT_UPDATE") && e.getTargetId().equals(id)).toList();
         assertThat(events).extracting(AuditEvent::getResult).containsExactlyInAnyOrder("SUCCESS", "SUCCESS", "FAILURE", "FAILURE");
         assertThat(events).allSatisfy(e -> assertThat(e.getMetadata()).isEqualTo("{}"));
     }
