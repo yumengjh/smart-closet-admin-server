@@ -1,11 +1,11 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/reference/management-api.yaml
-# source-commit: 8513d2c85b74d9db0c69bb30a2522f4597e74d73
-# source-sha256: ddf2b61985939cc54503eee53355922320418d9b86b60f14dfa75bd0e7578a96
+# source-commit: 26342c082b4704cf7c0b72707a7727addd1ca08a
+# source-sha256: a5cc60fd0a02bc2b9c286b4ae3591c85987ca9ddddac95f8a87aa8a02486d3b8
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
   title: Smart Closet Management API
-  version: 1.12.0
+  version: 1.13.0
   description: |
     鱼搭中立管理接口。默认关闭（`closet.management.enabled=false`），开启后供任意宿主平台以服务身份调用。
     设计说明见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md`；1.1（运维、KPI、大屏与数据出口、模板审核）见
@@ -17,7 +17,7 @@ info:
     `docs/design/2026-11-23-用户反馈：匿名提交与后台处理设计.md`。1.9.1 只修正说明（issue #290）：数仓 `garment_created` 只含已拥有衣物，
     衣物新增类指标不含种草，注册模式可由 `PUT /registration` 覆盖，`Wardrobe` 补齐 `styles`、`genderFits`。1.10（issue #296）用户列表与详情
     增加 `emailBound` 与打码的 `emailMasked`，不返回邮箱全文，见 `docs/design/2026-11-24-邮件模块：邮箱注册、找回密码与监控告警设计.md`。1.11 补齐运维与内容：`/ops/status` 增加 `database`，
-    新增只读 `/ops/mail`、`/ops/monitor`，以及整套穿搭样本 `/samples`（与鱼搭内管理页共用存储，见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md` 末尾 1.11 一节）。1.12（issue #298）新增模型调配 `/models`：服务商、模型、生效与备用路由、免费探测与试用、调用与消耗 `/models/usage`，`/ops/status` 的 `providers` 增加 `routing`，见 `docs/design/2026-11-26-模型调配：多服务商、生效模型与自动备用设计.md`。
+    新增只读 `/ops/mail`、`/ops/monitor`，以及整套穿搭样本 `/samples`（与鱼搭内管理页共用存储，见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md` 末尾 1.11 一节）。1.13（issue #299）新增上游多路冗余：模型池 `/models/pools`、摘除、档位与重发设置、健康事件与时间线、尝试链、探活、余额、告警，`/models` 与 `/models/usage` 增加字段，`/ops/status` 的 `providers` 增加 `pools` 与 `alertsFiring`，见 `docs/design/2026-11-27-上游多路冗余：模型池、标准与高质量档位设计.md` 第十六节；图像额度上限在权益、兑换码批次与商品里放宽到 3000（按人覆盖仍为 1000）。1.12（issue #298）新增模型调配 `/models`：服务商、模型、生效与备用路由、免费探测与试用、调用与消耗 `/models/usage`，`/ops/status` 的 `providers` 增加 `routing`，见 `docs/design/2026-11-26-模型调配：多服务商、生效模型与自动备用设计.md`。
 
     认证：每个请求都必须携带 HMAC 签名头（见 `components.securitySchemes.closetHmac`）。
     时间字段均为 Unix 毫秒，字段名以 `AtMs` 结尾；日期参数为 `YYYY-MM-DD`，按 Asia/Shanghai 解释，`to` 含当天。
@@ -1814,6 +1814,8 @@ paths:
     post: {"summary": "\u66f4\u65b0\u672c\u5730\u7d2f\u8ba1\u652f\u51fa\u6388\u6743", "operationId": "tryonPostAccountsIdBudget", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}, "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TryOnBudgetChange"}}}}}
   /tryon/pool:
     get: {"summary": "\u67e5\u8be2\u603b\u6c60\u53ef\u7528\u6c60\u548c\u5e76\u53d1", "operationId": "tryonGetPool", "responses": {"200": {"description": "\u64cd\u4f5c\u7ed3\u679c\uff1b\u4e0d\u542b\u6c38\u4e45\u5bc6\u94a5\u4e0e\u79c1\u4eba\u5a92\u4f53\u5185\u5bb9", "content": {"application/json": {"schema": {}}}}}}
+  /tryon/vendors:
+    get: {"summary": "\u67e5\u8be2\u5b9e\u65f6\u8bd5\u7a7f\u4f9b\u5e94\u5546\u6982\u51b5\uff08XMAX \u5bf9\u5e94\u6807\u51c6\u6863\uff0cDECART \u5bf9\u5e94\u9ad8\u8d28\u91cf\u6863\uff09", "operationId": "tryonGetVendors", "responses": {"200": {"description": "\u6bcf\u4e2a\u4f9b\u5e94\u5546\u7684\u8d26\u6237\u6570\u3001\u5065\u5eb7\u8d26\u6237\u6570\u3001\u5e76\u53d1\u5728\u7528\u3001\u4eca\u65e5\u4f1a\u8bdd\u6570\u4e0e\u79d2\u6570\u3001\u4eca\u65e5\u82b1\u8d39\u3001\u4f59\u989d\u3001\u9996\u5e27\u524d\u5931\u8d25\u6b21\u6570\uff1bDECART \u53e6\u542b\u4f9b\u5e94\u5546\u4fa7\u5e76\u53d1\u4e0e\u6309\u65e5\u5bf9\u8d26\u6570\u636e\u3002\u4e0d\u542b\u7528\u6237\u540d\u3001\u7528\u6237\u6807\u8bc6\u4e0e\u5bc6\u94a5", "content": {"application/json": {"schema": {}}}}}}
   /tryon/reference-source:
     get: {"summary": "\u67e5\u8be2\u8bd5\u7a7f\u53c2\u8003\u56fe\u6765\u6e90\uff08\u8bd5\u7a7f\u4e13\u7528\u5b58\u50a8\u6876\u3001\u672c\u7ad9\u516c\u7f51\u7ad9\u70b9\u6216\u4ec5\u9650\u672c\u5730\u5f00\u53d1\u7684 XMax \u5b58\u50a8\uff09\u4e0e\u5404\u72b6\u6001\u53c2\u8003\u56fe\u8bb0\u5f55\u6570", "operationId": "tryonGetReferenceSource", "responses": {"200": {"description": "\u6765\u6e90\u3001devOnly\u3001\u6876\u4e3b\u673a\u540d/\u6876\u540d/\u524d\u7f00\u6216\u7ad9\u70b9 origin\u3001\u5730\u5740\u6709\u6548\u671f\u4e0e\u8bb0\u5f55\u8ba1\u6570\uff1b\u4e0d\u542b\u8bbf\u95ee\u5bc6\u94a5\u3001\u4ee4\u724c\u6216\u56fe\u7247\u5730\u5740", "content": {"application/json": {"schema": {}}}}}}
   /tryon/usage:
@@ -1978,7 +1980,7 @@ paths:
                 priceMinor: { type: integer, minimum: 1, maximum: 100000000 }
                 points: { type: integer, minimum: 0, maximum: 10000000 }
                 entDays: { type: integer, minimum: 1, maximum: 3650 }
-                entImageDailyLimit: { type: integer, minimum: 0, maximum: 1000 }
+                entImageDailyLimit: { type: integer, minimum: 0, maximum: 3000 }
                 entAgentDailyLimit: { type: integer, minimum: 0, maximum: 1000 }
                 enabled: { type: boolean }
                 sortOrder: { type: integer }
@@ -2056,7 +2058,7 @@ paths:
                 points: { type: integer, minimum: 0, maximum: 10000000 }
                 unitPriceMicro: { type: integer, minimum: 0, description: '每点售价（币种百万分之一），0 表示赠送无收入；大于 0 必须填 currency' }
                 currency: { type: string, maxLength: 8 }
-                imageDailyLimit: { type: integer, minimum: 0, maximum: 1000 }
+                imageDailyLimit: { type: integer, minimum: 0, maximum: 3000 }
                 agentDailyLimit: { type: integer, minimum: 0, maximum: 1000 }
                 entitlementDays: { type: integer, minimum: 1, maximum: 3650 }
                 quantity: { type: integer, minimum: 1, maximum: 500 }
@@ -2146,7 +2148,7 @@ paths:
               additionalProperties: false
               required: [days]
               properties:
-                imageDailyLimit: { type: integer, minimum: 0, maximum: 1000 }
+                imageDailyLimit: { type: integer, minimum: 0, maximum: 3000 }
                 agentDailyLimit: { type: integer, minimum: 0, maximum: 1000 }
                 days: { type: integer, minimum: 1, maximum: 3650 }
                 note: { type: string, maxLength: 80 }
@@ -2933,6 +2935,404 @@ paths:
               schema: { $ref: '#/components/schemas/ModelRouting' }
         '400': { $ref: '#/components/responses/Problem' }
         '401': { $ref: '#/components/responses/Problem' }
+  /models/pools/{pool}:
+    parameters:
+      - { name: pool, in: path, required: true, schema: { type: string, enum: [VISION, CHAT, IMAGE_PREMIUM, IMAGE_STANDARD, PORTRAIT_PREMIUM, PORTRAIT_STANDARD] } }
+    put:
+      tags: [models]
+      operationId: putModelPool
+      description: 整体替换池的成员（优先级 1 到 9 小者先用，同级按权重轮转）。成员必须是该池能力的模型、不重复，且至少有一个开启并且服务商可用的成员。池已存在时 revision 必填并须一致（409 MODEL_CONFLICT）；池不存在或刚清空时可省略。返回写入后的池视图。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModelPoolInput' }
+      responses:
+        '200':
+          description: 写入后的池
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelPoolView' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [models]
+      operationId: clearModelPool
+      description: 清空池。VISION、CHAT、IMAGE_PREMIUM 回到部署默认；IMAGE_STANDARD 清空后用户端不再提供标准档；形象图池清空后跟随同档的生图池。
+      responses:
+        '200':
+          description: 清空后的池
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelPoolView' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /models/entries/{id}/drain:
+    parameters:
+      - { name: id, in: path, required: true, description: '模型 id（含冒号时原样给出）', schema: { type: string, maxLength: 300 } }
+    post:
+      tags: [models]
+      operationId: drainModelEntry
+      description: 把模型从它所在的所有池里摘除（不再接新任务，在途的跑完），写 MANUAL_DRAIN 事件。不在任何池里 400，模型不存在 404。
+      responses:
+        '200':
+          description: 摘除结果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelDrainResult' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /models/entries/{id}/undrain:
+    parameters:
+      - { name: id, in: path, required: true, description: '模型 id（含冒号时原样给出）', schema: { type: string, maxLength: 300 } }
+    post:
+      tags: [models]
+      operationId: undrainModelEntry
+      description: 把模型放回它所在的池，写 MANUAL_UNDRAIN 事件。
+      responses:
+        '200':
+          description: 放回结果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelDrainResult' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /models/tiers:
+    get:
+      tags: [models]
+      operationId: getModelTiers
+      description: 档位设置：降级开关、衣物整理用哪个池、各用途的额度单位、用户默认生图档位；renderTiersEnabled 表示两个生图池都有成员，用户端才会出现档位选择。
+      responses:
+        '200':
+          description: 档位设置
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelTiers' }
+        '401': { $ref: '#/components/responses/Problem' }
+    put:
+      tags: [models]
+      operationId: putModelTiers
+      description: 整体替换档位设置（省略的字段取默认值）。revision 必填，不一致 409 MODEL_CONFLICT；单位需在 0 到 20 之间，衣物整理只能用生图池。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModelTiersInput' }
+      responses:
+        '200':
+          description: 写入后的设置
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelTiers' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /models/resend:
+    get:
+      tags: [models]
+      operationId: getModelResend
+      description: 重发设置。notExecutedMarkers 是管理员自己加的“确定没执行”标记，builtInMarkers 是内置的只读标记。
+      responses:
+        '200':
+          description: 重发设置
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelResend' }
+        '401': { $ref: '#/components/responses/Problem' }
+    put:
+      tags: [models]
+      operationId: putModelResend
+      description: 整体替换重发设置。revision 必填；与内置标记相同的标记不会重复保存。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModelResendInput' }
+      responses:
+        '200':
+          description: 写入后的设置
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelResend' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /models/health/events:
+    get:
+      tags: [models]
+      operationId: listModelHealthEvents
+      description: 持久化的健康与路由事件（暂停、恢复、改道、重发、降级、摘除、探活、服务商不可达等），新的在前，保留 180 天。只含 id、代码与时间。
+      parameters:
+        - { name: from, in: query, required: false, schema: { type: string, format: date } }
+        - { name: to, in: query, required: false, schema: { type: string, format: date } }
+        - { name: scope, in: query, required: false, schema: { type: string, enum: [ENTRY, PROVIDER, POOL, VENDOR] } }
+        - { name: refId, in: query, required: false, schema: { type: string, minLength: 1, maxLength: 200 } }
+        - { name: pool, in: query, required: false, schema: { type: string, enum: [VISION, CHAT, IMAGE_PREMIUM, IMAGE_STANDARD, PORTRAIT_PREMIUM, PORTRAIT_STANDARD] } }
+        - { name: kind, in: query, required: false, schema: { type: string, pattern: '^[A-Z_]{1,24}$' } }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100000, default: 1 } }
+        - { name: size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: 一页事件
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelHealthEventPage' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /models/health/timeline:
+    get:
+      tags: [models]
+      operationId: getModelHealthTimeline
+      description: 稳定性曲线数据：按时间桶汇总每个成员的调用数、成功、确定没执行的失败（NOT_EXECUTED）、可能已执行的失败（MAYBE_EXECUTED）、其他失败、成功调用的 P50 与 P95 耗时和暂停时长。pool 与 entryId 二选一，时间范围最长 31 天，只列出有调用或有暂停的桶。
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: bucket, in: query, required: false, schema: { type: string, enum: [5m, 1h, 1d], default: 1h } }
+        - { name: pool, in: query, required: false, schema: { type: string, enum: [VISION, CHAT, IMAGE_PREMIUM, IMAGE_STANDARD, PORTRAIT_PREMIUM, PORTRAIT_STANDARD] } }
+        - { name: entryId, in: query, required: false, schema: { type: string, minLength: 1, maxLength: 300 } }
+      responses:
+        '200':
+          description: 时间线
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelHealthTimeline' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /models/traces:
+    get:
+      tags: [models]
+      operationId: listModelTraces
+      description: 多次尝试的任务（尝试链）列表，新的在前，只含 traceId 与摘要。traceId 是任务 id 的哈希，不能反查用户。decision 筛选“链里出现过该决定”，outcome=OK 表示至少一次成功、FAILED 表示全部失败。
+      parameters:
+        - { name: decision, in: query, required: false, schema: { type: string, enum: [RESEND, REROUTE, DEGRADE] } }
+        - { name: outcome, in: query, required: false, schema: { type: string, enum: [OK, FAILED] } }
+        - { name: from, in: query, required: false, schema: { type: string, format: date } }
+        - { name: to, in: query, required: false, schema: { type: string, format: date } }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100000, default: 1 } }
+        - { name: size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: 一页尝试链摘要
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelTracePage' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /models/traces/{traceId}:
+    parameters:
+      - { name: traceId, in: path, required: true, schema: { type: string, pattern: '^[0-9a-f]{32}$' } }
+    get:
+      tags: [models]
+      operationId: getModelTrace
+      description: 一个任务的全部尝试，按尝试序号：时间、池、成员、决定、档位、结果、错误码、执行分类、耗时、费用。
+      responses:
+        '200':
+          description: 尝试链
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelTrace' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /models/probe:
+    get:
+      tags: [models]
+      operationId: getModelProbe
+      description: 探活设置、今日付费探活用量（按成员与按能力的花费）、每个服务商最近一次免费探活结果（进程内，重启后重建）、每个成员最近一次付费探活结果。
+      responses:
+        '200':
+          description: 探活概况
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelProbeOverview' }
+        '401': { $ref: '#/components/responses/Problem' }
+    put:
+      tags: [models]
+      operationId: putModelProbe
+      description: 整体替换探活设置（省略的字段取默认值，付费探活默认关闭）。revision 必填。花费上限按能力给出，单位为人民币微元，美元账单按 usdToCny 折算。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModelProbeInput' }
+      responses:
+        '200':
+          description: 写入后的探活概况
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelProbeOverview' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /models/entries/{id}/probe-paid:
+    parameters:
+      - { name: id, in: path, required: true, description: '模型 id（含冒号时原样给出）', schema: { type: string, maxLength: 300 } }
+    post:
+      tags: [models]
+      operationId: probeModelEntryPaid
+      description: 手动付费探活一次：向成员发一个最小真实请求（识图 64×64 图、对话一句话、生图固定提示词），会产生真实费用，不受每日次数与花费上限限制但计入当日总数；成功会让暂停中的成员恢复。后台应二次确认。响应带实际费用。
+      responses:
+        '200':
+          description: 探活结果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelPaidProbeResult' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /models/balances:
+    get:
+      tags: [models]
+      operationId: getModelBalances
+      description: 每个服务商的余额视图：余额来源、上游最近报的余额（原始数字与换算结果并排）、本地估算余额、差额（超过 10% 标 differenceWarning）、阈值、是否被自动移出，以及最近 30 天每日花费。未设置来源的服务商 billing.source 为 NONE。
+      responses:
+        '200':
+          description: 余额列表
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelBalanceList' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /models/providers/{id}/billing:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z0-9][a-z0-9-]{1,31}$' } }
+    put:
+      tags: [models]
+      operationId: putModelProviderBilling
+      description: 设置服务商的余额来源（NEWAPI、OPENROUTER、MANUAL、NONE）、访问令牌、阈值、币种与是否自动移出。令牌只写不读（省略保持不变，空串清除），响应只回打码。首次保存可省略 revision，之后必填。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModelBillingInput' }
+      responses:
+        '200':
+          description: 保存后的余额视图
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelBalance' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /models/providers/{id}/balance/refresh:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z0-9][a-z0-9-]{1,31}$' } }
+    post:
+      tags: [models]
+      operationId: refreshModelProviderBalance
+      description: 立即向上游拉取余额（来源为 NEWAPI 或 OPENROUTER 时）。上游的错误不使请求失败，写在 lastError；其他来源只重新判断阈值。
+      responses:
+        '200':
+          description: 刷新后的余额视图
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelBalance' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /models/providers/{id}/balance/manual:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z0-9][a-z0-9-]{1,31}$' } }
+    post:
+      tags: [models]
+      operationId: recordModelProviderBalance
+      description: 手动录入一条余额读数（“某一刻余额是多少”）。atMs 可选，默认现在，最早一年前、不能晚于现在。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModelBalanceManual' }
+      responses:
+        '200':
+          description: 录入后的余额视图
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelBalance' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /models/providers/{id}/balance/history:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, pattern: '^[a-z0-9][a-z0-9-]{1,31}$' } }
+    get:
+      tags: [models]
+      operationId: getModelProviderBalanceHistory
+      description: 余额快照历史，新的在前，保留 365 天。
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 500, default: 50 } }
+      responses:
+        '200':
+          description: 快照列表
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelBalanceHistory' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /models/alerts:
+    get:
+      tags: [models]
+      operationId: listModelAlerts
+      description: 模型告警。state=FIRING 只列未恢复的；ALL（默认）列已存的触发与恢复记录，新的在前，含邮件发送结果。读数文字只含 id、供应商名与数字。
+      parameters:
+        - { name: state, in: query, required: false, schema: { type: string, enum: [FIRING, ALL], default: ALL } }
+        - { name: rule, in: query, required: false, schema: { type: string, enum: [entry-paused, provider-unreachable, probe-paid-failed, pool-last-member, pool-exhausted, low-balance, spend-cap, tryon-vendor-down, tryon-remote-excess, tryon-reconcile-gap] } }
+        - { name: from, in: query, required: false, schema: { type: string, format: date } }
+        - { name: to, in: query, required: false, schema: { type: string, format: date } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        '200':
+          description: 告警列表
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelAlertList' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+  /models/alerts/settings:
+    get:
+      tags: [models]
+      operationId: getModelAlertSettings
+      description: 每条规则的开关、重复提醒间隔，以及邮件是否开启、收件人是否已配置（收件人由部署配置 CLOSET_MONITOR_ALERT_TO 决定，这里不显示地址）。
+      responses:
+        '200':
+          description: 告警设置
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelAlertSettings' }
+        '401': { $ref: '#/components/responses/Problem' }
+    put:
+      tags: [models]
+      operationId: putModelAlertSettings
+      description: 整体替换告警设置：rules 只需写要关闭或显式开启的规则，没写的默认开启；repeatMinutes 5 到 1440。revision 必填。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModelAlertSettingsInput' }
+      responses:
+        '200':
+          description: 写入后的设置
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelAlertSettings' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /models/alerts/test:
+    post:
+      tags: [models]
+      operationId: testModelAlert
+      description: 向告警收件人发一封测试邮件（不含任何业务数据，不写告警记录）。result 为 SENT、MAIL_DISABLED、NO_RECIPIENT、THROTTLED 或 FAILED。
+      responses:
+        '200':
+          description: 发送结果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelAlertTestResult' }
+        '401': { $ref: '#/components/responses/Problem' }
 components:
   securitySchemes:
     closetHmac:
@@ -3688,11 +4088,11 @@ components:
     BillingCostRate: {"type": "object", "required": ["id", "model", "unit", "amountMicro", "currency", "effectiveFromMs"], "properties": {"id": {"type": "string"}, "model": {"type": "string"}, "unit": {"type": "string", "enum": ["PER_IMAGE", "PER_MTOK_IN", "PER_MTOK_OUT", "PER_SECOND"]}, "amountMicro": {"type": "integer"}, "currency": {"type": "string"}, "effectiveFromMs": {"type": "integer"}, "actor": {"type": ["string", "null"]}, "note": {"type": ["string", "null"]}}}
     BillingAlert: {"type": "object", "required": ["tier", "model", "status"], "properties": {"tier": {"type": "string"}, "model": {"type": "string"}, "status": {"type": "string", "enum": ["NO_PRICE", "NO_COST", "BELOW_COST", "LOW_MARGIN", "OK"]}, "priceMilliPoints": {"type": ["integer", "null"]}, "revenuePerUnitMicro": {"type": ["number", "null"]}, "costPerUnitMicro": {"type": ["number", "null"]}, "assumedMix": {"type": "boolean"}}}
     BillingMarginReport: {"type": "object", "required": ["fromMs", "toMs", "lines", "liabilities", "notes"], "properties": {"orderLines": {"type": "array", "description": "\u8ba2\u5355\u5e26\u6765\u7684\u6536\u5165\u4e0e\u624b\u7eed\u8d39\uff0c\u6309\u5929\u6309\u5e01\u79cd\uff1b\u8ba2\u9605\u6536\u5165\u6309\u5929\u5e73\u644a", "items": {"type": "object"}}, "totals": {"type": "array", "description": "\u5404\u5e01\u79cd\u7684\u5e95\u7ebf\uff1a\u70b9\u6570\u6536\u5165 + \u8ba2\u9605\u6536\u5165 - \u4e0a\u6e38\u6210\u672c - \u6e20\u9053\u624b\u7eed\u8d39\uff0c\u5e01\u79cd\u4e4b\u95f4\u4e0d\u6298\u7b97", "items": {"type": "object"}}, "fromMs": {"type": "integer"}, "toMs": {"type": "integer"}, "lines": {"type": "array", "items": {"type": "object"}}, "liabilities": {"type": "array", "items": {"type": "object"}}, "notes": {"type": "array", "items": {"type": "string"}}}}
-    TryOnSettingsValue: {"type": "object", "additionalProperties": false, "required": ["mode", "defaultEnabled", "dailySeconds", "dailyPoints", "totalPoints", "sessionSeconds", "startupSeconds", "firstFrameSeconds", "queueSeconds", "offerSeconds", "recordingSeconds", "recordingBytes", "storageBytes", "accountConcurrency", "accountGuardPoints"], "properties": {"mode": {"type": "string", "enum": ["FORCE_OFF", "FORCE_ON", "FOLLOW_USER"]}, "defaultEnabled": {"type": "boolean"}, "dailySeconds": {"type": "integer", "minimum": 0, "maximum": 86400}, "dailyPoints": {"type": "integer", "minimum": 0, "maximum": 1000000000}, "totalPoints": {"type": "integer", "minimum": 0, "maximum": 1000000000000}, "sessionSeconds": {"type": "integer", "minimum": 1, "maximum": 3600}, "startupSeconds": {"type": "integer", "minimum": 1, "maximum": 120}, "firstFrameSeconds": {"type": "integer", "minimum": 1, "maximum": 120}, "queueSeconds": {"type": "integer", "minimum": 1, "maximum": 600}, "offerSeconds": {"type": "integer", "minimum": 1, "maximum": 60}, "recordingSeconds": {"type": "integer", "minimum": 1, "maximum": 600}, "recordingBytes": {"type": "integer", "minimum": 1024, "maximum": 536870912}, "storageBytes": {"type": "integer", "minimum": 0, "maximum": 1099511627776}, "accountConcurrency": {"type": "integer", "minimum": 1, "maximum": 100}, "accountGuardPoints": {"type": "integer", "minimum": 0, "maximum": 3600}}}
+    TryOnSettingsValue: {"type": "object", "additionalProperties": false, "required": ["mode", "defaultEnabled", "dailySeconds", "dailyPoints", "totalPoints", "sessionSeconds", "startupSeconds", "firstFrameSeconds", "queueSeconds", "offerSeconds", "recordingSeconds", "recordingBytes", "storageBytes", "accountConcurrency", "accountGuardPoints"], "properties": {"mode": {"type": "string", "enum": ["FORCE_OFF", "FORCE_ON", "FOLLOW_USER"]}, "defaultEnabled": {"type": "boolean"}, "dailySeconds": {"type": "integer", "minimum": 0, "maximum": 86400}, "dailyPoints": {"type": "integer", "minimum": 0, "maximum": 1000000000}, "totalPoints": {"type": "integer", "minimum": 0, "maximum": 1000000000000}, "sessionSeconds": {"type": "integer", "minimum": 1, "maximum": 3600}, "startupSeconds": {"type": "integer", "minimum": 1, "maximum": 120}, "firstFrameSeconds": {"type": "integer", "minimum": 1, "maximum": 120}, "queueSeconds": {"type": "integer", "minimum": 1, "maximum": 600}, "offerSeconds": {"type": "integer", "minimum": 1, "maximum": 60}, "recordingSeconds": {"type": "integer", "minimum": 1, "maximum": 600}, "recordingBytes": {"type": "integer", "minimum": 1024, "maximum": 536870912}, "storageBytes": {"type": "integer", "minimum": 0, "maximum": 1099511627776}, "accountConcurrency": {"type": "integer", "minimum": 1, "maximum": 100}, "accountGuardPoints": {"type": "integer", "minimum": 0, "maximum": 3600}, "premiumEnabled": {"type": "boolean", "description": "\u9ad8\u8d28\u91cf\u5b9e\u65f6\u6863\u5f00\u5173\uff0c\u9ed8\u8ba4 false\uff1b\u7701\u7565\u65f6\u4fdd\u6301\u5173\u95ed\u3002PUT \u4e3a\u5b8c\u6574\u66ff\u6362"}, "premiumDailySeconds": {"type": "integer", "minimum": 0, "maximum": 86400, "description": "\u9ad8\u8d28\u91cf\u6863\u6bcf\u4eba\u6bcf\u5929\u7684\u514d\u8d39\u79d2\u6570\uff0c\u9ed8\u8ba4 30\uff1b\u4e0e\u6807\u51c6\u6863\u4e92\u4e0d\u501f\u7528"}, "premiumSessionSeconds": {"type": "integer", "minimum": 10, "maximum": 3600, "description": "\u9ad8\u8d28\u91cf\u6863\u5355\u6b21\u65f6\u957f\u4e0a\u9650\uff08\u79d2\uff09\uff0c\u9ed8\u8ba4 60\uff1b\u4e5f\u662f\u53d1\u7ed9\u4f9b\u5e94\u5546\u7684\u4ee4\u724c\u5c01\u9876\uff0c\u4f9b\u5e94\u5546\u8981\u6c42\u4e0d\u5c0f\u4e8e 10"}}}
     TryOnSettingsChange: {"type": "object", "additionalProperties": false, "required": ["revision", "value"], "properties": {"revision": {"type": "integer", "minimum": 0}, "value": {"$ref": "#/components/schemas/TryOnSettingsValue"}}}
     TryOnReset: {"type": "object", "additionalProperties": false, "required": ["revision"], "properties": {"revision": {"type": "integer", "minimum": 0}}}
-    TryOnUserPolicy: {"type": "object", "additionalProperties": false, "required": ["accessMode", "dailySeconds"], "properties": {"accessMode": {"type": "string", "enum": ["INHERIT", "ENABLED", "DISABLED"]}, "dailySeconds": {"type": ["integer", "null"], "minimum": 0, "maximum": 86400}, "startupFailureLimit": {"type": ["integer", "null"], "minimum": 0, "maximum": 999, "description": "\u6bcf\u65e5\u6709\u8d39\u7528\u7684\u9996\u5e27\u524d\u5931\u8d25\u4e0a\u9650\uff1bnull \u6216\u7701\u7565\u7ee7\u627f\u9ed8\u8ba4 3\uff0c0 \u5173\u95ed\u8be5\u7528\u6237\u6b21\u6570\u9650\u5236\u3002PUT \u4e3a\u5b8c\u6574\u66ff\u6362\u3002"}}}
-    TryOnCredentialInput: {"type": "object", "additionalProperties": false, "required": ["name", "environment", "apiKey"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 80}, "environment": {"type": "string", "enum": ["china", "global"]}, "apiKey": {"type": "string", "writeOnly": true, "pattern": "^uk-[A-Za-z0-9_-]{8,500}$"}}}
+    TryOnUserPolicy: {"type": "object", "additionalProperties": false, "required": ["accessMode", "dailySeconds"], "properties": {"accessMode": {"type": "string", "enum": ["INHERIT", "ENABLED", "DISABLED"]}, "dailySeconds": {"type": ["integer", "null"], "minimum": 0, "maximum": 86400}, "premiumDailySeconds": {"type": ["integer", "null"], "minimum": 0, "maximum": 86400, "description": "\u8be5\u7528\u6237\u6bcf\u5929\u7684\u9ad8\u8d28\u91cf\u6863\u514d\u8d39\u79d2\u6570\uff1bnull \u6216\u7701\u7565\u7ee7\u627f\u5168\u5c40\u8bbe\u7f6e\u3002PUT \u4e3a\u5b8c\u6574\u66ff\u6362"}, "startupFailureLimit": {"type": ["integer", "null"], "minimum": 0, "maximum": 999, "description": "\u6bcf\u65e5\u6709\u8d39\u7528\u7684\u9996\u5e27\u524d\u5931\u8d25\u4e0a\u9650\uff1bnull \u6216\u7701\u7565\u7ee7\u627f\u9ed8\u8ba4 3\uff0c0 \u5173\u95ed\u8be5\u7528\u6237\u6b21\u6570\u9650\u5236\u3002PUT \u4e3a\u5b8c\u6574\u66ff\u6362\u3002"}}}
+    TryOnCredentialInput: {"type": "object", "additionalProperties": false, "required": ["name", "apiKey"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 80}, "environment": {"type": "string", "enum": ["china", "global"], "description": "XMAX \u5fc5\u586b\uff1bDECART \u53ea\u80fd\u662f global\uff0c\u53ef\u7701\u7565"}, "apiKey": {"type": "string", "writeOnly": true, "pattern": "^(uk-[A-Za-z0-9_-]{8,500}|[A-Za-z0-9_.-]{16,500})$", "description": "XMAX \u4e3a uk- \u5f00\u5934\u7684\u6c38\u4e45 key\uff1bDECART \u4e3a\u670d\u52a1\u7aef\u6c38\u4e45 key\uff08\u53ea\u5728\u670d\u52a1\u7aef\u4f7f\u7528\uff0c\u52a0\u5bc6\u5165\u5e93\uff0c\u4e0d\u8fdb\u6d4f\u89c8\u5668\uff09"}, "vendor": {"type": "string", "enum": ["XMAX", "DECART"], "description": "\u7701\u7565\u5373 XMAX\uff1bDECART \u8d26\u6237\u5c5e\u4e8e\u9ad8\u8d28\u91cf\u6863"}, "model": {"type": "string", "maxLength": 80, "pattern": "^[A-Za-z0-9._-]{1,80}$", "description": "\u4ec5 DECART\uff1a\u8be5\u8d26\u6237\u5141\u8bb8\u7684\u6a21\u578b\uff0c\u9ed8\u8ba4 lucy-vton-latest"}}}
     TryOnAccountChange: {"type": "object", "additionalProperties": false, "required": ["name", "accepting", "weight", "concurrencyLimit"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 80}, "accepting": {"type": "boolean"}, "weight": {"type": "integer", "minimum": 1, "maximum": 100}, "concurrencyLimit": {"type": "integer", "minimum": 1, "maximum": 100}}}
     TryOnBudgetChange: {"type": "object", "additionalProperties": false, "required": ["budgetPoints"], "properties": {"budgetPoints": {"type": "integer", "minimum": 0, "maximum": 1000000000000}}}
     Role:
@@ -4130,7 +4530,7 @@ components:
         models: { type: object }
         indexes: { type: object }
         queue: { type: object, properties: { byStatus: { type: object }, byKind: { type: array, items: { type: object } }, oldestQueuedAgeMs: { type: [integer, 'null'] }, failed24h: { type: integer } } }
-        providers: { type: object, description: '识图、生图、助手运行时；1.12 起含 routing（VISION、IMAGE、CHAT 各自的 active、fallback、effective 与 health）' }
+        providers: { type: object, description: '识图、生图、助手运行时；1.12 起含 routing（VISION、IMAGE、CHAT 各自的 active、fallback、effective 与 health，由池推出）；1.13 起含 pools（每个已配置的池：pool、available、total、degraded）与 alertsFiring（未恢复的模型告警数）' }
         sessions: { type: object, properties: { active: { type: integer }, onlineLast5Min: { type: integer } } }
         database:
           type: object
@@ -4633,6 +5033,10 @@ components:
         stitchedCalls: { type: integer, format: int64, description: 参考图超出上限、拼了图的调用数 }
         timeoutSeconds: { type: [integer, 'null'], description: 该模型当前的等待上限（对话为 null） }
         lastCallAtMs: { type: [integer, 'null'], format: int64 }
+        notExecutedFailures: { type: integer, format: int64, description: '1.13：确定没执行的失败次数' }
+        maybeExecutedFailures: { type: integer, format: int64, description: '1.13：可能已执行的失败次数' }
+        notExecutedRate: { type: [number, 'null'], description: '1.13：确定没执行的失败占已完成调用（ok + failed）的比例' }
+        maybeExecutedRate: { type: [number, 'null'], description: '1.13：可能已执行的失败占已完成调用的比例' }
     ModelUsage:
       type: object
       required: [scope, totals, byProvider, byModel, byPurpose, errors, daily, recent, note]
@@ -4706,7 +5110,17 @@ components:
               timeoutSeconds: { type: [integer, 'null'], description: 调用当时的等待上限；错误码 PROVIDER_TIMEOUT 表示等满了这个时间 }
               costMicro: { type: [integer, 'null'], format: int64 }
               costCurrency: { type: [string, 'null'] }
+              traceId: { type: [string, 'null'], description: '1.13：所属尝试链，可用 GET /models/traces/{traceId} 查看；改版前的调用为 null' }
         note: { type: string }
+        byPool: { type: array, description: '1.13：按池汇总（只含带池记录的调用）', items: { $ref: '#/components/schemas/ModelUsageGroupPool' } }
+        byTier: { type: array, description: '1.13：请求档位与实际档位的交叉表，degraded 为真即降级', items: { $ref: '#/components/schemas/ModelUsageGroupTier' } }
+        decisions: { type: array, description: '1.13：首发、改道、重发、降级各多少次及其花费（不含探活）', items: { $ref: '#/components/schemas/ModelUsageGroupDecision' } }
+        probe:
+          type: object
+          description: '1.13：探活次数与花费'
+          properties:
+            free: { $ref: '#/components/schemas/ModelUsageGroupProbe' }
+            paid: { $ref: '#/components/schemas/ModelUsageGroupProbe' }
     ModelRouting:
       type: object
       properties:
@@ -4742,6 +5156,19 @@ components:
               entryId: { type: string }
               kind: { type: string }
               code: { type: [string, 'null'] }
+        pools: { type: array, description: '1.13：六个池各一项，含成员、在途、今日用量与不可用原因', items: { $ref: '#/components/schemas/ModelPoolView' } }
+        tiers: { $ref: '#/components/schemas/ModelTiers' }
+        resend: { $ref: '#/components/schemas/ModelResend' }
+        probe:
+          type: object
+          properties:
+            settings: { $ref: '#/components/schemas/ModelProbeSettings' }
+            revision: { type: integer, format: int64 }
+            paidUsage: { $ref: '#/components/schemas/ModelPaidUsage' }
+        alerts:
+          type: object
+          properties:
+            firing: { type: integer, description: 未恢复的告警数 }
     ModelProviderInput:
       type: object
       required: [id, kind, baseUrl, apiKey]
@@ -4804,9 +5231,489 @@ components:
         code: { type: string, description: '失败时的错误代码' }
         models: { type: array, maxItems: 200, items: { type: string } }
         latencyMs: { type: integer, format: int64 }
+        unreachable: { type: boolean, description: '1.13：这次探测之后服务商是否被标为连不上' }
+        consecutiveFailures: { type: integer, description: '1.13：连续失败次数' }
     ModelTestResult:
       type: object
       properties:
         ok: { type: boolean }
         code: { type: [string, 'null'] }
         latencyMs: { type: integer, format: int64 }
+    ModelPoolName:
+      type: string
+      enum: [VISION, CHAT, IMAGE_PREMIUM, IMAGE_STANDARD, PORTRAIT_PREMIUM, PORTRAIT_STANDARD]
+    ModelPoolMemberInput:
+      type: object
+      additionalProperties: false
+      required: [entryId]
+      properties:
+        entryId: { type: string, maxLength: 300 }
+        priority: { type: integer, minimum: 1, maximum: 9, default: 1 }
+        weight: { type: integer, minimum: 1, maximum: 100, default: 100 }
+        enabled: { type: boolean, default: true }
+        drain: { type: boolean, default: false }
+        maxConcurrency: { type: integer, minimum: 0, maximum: 1000, default: 0, description: 0 表示不限 }
+        dailyCallCap: { type: integer, minimum: 0, maximum: 10000000, default: 0, description: 0 表示不限 }
+        dailySpendCapMicro: { type: [integer, 'null'], format: int64, minimum: 0, description: 每日花费上限（微单位）；给了就必须同时给 spendCurrency }
+        spendCurrency: { type: [string, 'null'], pattern: '^[A-Z]{3}$' }
+        paidProbeIntervalMinutes: { type: [integer, 'null'], minimum: 30, maximum: 1440, description: 定时付费探活间隔，null 表示不定时探活 }
+    ModelPoolInput:
+      type: object
+      additionalProperties: false
+      required: [members]
+      properties:
+        members: { type: array, minItems: 1, maxItems: 20, items: { $ref: '#/components/schemas/ModelPoolMemberInput' } }
+        revision: { type: [integer, 'null'], format: int64, description: 池已存在时必填 }
+    ModelPoolMember:
+      type: object
+      required: [entryId, priority, weight, enabled, drain, maxConcurrency, dailyCallCap, inFlight, today, unavailable, health]
+      properties:
+        entryId: { type: string }
+        label: { type: [string, 'null'] }
+        providerId: { type: [string, 'null'] }
+        model: { type: [string, 'null'] }
+        priority: { type: integer }
+        weight: { type: integer }
+        enabled: { type: boolean }
+        drain: { type: boolean }
+        maxConcurrency: { type: integer }
+        dailyCallCap: { type: integer }
+        dailySpendCapMicro: { type: [integer, 'null'], format: int64 }
+        spendCurrency: { type: [string, 'null'] }
+        paidProbeIntervalMinutes: { type: [integer, 'null'] }
+        inFlight: { type: integer, description: 当前在途调用数 }
+        today:
+          type: object
+          required: [calls, spend]
+          properties:
+            calls: { type: integer }
+            spend: { type: array, items: { $ref: '#/components/schemas/ModelCost' } }
+        unavailable: { type: [string, 'null'], enum: [DISABLED, DRAINED, MISSING, UNUSABLE, UNREACHABLE, LOW_BALANCE, PAUSED, CONCURRENCY, CALL_CAP, SPEND_CAP, null], description: 现在不能接新任务的原因，null 表示可用 }
+        health:
+          type: object
+          properties:
+            state: { type: string, enum: [OK, PAUSED] }
+            consecutiveFailures: { type: integer }
+    ModelPoolView:
+      type: object
+      required: [pool, capability, configured, revision, source, members, total, available, effective, exhausted]
+      properties:
+        pool: { $ref: '#/components/schemas/ModelPoolName' }
+        capability: { type: string, enum: [VISION, IMAGE, CHAT] }
+        tier: { type: [string, 'null'], enum: [PREMIUM, STANDARD, null] }
+        configured: { type: boolean }
+        revision: { type: integer, format: int64 }
+        updatedAtMs: { type: [integer, 'null'], format: int64 }
+        source: { type: string, enum: [POOL, DEPLOYMENT_DEFAULT, IMAGE_POOL, NONE], description: 没配置时用什么：部署默认、同档生图池或没有 }
+        degradesTo: { type: [string, 'null'], description: 高质量池降级到的池 }
+        members: { type: array, items: { $ref: '#/components/schemas/ModelPoolMember' } }
+        total: { type: integer, description: 参与（开启且未摘除）的成员数 }
+        available: { type: integer, description: 其中现在能接新任务的成员数 }
+        effective: { type: [string, 'null'], description: 现在选择会选中的成员 id（只看不转动轮转） }
+        exhausted: { type: boolean }
+    ModelDrainResult:
+      type: object
+      required: [entryId, drain, pools]
+      properties:
+        entryId: { type: string }
+        drain: { type: boolean }
+        pools:
+          type: array
+          items:
+            type: object
+            properties:
+              pool: { $ref: '#/components/schemas/ModelPoolName' }
+              revision: { type: integer, format: int64 }
+    ModelTiersInput:
+      type: object
+      additionalProperties: false
+      required: [revision]
+      properties:
+        degradeEnabled: { type: boolean, default: true }
+        cleanupPool: { type: string, enum: [IMAGE_PREMIUM, IMAGE_STANDARD], default: IMAGE_PREMIUM }
+        units:
+          type: object
+          additionalProperties: false
+          properties:
+            vision: { type: integer, minimum: 0, maximum: 20, default: 1 }
+            cleanup: { type: integer, minimum: 0, maximum: 20, default: 1 }
+            renderStandard: { type: integer, minimum: 0, maximum: 20, default: 1 }
+            renderPremium: { type: integer, minimum: 0, maximum: 20, default: 3 }
+        defaultRenderTier: { type: string, enum: [PREMIUM, STANDARD], default: PREMIUM }
+        revision: { type: integer, format: int64 }
+    ModelTiers:
+      type: object
+      required: [degradeEnabled, cleanupPool, units, defaultRenderTier, renderTiersEnabled, revision]
+      properties:
+        degradeEnabled: { type: boolean }
+        cleanupPool: { type: string }
+        units:
+          type: object
+          properties:
+            vision: { type: integer }
+            cleanup: { type: integer }
+            renderStandard: { type: integer }
+            renderPremium: { type: integer }
+        defaultRenderTier: { type: string, enum: [PREMIUM, STANDARD] }
+        renderTiersEnabled: { type: boolean }
+        revision: { type: integer, format: int64 }
+    ModelResendInput:
+      type: object
+      additionalProperties: false
+      required: [revision]
+      properties:
+        enabled: { type: boolean, default: true }
+        maxAttempts: { type: integer, minimum: 0, maximum: 5, default: 2 }
+        fast503Ms: { type: integer, minimum: 0, maximum: 60000, default: 5000 }
+        notExecutedMarkers: { type: array, maxItems: 30, items: { type: string, maxLength: 80 } }
+        revision: { type: integer, format: int64 }
+    ModelResend:
+      type: object
+      required: [enabled, maxAttempts, fast503Ms, notExecutedMarkers, builtInMarkers, revision]
+      properties:
+        enabled: { type: boolean }
+        maxAttempts: { type: integer }
+        fast503Ms: { type: integer }
+        notExecutedMarkers: { type: array, items: { type: string } }
+        builtInMarkers: { type: array, items: { type: string }, description: 内置标记，只读 }
+        revision: { type: integer, format: int64 }
+    ModelHealthEvent:
+      type: object
+      properties:
+        id: { type: string }
+        atMs: { type: integer, format: int64 }
+        scope: { type: string, enum: [ENTRY, PROVIDER, POOL, VENDOR] }
+        refId: { type: string }
+        pool: { type: [string, 'null'] }
+        kind: { type: string }
+        code: { type: [string, 'null'] }
+    ModelHealthEventPage:
+      type: object
+      required: [page, size, total, items]
+      properties:
+        page: { type: integer }
+        size: { type: integer }
+        total: { type: integer, format: int64 }
+        items: { type: array, items: { $ref: '#/components/schemas/ModelHealthEvent' } }
+    ModelHealthBucket:
+      type: object
+      properties:
+        startMs: { type: integer, format: int64 }
+        calls: { type: integer, format: int64 }
+        ok: { type: integer, format: int64 }
+        notExecutedFailures: { type: integer, format: int64 }
+        maybeExecutedFailures: { type: integer, format: int64 }
+        otherFailures: { type: integer, format: int64 }
+        p50Ms: { type: [integer, 'null'], format: int64 }
+        p95Ms: { type: [integer, 'null'], format: int64 }
+        pausedMs: { type: integer, format: int64 }
+    ModelHealthTimeline:
+      type: object
+      required: [from, to, bucket, series, note]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        bucket: { type: string, enum: [5m, 1h, 1d] }
+        series:
+          type: array
+          items:
+            type: object
+            properties:
+              entryId: { type: string }
+              label: { type: [string, 'null'] }
+              model: { type: [string, 'null'] }
+              buckets: { type: array, items: { $ref: '#/components/schemas/ModelHealthBucket' } }
+        note: { type: string }
+    ModelTraceSummary:
+      type: object
+      properties:
+        traceId: { type: string }
+        attempts: { type: integer }
+        firstAtMs: { type: integer, format: int64 }
+        lastAtMs: { type: integer, format: int64 }
+        decisions: { type: array, items: { type: string, enum: [FIRST, REROUTE, RESEND, DEGRADE, PROBE, MANUAL] } }
+        finalOutcome: { type: string }
+        ok: { type: boolean }
+        pool: { type: [string, 'null'] }
+        tierRequested: { type: [string, 'null'] }
+        tierUsed: { type: [string, 'null'] }
+        costs: { type: array, items: { $ref: '#/components/schemas/ModelCost' } }
+    ModelTracePage:
+      type: object
+      required: [page, size, total, items]
+      properties:
+        page: { type: integer }
+        size: { type: integer }
+        total: { type: integer, format: int64 }
+        items: { type: array, items: { $ref: '#/components/schemas/ModelTraceSummary' } }
+    ModelTraceAttempt:
+      type: object
+      properties:
+        attemptNo: { type: [integer, 'null'] }
+        atMs: { type: integer, format: int64 }
+        pool: { type: [string, 'null'] }
+        entryId: { type: [string, 'null'] }
+        label: { type: [string, 'null'] }
+        providerId: { type: string }
+        model: { type: string }
+        capability: { type: string }
+        purpose: { type: string }
+        decision: { type: [string, 'null'] }
+        tierRequested: { type: [string, 'null'] }
+        tierUsed: { type: [string, 'null'] }
+        outcome: { type: string, enum: [OK, FAILED, CANCELLED] }
+        errorCode: { type: [string, 'null'] }
+        execution: { type: [string, 'null'], enum: [NOT_EXECUTED, MAYBE_EXECUTED, REQUEST, null] }
+        latencyMs: { type: integer, format: int64 }
+        costMicro: { type: [integer, 'null'], format: int64 }
+        costCurrency: { type: [string, 'null'] }
+    ModelTrace:
+      type: object
+      required: [traceId, attempts]
+      properties:
+        traceId: { type: string }
+        attempts: { type: array, items: { $ref: '#/components/schemas/ModelTraceAttempt' } }
+    ModelProbeSettings:
+      type: object
+      properties:
+        freeEnabled: { type: boolean }
+        freeIntervalMinutes: { type: integer }
+        freeFailures: { type: integer }
+        paidEnabled: { type: boolean }
+        paidDailyCalls: { type: integer }
+        paidPerEntry: { type: integer }
+        paidSpendCapMicro: { type: object, additionalProperties: { type: integer, format: int64 }, description: 按 VISION、CHAT、IMAGE 的每日花费上限（人民币微元） }
+        usdToCny: { type: number }
+    ModelPaidUsage:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        calls: { type: integer }
+        callCap: { type: integer }
+        byEntry: { type: object, additionalProperties: { type: integer } }
+        perEntryCap: { type: integer }
+        spendMicro: { type: object, additionalProperties: { type: integer, format: int64 } }
+        spendCapMicro: { type: object, additionalProperties: { type: integer, format: int64 } }
+    ModelProbeInput:
+      type: object
+      additionalProperties: false
+      required: [revision]
+      properties:
+        freeEnabled: { type: boolean, default: true }
+        freeIntervalMinutes: { type: integer, minimum: 1, maximum: 1440, default: 5 }
+        freeFailures: { type: integer, minimum: 1, maximum: 10, default: 2 }
+        paidEnabled: { type: boolean, default: false }
+        paidDailyCalls: { type: integer, minimum: 0, maximum: 1000, default: 50 }
+        paidPerEntry: { type: integer, minimum: 0, maximum: 100, default: 12 }
+        paidSpendCapMicro: { type: object, additionalProperties: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }, description: 键只能是 VISION、CHAT、IMAGE }
+        usdToCny: { type: number, exclusiveMinimum: 0, maximum: 100, default: 7.2 }
+        revision: { type: integer, format: int64 }
+    ModelProbeOverview:
+      type: object
+      required: [settings, revision, paidUsage, free, paid]
+      properties:
+        settings: { $ref: '#/components/schemas/ModelProbeSettings' }
+        revision: { type: integer, format: int64 }
+        paidUsage: { $ref: '#/components/schemas/ModelPaidUsage' }
+        free:
+          type: array
+          items:
+            type: object
+            properties:
+              providerId: { type: string }
+              atMs: { type: integer, format: int64 }
+              ok: { type: boolean }
+              httpStatus: { type: [integer, 'null'] }
+              code: { type: [string, 'null'] }
+              latencyMs: { type: integer, format: int64 }
+              modelCount: { type: [integer, 'null'] }
+              consecutiveFailures: { type: integer }
+              unreachable: { type: boolean }
+        paid:
+          type: array
+          items:
+            type: object
+            properties:
+              entryId: { type: string }
+              atMs: { type: integer, format: int64 }
+              ok: { type: boolean }
+              code: { type: [string, 'null'] }
+              latencyMs: { type: integer, format: int64 }
+              costMicro: { type: [integer, 'null'], format: int64 }
+              costCurrency: { type: [string, 'null'] }
+    ModelPaidProbeResult:
+      type: object
+      required: [entryId, sent, ok, latencyMs, paidUsage]
+      properties:
+        entryId: { type: string }
+        sent: { type: boolean, description: false 表示没发出请求，原因在 skipped }
+        ok: { type: boolean }
+        code: { type: [string, 'null'] }
+        latencyMs: { type: integer, format: int64 }
+        costMicro: { type: [integer, 'null'], format: int64, description: 实际费用；没有价格时为 null }
+        costCurrency: { type: [string, 'null'] }
+        skipped: { type: [string, 'null'], description: 'NO_KEY、NO_GENERATION 等没发出的原因' }
+        paidUsage: { $ref: '#/components/schemas/ModelPaidUsage' }
+    ModelBillingInput:
+      type: object
+      additionalProperties: false
+      properties:
+        source: { type: string, enum: [NEWAPI, OPENROUTER, MANUAL, NONE], default: NONE }
+        token: { type: [string, 'null'], description: '访问令牌（OpenRouter management key 等），只写不读；省略保持，空串清除' }
+        unit: { type: [string, 'null'], enum: [USD, CNY, QUOTA, null], description: 只给 NEWAPI，默认 USD }
+        quotaPerUnit: { type: [integer, 'null'], format: int64, minimum: 1, maximum: 1000000000, description: 只给 NEWAPI 的 QUOTA 单位，默认 500000 }
+        lowBalanceMicro: { type: [integer, 'null'], format: int64, minimum: 0 }
+        currency: { type: [string, 'null'], pattern: '^[A-Z]{3}$' }
+        autoRemove: { type: boolean, default: false, description: 余额低于阈值时把该服务商的成员移出选择 }
+        revision: { type: [integer, 'null'], format: int64, description: 首次保存可省略 }
+    ModelBalanceSnapshot:
+      type: object
+      properties:
+        id: { type: string }
+        atMs: { type: integer, format: int64 }
+        source: { type: string, enum: [NEWAPI, OPENROUTER, MANUAL] }
+        raw:
+          type: object
+          description: 上游原始数字，供后台核对单位
+          properties:
+            unit: { type: [string, 'null'] }
+            json: { description: 原始 JSON（解析失败时为原文字符串）, type: [object, string, 'null'] }
+        converted:
+          type: object
+          properties:
+            balanceMicro: { type: integer, format: int64 }
+            currency: { type: string }
+    ModelBalance:
+      type: object
+      required: [providerId, billing, reported, estimatedMicro, differenceWarning, low, removed, dailySpend]
+      properties:
+        providerId: { type: string }
+        providerName: { type: string }
+        billing:
+          type: object
+          properties:
+            source: { type: string, enum: [NEWAPI, OPENROUTER, MANUAL, NONE] }
+            tokenConfigured: { type: boolean }
+            tokenHint: { type: [string, 'null'] }
+            unit: { type: [string, 'null'] }
+            quotaPerUnit: { type: [integer, 'null'], format: int64 }
+            lowBalanceMicro: { type: [integer, 'null'], format: int64 }
+            currency: { type: [string, 'null'] }
+            autoRemove: { type: boolean }
+            revision: { type: integer, format: int64 }
+        reported: { oneOf: [{ $ref: '#/components/schemas/ModelBalanceSnapshot' }, { type: 'null' }] }
+        estimatedMicro: { type: [integer, 'null'], format: int64, description: 最近读数减去之后账本里的计价花费 }
+        differenceMicro: { type: [integer, 'null'], format: int64, description: 上报余额减估算余额 }
+        differenceWarning: { type: boolean, description: 差额超过上报余额的 10% }
+        low: { type: boolean }
+        removed: { type: boolean, description: 已被自动移出选择 }
+        lastError: { type: [string, 'null'] }
+        lastRefreshMs: { type: [integer, 'null'], format: int64 }
+        dailySpend:
+          type: array
+          description: 最近 30 天，每天一项
+          items:
+            type: object
+            properties:
+              date: { type: string, format: date }
+              costs: { type: array, items: { $ref: '#/components/schemas/ModelCost' } }
+    ModelBalanceList:
+      type: object
+      required: [providers]
+      properties:
+        providers: { type: array, items: { $ref: '#/components/schemas/ModelBalance' } }
+    ModelBalanceManual:
+      type: object
+      additionalProperties: false
+      required: [balanceMicro]
+      properties:
+        balanceMicro: { type: integer, format: int64 }
+        currency: { type: [string, 'null'], pattern: '^[A-Z]{3}$' }
+        atMs: { type: [integer, 'null'], format: int64 }
+    ModelBalanceHistory:
+      type: object
+      required: [providerId, items]
+      properties:
+        providerId: { type: string }
+        items: { type: array, items: { $ref: '#/components/schemas/ModelBalanceSnapshot' } }
+    ModelAlertRow:
+      type: object
+      properties:
+        id: { type: string }
+        rule: { type: string }
+        ruleName: { type: string }
+        refId: { type: string }
+        state: { type: string, enum: [FIRING, RECOVERED] }
+        atMs: { type: integer, format: int64 }
+        lastMailMs: { type: integer, format: int64, description: 只在 state=FIRING 的未恢复列表里出现 }
+        mailResult: { type: [string, 'null'], enum: [SENT, THROTTLED, MAIL_DISABLED, NO_RECIPIENT, FAILED, null] }
+        reading: { type: [string, 'null'] }
+    ModelAlertList:
+      type: object
+      required: [firingCount, items]
+      properties:
+        firingCount: { type: integer }
+        items: { type: array, items: { $ref: '#/components/schemas/ModelAlertRow' } }
+    ModelAlertSettingsInput:
+      type: object
+      additionalProperties: false
+      required: [revision]
+      properties:
+        rules: { type: object, additionalProperties: { type: boolean }, description: 键为规则名；没写的规则默认开启 }
+        repeatMinutes: { type: integer, minimum: 5, maximum: 1440, default: 60 }
+        revision: { type: integer, format: int64 }
+    ModelAlertSettings:
+      type: object
+      required: [rules, repeatMinutes, mailEnabled, recipientsConfigured, revision]
+      properties:
+        rules:
+          type: array
+          items:
+            type: object
+            properties:
+              rule: { type: string }
+              name: { type: string }
+              trigger: { type: string }
+              enabled: { type: boolean }
+        repeatMinutes: { type: integer }
+        mailEnabled: { type: boolean }
+        recipientsConfigured: { type: boolean }
+        revision: { type: integer, format: int64 }
+    ModelAlertTestResult:
+      type: object
+      properties:
+        result: { type: string, enum: [SENT, THROTTLED, MAIL_DISABLED, NO_RECIPIENT, FAILED] }
+    ModelUsageGroupPool:
+      type: object
+      properties:
+        pool: { type: string }
+        calls: { type: integer, format: int64 }
+        ok: { type: integer, format: int64 }
+        failed: { type: integer, format: int64 }
+        successRate: { type: [number, 'null'] }
+        costs: { type: array, items: { $ref: '#/components/schemas/ModelCost' } }
+    ModelUsageGroupTier:
+      type: object
+      properties:
+        tierRequested: { type: string }
+        tierUsed: { type: [string, 'null'] }
+        calls: { type: integer, format: int64 }
+        ok: { type: integer, format: int64 }
+        failed: { type: integer, format: int64 }
+        degraded: { type: boolean, description: 实际档位与请求档位不同，即降级 }
+        costs: { type: array, items: { $ref: '#/components/schemas/ModelCost' } }
+    ModelUsageGroupDecision:
+      type: object
+      properties:
+        decision: { type: string, enum: [FIRST, REROUTE, RESEND, DEGRADE, MANUAL] }
+        calls: { type: integer, format: int64 }
+        ok: { type: integer, format: int64 }
+        failed: { type: integer, format: int64 }
+        costs: { type: array, items: { $ref: '#/components/schemas/ModelCost' } }
+    ModelUsageGroupProbe:
+      type: object
+      properties:
+        purpose: { type: string, enum: [PROBE_FREE, PROBE_PAID] }
+        calls: { type: integer, format: int64 }
+        failed: { type: integer, format: int64 }
+        costs: { type: array, items: { $ref: '#/components/schemas/ModelCost' } }

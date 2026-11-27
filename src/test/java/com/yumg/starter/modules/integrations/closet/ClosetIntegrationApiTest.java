@@ -1052,6 +1052,8 @@ class ClosetIntegrationApiTest {
 
     @Test void modelTimeoutRequiresWriteAndForwardsSettingsAndErrorsWithoutAuditingBody() throws Exception {
         String id = "cfg:image:vendor:timeout-test";
+        // The SQLite test file in target/ survives between runs: count only the audit rows this test writes.
+        var earlier = auditEvents.findAll().stream().map(AuditEvent::getId).collect(java.util.stream.Collectors.toSet());
         String local = "/api/v1/closet/models/entries/" + id + "/timeout";
         String upstream = "http://closet.test/api/manage/v1/models/entries/cfg%3Aimage%3Avendor%3Atimeout-test/timeout";
         String body = "{\"timeoutSeconds\":180,\"revision\":7}";
@@ -1080,8 +1082,8 @@ class ClosetIntegrationApiTest {
         mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest());
         server.verify();
-        var events = auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_MODELS_ENTRY_TIMEOUT_UPDATE")
-                && e.getTargetId().equals(id)).toList();
+        var events = auditEvents.findAll().stream().filter(e -> !earlier.contains(e.getId())
+                && e.getAction().equals("CLOSET_MODELS_ENTRY_TIMEOUT_UPDATE") && e.getTargetId().equals(id)).toList();
         assertThat(events).extracting(AuditEvent::getResult).containsExactlyInAnyOrder("SUCCESS", "SUCCESS", "FAILURE", "FAILURE");
         assertThat(events).allSatisfy(e -> assertThat(e.getMetadata()).isEqualTo("{}"));
     }
@@ -1197,6 +1199,21 @@ class ClosetIntegrationApiTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.active").value("cfg:vision:vendor:model"))
                 .andExpect(jsonPath("$.data.configured").value(false));
         server.verify();
+    }
+
+    @Test void modelPoolsRequireWriteAndForwardRevisionWithoutAuditingBody() throws Exception {
+        String local = "/api/v1/closet/models/pools/VISION";
+        String body = "{\"members\":[],\"revision\":4}";
+        mvc.perform(put(local).with(jwtAs("closet:models:read")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
+        server.expect(requestTo("http://closet.test/api/manage/v1/models/pools/VISION"))
+                .andExpect(method(HttpMethod.PUT)).andExpect(content().json(body, true))
+                .andExpect(ClosetIntegrationApiTest::capture).andRespond(withSuccess("{\"revision\":5}", MediaType.APPLICATION_JSON));
+        mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.revision").value(5));
+        assertThat(recorded.get().signature()).isNotBlank();
+        server.verify();
+        assertThat(auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_MODELS_POOL_UPDATE")).toList())
+                .isNotEmpty().allSatisfy(e -> assertThat(String.valueOf(e.getMetadata())).doesNotContain(body));
     }
 
     @Test void portraitRoutingForwardsRevisionAndResetResponse() throws Exception {
@@ -1438,6 +1455,7 @@ class ClosetIntegrationApiTest {
     static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> tryOnOperations() {
         return java.util.stream.Stream.of(
                 org.junit.jupiter.params.provider.Arguments.of("GET", "/settings", "read", "settings", ""),
+                org.junit.jupiter.params.provider.Arguments.of("GET", "/vendors", "read", "vendors", ""),
                 org.junit.jupiter.params.provider.Arguments.of("PUT", "/settings", "write", "updateSettings", "{\"revision\":4,\"value\":{\"mode\":\"FOLLOW_USER\",\"defaultEnabled\":false,\"dailySeconds\":180,\"dailyPoints\":1800,\"totalPoints\":3000,\"sessionSeconds\":180,\"startupSeconds\":30,\"firstFrameSeconds\":20,\"queueSeconds\":60,\"offerSeconds\":10,\"recordingSeconds\":60,\"recordingBytes\":104857600,\"storageBytes\":1073741824,\"accountConcurrency\":1,\"accountGuardPoints\":60}}"),
                 org.junit.jupiter.params.provider.Arguments.of("POST", "/settings/reset", "write", "resetSettings", "{\"revision\":4}"),
                 org.junit.jupiter.params.provider.Arguments.of("GET", "/users/alice/policy", "read", "userPolicy", ""),

@@ -24,6 +24,12 @@ public class ClosetTryOnController {
         return service.read("/settings", query);
     }
 
+    @GetMapping("/vendors")
+    @PreAuthorize("hasAuthority('closet:tryon:read')")
+    public JsonNode vendors(@RequestParam MultiValueMap<String, String> query) {
+        return service.read("/vendors", query);
+    }
+
     @PutMapping("/settings")
     @PreAuthorize("hasAuthority('closet:tryon:write')")
     public JsonNode updateSettings(@Valid @RequestBody SettingsChange request) {

@@ -22,6 +22,38 @@ public class ClosetModelsController {
     @GetMapping("/usage") @PreAuthorize("hasAuthority('closet:models:read')")
     public JsonNode usage(@RequestParam MultiValueMap<String, String> query) { return models.usage(query); }
 
+    @GetMapping({"/tiers", "/resend", "/health/events", "/health/timeline", "/traces", "/probe", "/balances", "/alerts", "/alerts/settings"})
+    @PreAuthorize("hasAuthority('closet:models:read')")
+    public JsonNode redundancyRead(jakarta.servlet.http.HttpServletRequest request, @RequestParam MultiValueMap<String, String> query) {
+        return models.redundancyRead(request.getRequestURI().substring(request.getContextPath().length() + "/api/v1/closet/models".length()), query);
+    }
+    @GetMapping("/traces/{id}") @PreAuthorize("hasAuthority('closet:models:read')")
+    public JsonNode trace(@PathVariable String id) { return models.trace(id); }
+    @GetMapping("/providers/{id}/balance/history") @PreAuthorize("hasAuthority('closet:models:read')")
+    public JsonNode balanceHistory(@PathVariable String id, @RequestParam MultiValueMap<String, String> query) { return models.balanceHistory(id, query); }
+    @PutMapping("/pools/{pool}") @PreAuthorize("hasAuthority('closet:models:write')")
+    public JsonNode putPool(@PathVariable String pool, @RequestBody JsonNode body) { return models.putPool(pool, body); }
+    @DeleteMapping("/pools/{pool}") @PreAuthorize("hasAuthority('closet:models:write')")
+    public JsonNode deletePool(@PathVariable String pool) { return models.deletePool(pool); }
+    @PutMapping({"/tiers", "/resend", "/probe", "/alerts/settings"}) @PreAuthorize("hasAuthority('closet:models:write')")
+    public JsonNode redundancySettings(jakarta.servlet.http.HttpServletRequest request, @RequestBody JsonNode body) {
+        return models.redundancySettings(request.getRequestURI().substring(request.getContextPath().length() + "/api/v1/closet/models".length()), body);
+    }
+    @PostMapping("/entries/{id}/drain") @PreAuthorize("hasAuthority('closet:models:write')")
+    public JsonNode drain(@PathVariable String id) { return models.entryAction(id, "drain"); }
+    @PostMapping("/entries/{id}/undrain") @PreAuthorize("hasAuthority('closet:models:write')")
+    public JsonNode undrain(@PathVariable String id) { return models.entryAction(id, "undrain"); }
+    @PostMapping("/entries/{id}/probe-paid") @PreAuthorize("hasAuthority('closet:models:write')")
+    public JsonNode paidProbe(@PathVariable String id) { return models.entryAction(id, "probe-paid"); }
+    @PutMapping("/providers/{id}/billing") @PreAuthorize("hasAuthority('closet:models:write')")
+    public JsonNode billing(@PathVariable String id, @RequestBody JsonNode body) { return models.billing(id, body); }
+    @PostMapping("/providers/{id}/balance/refresh") @PreAuthorize("hasAuthority('closet:models:write')")
+    public JsonNode refreshBalance(@PathVariable String id) { return models.balanceAction(id, "refresh", null); }
+    @PostMapping("/providers/{id}/balance/manual") @PreAuthorize("hasAuthority('closet:models:write')")
+    public JsonNode manualBalance(@PathVariable String id, @RequestBody JsonNode body) { return models.balanceAction(id, "manual", body); }
+    @PostMapping("/alerts/test") @PreAuthorize("hasAuthority('closet:models:write')")
+    public JsonNode testAlert() { return models.testAlert(); }
+
     @PostMapping("/providers") @PreAuthorize("hasAuthority('closet:models:write')")
     @ResponseStatus(HttpStatus.CREATED)
     public JsonNode createProvider(@RequestBody JsonNode body) { return models.createProvider(body); }
