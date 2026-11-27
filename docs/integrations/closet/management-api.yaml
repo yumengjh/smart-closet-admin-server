@@ -1,6 +1,6 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/reference/management-api.yaml
-# source-commit: 26342c082b4704cf7c0b72707a7727addd1ca08a
-# source-sha256: a5cc60fd0a02bc2b9c286b4ae3591c85987ca9ddddac95f8a87aa8a02486d3b8
+# source-commit: af15673b58840a85db158a40d1d3bb68d1c150b4
+# source-sha256: b8d86e9a3ab292583ffc25eda253b33fa6c8c184dba70b8511bb53a8191cca3b
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
@@ -5646,7 +5646,7 @@ components:
         state: { type: string, enum: [FIRING, RECOVERED] }
         atMs: { type: integer, format: int64 }
         lastMailMs: { type: integer, format: int64, description: 只在 state=FIRING 的未恢复列表里出现 }
-        mailResult: { type: [string, 'null'], enum: [SENT, THROTTLED, MAIL_DISABLED, NO_RECIPIENT, FAILED, null] }
+        mailResult: { type: [string, 'null'], enum: [SENT, THROTTLED, MAIL_OFF, MAIL_DISABLED, NO_RECIPIENT, FAILED, null], description: 'THROTTLED：发送限流，或同一件事在重复提醒间隔内再次触发；MAIL_OFF：后台关闭了“发送告警邮件”；恢复行在触发时没有发出邮件时为 null' }
         reading: { type: [string, 'null'] }
     ModelAlertList:
       type: object
@@ -5661,10 +5661,11 @@ components:
       properties:
         rules: { type: object, additionalProperties: { type: boolean }, description: 键为规则名；没写的规则默认开启 }
         repeatMinutes: { type: integer, minimum: 5, maximum: 1440, default: 60 }
+        sendMail: { type: boolean, default: true, description: '发送告警邮件的总开关；false 时只写告警记录、不发邮件（测试邮件照发）' }
         revision: { type: integer, format: int64 }
     ModelAlertSettings:
       type: object
-      required: [rules, repeatMinutes, mailEnabled, recipientsConfigured, revision]
+      required: [rules, repeatMinutes, sendMail, mailEnabled, recipientsConfigured, revision]
       properties:
         rules:
           type: array
@@ -5676,6 +5677,7 @@ components:
               trigger: { type: string }
               enabled: { type: boolean }
         repeatMinutes: { type: integer }
+        sendMail: { type: boolean, description: 发送告警邮件的总开关 }
         mailEnabled: { type: boolean }
         recipientsConfigured: { type: boolean }
         revision: { type: integer, format: int64 }
