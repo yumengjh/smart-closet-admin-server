@@ -1199,6 +1199,21 @@ class ClosetIntegrationApiTest {
         server.verify();
     }
 
+    @Test void modelPoolsRequireWriteAndForwardRevisionWithoutAuditingBody() throws Exception {
+        String local = "/api/v1/closet/models/pools/VISION";
+        String body = "{\"members\":[],\"revision\":4}";
+        mvc.perform(put(local).with(jwtAs("closet:models:read")).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
+        server.expect(requestTo("http://closet.test/api/manage/v1/models/pools/VISION"))
+                .andExpect(method(HttpMethod.PUT)).andExpect(content().json(body, true))
+                .andExpect(ClosetIntegrationApiTest::capture).andRespond(withSuccess("{\"revision\":5}", MediaType.APPLICATION_JSON));
+        mvc.perform(put(local).with(jwtAs("closet:models:write")).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.revision").value(5));
+        assertThat(recorded.get().signature()).isNotBlank();
+        server.verify();
+        assertThat(auditEvents.findAll().stream().filter(e -> e.getAction().equals("CLOSET_MODELS_POOL_UPDATE")).toList())
+                .isNotEmpty().allSatisfy(e -> assertThat(String.valueOf(e.getMetadata())).doesNotContain(body));
+    }
+
     @Test void portraitRoutingForwardsRevisionAndResetResponse() throws Exception {
         String local = "/api/v1/closet/models/routing/PORTRAIT";
         String upstream = "http://closet.test/api/manage/v1/models/routing/PORTRAIT";
@@ -1438,6 +1453,7 @@ class ClosetIntegrationApiTest {
     static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> tryOnOperations() {
         return java.util.stream.Stream.of(
                 org.junit.jupiter.params.provider.Arguments.of("GET", "/settings", "read", "settings", ""),
+                org.junit.jupiter.params.provider.Arguments.of("GET", "/vendors", "read", "vendors", ""),
                 org.junit.jupiter.params.provider.Arguments.of("PUT", "/settings", "write", "updateSettings", "{\"revision\":4,\"value\":{\"mode\":\"FOLLOW_USER\",\"defaultEnabled\":false,\"dailySeconds\":180,\"dailyPoints\":1800,\"totalPoints\":3000,\"sessionSeconds\":180,\"startupSeconds\":30,\"firstFrameSeconds\":20,\"queueSeconds\":60,\"offerSeconds\":10,\"recordingSeconds\":60,\"recordingBytes\":104857600,\"storageBytes\":1073741824,\"accountConcurrency\":1,\"accountGuardPoints\":60}}"),
                 org.junit.jupiter.params.provider.Arguments.of("POST", "/settings/reset", "write", "resetSettings", "{\"revision\":4}"),
                 org.junit.jupiter.params.provider.Arguments.of("GET", "/users/alice/policy", "read", "userPolicy", ""),

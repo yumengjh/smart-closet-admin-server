@@ -1,6 +1,7 @@
 package com.yumg.starter.modules.integrations.closet.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
@@ -23,9 +24,9 @@ public final class ClosetTryOnRequests {
             @NotNull @Min(0) @Max(1099511627776L) Long storageBytes,
             @NotNull @Min(1) @Max(100L) Integer accountConcurrency,
             @NotNull @Min(0) @Max(3600L) Integer accountGuardPoints,
-            Boolean premiumEnabled,
-            @Min(0) @Max(86400) Integer premiumDailySeconds,
-            @Min(10) @Max(3600) Integer premiumSessionSeconds) {
+            @JsonInclude(JsonInclude.Include.NON_NULL) Boolean premiumEnabled,
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Min(0) @Max(86400) Integer premiumDailySeconds,
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Min(10) @Max(3600) Integer premiumSessionSeconds) {
         @AssertTrue(message = "首帧等待时间不能超过启动总时限") @JsonIgnore
         public boolean isFirstFrameWithinStartup() {
             return firstFrameSeconds == null || startupSeconds == null || firstFrameSeconds <= startupSeconds;
@@ -42,14 +43,14 @@ public final class ClosetTryOnRequests {
             @NotNull @Pattern(regexp = "^(INHERIT|ENABLED|DISABLED)$") String accessMode,
             @Min(0) @Max(86400L) Integer dailySeconds,
             @Min(0) @Max(999L) Integer startupFailureLimit,
-            @Min(0) @Max(86400) Integer premiumDailySeconds) {
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Min(0) @Max(86400) Integer premiumDailySeconds) {
     }
     public record CredentialInput(
             @NotNull @NotBlank @Size(max = 80) String name,
             @Pattern(regexp = "^(china|global)$") String environment,
             @NotNull @Pattern(regexp = "^(uk-[A-Za-z0-9_-]{8,500}|[A-Za-z0-9_.-]{16,500})$") String apiKey,
-            @Pattern(regexp = "^(XMAX|DECART)$") String vendor,
-            @Pattern(regexp = "^[A-Za-z0-9._-]{1,80}$") String model) {
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Pattern(regexp = "^(XMAX|DECART)$") String vendor,
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Pattern(regexp = "^[A-Za-z0-9._-]{1,80}$") String model) {
         @Override public String toString() { return "CredentialInput[redacted]"; }
     }
     public record AccountChange(
