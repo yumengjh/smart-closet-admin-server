@@ -1,6 +1,6 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/reference/management-api.yaml
-# source-commit: 9dea1d33417601a7fb92dd0433cf775c4f931635
-# source-sha256: 53d46b91e203adcbe9cc99bb20a4ba29957bebcffa10cb941d603ead0ef86cbe
+# source-commit: 26342c082b4704cf7c0b72707a7727addd1ca08a
+# source-sha256: a5cc60fd0a02bc2b9c286b4ae3591c85987ca9ddddac95f8a87aa8a02486d3b8
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
@@ -5110,6 +5110,7 @@ components:
               timeoutSeconds: { type: [integer, 'null'], description: 调用当时的等待上限；错误码 PROVIDER_TIMEOUT 表示等满了这个时间 }
               costMicro: { type: [integer, 'null'], format: int64 }
               costCurrency: { type: [string, 'null'] }
+              traceId: { type: [string, 'null'], description: '1.13：所属尝试链，可用 GET /models/traces/{traceId} 查看；改版前的调用为 null' }
         note: { type: string }
         byPool: { type: array, description: '1.13：按池汇总（只含带池记录的调用）', items: { $ref: '#/components/schemas/ModelUsageGroupPool' } }
         byTier: { type: array, description: '1.13：请求档位与实际档位的交叉表，degraded 为真即降级', items: { $ref: '#/components/schemas/ModelUsageGroupTier' } }
