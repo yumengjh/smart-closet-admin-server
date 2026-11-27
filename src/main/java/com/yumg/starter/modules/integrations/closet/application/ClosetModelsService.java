@@ -46,6 +46,58 @@ public class ClosetModelsService {
     public JsonNode route(String capability, JsonNode body) { return audited("ROUTING_UPDATE", capability, () -> client.put(routePath(capability), body)); }
     public JsonNode resetRoute(String capability) { return audited("ROUTING_RESET", capability, () -> client.deleteWithResponse(routePath(capability))); }
 
+    public JsonNode redundancyRead(String suffix, Map<String, List<String>> query) {
+        List<String> allowed = switch (suffix) {
+            case "/health/events" -> List.of("from", "to", "scope", "refId", "pool", "kind", "page", "size");
+            case "/health/timeline" -> List.of("from", "to", "bucket", "pool", "entryId");
+            case "/traces" -> List.of("decision", "outcome", "from", "to", "page", "size");
+            case "/alerts" -> List.of("state", "rule", "from", "to", "limit");
+            case "/tiers", "/resend", "/probe", "/balances", "/alerts/settings" -> List.of();
+            default -> throw ApiException.notFound();
+        };
+        return client.get(BASE + suffix, filters(query, allowed));
+    }
+    public JsonNode trace(String id) { return client.get(path("traces", id), Map.of()); }
+    public JsonNode balanceHistory(String id, Map<String, List<String>> query) {
+        return client.get(path("providers", id) + "/balance/history", filters(query, List.of("limit")));
+    }
+    private Map<String, List<String>> filters(Map<String, List<String>> query, List<String> allowed) {
+        var result = new LinkedHashMap<String, List<String>>();
+        for (String key : allowed) if (query.containsKey(key)) result.put(key, query.get(key));
+        return result;
+    }
+    public JsonNode putPool(String pool, JsonNode body) { return audited("POOL_UPDATE", pool, () -> client.put(path("pools", pool), body)); }
+    public JsonNode deletePool(String pool) { return audited("POOL_DELETE", pool, () -> client.deleteWithResponse(path("pools", pool))); }
+    public JsonNode redundancySettings(String suffix, JsonNode body) {
+        String action = switch (suffix) {
+            case "/tiers" -> "TIERS_UPDATE";
+            case "/resend" -> "RESEND_UPDATE";
+            case "/probe" -> "PROBE_UPDATE";
+            case "/alerts/settings" -> "ALERT_SETTINGS_UPDATE";
+            default -> throw ApiException.notFound();
+        };
+        return audited(action, suffix.substring(1), () -> client.put(BASE + suffix, body));
+    }
+    public JsonNode entryAction(String id, String action) {
+        String auditAction = switch (action) {
+            case "drain" -> "ENTRY_DRAIN";
+            case "undrain" -> "ENTRY_UNDRAIN";
+            case "probe-paid" -> "ENTRY_PROBE_PAID";
+            default -> throw ApiException.notFound();
+        };
+        return audited(auditAction, id, () -> client.post(path("entries", id) + "/" + action, null));
+    }
+    public JsonNode billing(String id, JsonNode body) { return audited("PROVIDER_BILLING_UPDATE", id, () -> client.put(path("providers", id) + "/billing", body)); }
+    public JsonNode balanceAction(String id, String action, JsonNode body) {
+        String auditAction = switch (action) {
+            case "refresh" -> "BALANCE_REFRESH";
+            case "manual" -> "BALANCE_MANUAL";
+            default -> throw ApiException.notFound();
+        };
+        return audited(auditAction, id, () -> client.post(path("providers", id) + "/balance/" + action, body));
+    }
+    public JsonNode testAlert() { return audited("ALERT_TEST", "alerts", () -> client.post(BASE + "/alerts/test", null)); }
+
     private String path(String type, String id) {
         if (id == null || id.isEmpty() || id.length() > 300 || id.equals(".") || id.equals("..")) throw ApiException.notFound();
         return BASE + "/" + type + "/" + ClosetRequestSigner.encodeComponent(id);
