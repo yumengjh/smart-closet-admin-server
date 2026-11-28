@@ -413,7 +413,9 @@ class ClosetIntegrationApiTest {
                 new CreationRoute(HttpMethod.POST, version + "/verify", "write", "{\"revision\":1,\"evidence\":\"fixture evidence\"}"),
                 new CreationRoute(HttpMethod.POST, version + "/publish", "publish", "{\"revision\":1}"),
                 new CreationRoute(HttpMethod.POST, template + "/retire", "publish", "{\"revision\":1}"),
-                new CreationRoute(HttpMethod.GET, "/creations/generation-options", "read", null));
+                new CreationRoute(HttpMethod.GET, "/creations/generation-options", "read", null),
+                new CreationRoute(HttpMethod.GET, "/creations/settings", "read", null),
+                new CreationRoute(HttpMethod.PUT, "/creations/settings", "publish", "{\"userEnabled\":true}"));
     }
 
     @org.junit.jupiter.params.ParameterizedTest
@@ -1824,7 +1826,9 @@ class ClosetIntegrationApiTest {
         mvc.perform(get("/api/v1/closet" + path).with(jwtAs("closet:creation:read")))
                 .andExpect(status().isOk()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(png))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().contentType(MediaType.IMAGE_PNG))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Cache-Control", "no-store"));
+                // Preset card thumbnails are immutable and may be cached privately; results and portraits never are.
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Cache-Control",
+                        kind.equals("trial-garments") ? "max-age=86400, private" : "no-store"));
         server.verify();
     }
 

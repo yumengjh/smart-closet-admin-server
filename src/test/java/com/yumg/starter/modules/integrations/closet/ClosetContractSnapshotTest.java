@@ -68,7 +68,7 @@ class ClosetContractSnapshotTest {
             "GET /creations/templates/{id}/versions/{versionId}", "PUT /creations/templates/{id}/versions/{versionId}",
             "POST /creations/templates/{id}/versions/{versionId}/verify", "POST /creations/templates/{id}/versions/{versionId}/publish",
             "POST /creations/templates/{id}/retire",
-            "GET /creations/generation-options", "GET /creations/usage",
+            "GET /creations/generation-options", "GET /creations/usage", "GET /creations/settings", "PUT /creations/settings",
             "GET /creations/templates/{id}/versions/{versionId}/preview-image", "GET /creations/prompt-samples", "POST /creations/templates", "DELETE /creations/templates/{id}",
             "PUT /creations/templates/order", "GET /creations/trial-garments", "GET /creations/trial-garments/{id}/image",
             "GET /creations/trial-persons", "POST /creations/trial-persons",
