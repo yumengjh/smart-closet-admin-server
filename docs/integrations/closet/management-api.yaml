@@ -1,11 +1,11 @@
 # 鱼搭管理接口契约快照，请勿手改。契约源：yumengjh/smart-closet-server docs/reference/management-api.yaml
-# source-commit: af15673b58840a85db158a40d1d3bb68d1c150b4
-# source-sha256: b8d86e9a3ab292583ffc25eda253b33fa6c8c184dba70b8511bb53a8191cca3b
+# source-commit: 0e92299f3a7fbeac8ae614845e1f2d83ac5043ce
+# source-sha256: 098756a0812e04543f99d9658caf3a605c1c9fb095f7e53c22e6c13ff41a06ce
 # 更新方式：scripts/sync-closet-contract.sh [鱼搭仓库路径]
 openapi: 3.1.0
 info:
   title: Smart Closet Management API
-  version: 1.13.0
+  version: 1.14.0
   description: |
     鱼搭中立管理接口。默认关闭（`closet.management.enabled=false`），开启后供任意宿主平台以服务身份调用。
     设计说明见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md`；1.1（运维、KPI、大屏与数据出口、模板审核）见
@@ -17,7 +17,7 @@ info:
     `docs/design/2026-11-23-用户反馈：匿名提交与后台处理设计.md`。1.9.1 只修正说明（issue #290）：数仓 `garment_created` 只含已拥有衣物，
     衣物新增类指标不含种草，注册模式可由 `PUT /registration` 覆盖，`Wardrobe` 补齐 `styles`、`genderFits`。1.10（issue #296）用户列表与详情
     增加 `emailBound` 与打码的 `emailMasked`，不返回邮箱全文，见 `docs/design/2026-11-24-邮件模块：邮箱注册、找回密码与监控告警设计.md`。1.11 补齐运维与内容：`/ops/status` 增加 `database`，
-    新增只读 `/ops/mail`、`/ops/monitor`，以及整套穿搭样本 `/samples`（与鱼搭内管理页共用存储，见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md` 末尾 1.11 一节）。1.13（issue #299）新增上游多路冗余：模型池 `/models/pools`、摘除、档位与重发设置、健康事件与时间线、尝试链、探活、余额、告警，`/models` 与 `/models/usage` 增加字段，`/ops/status` 的 `providers` 增加 `pools` 与 `alertsFiring`，见 `docs/design/2026-11-27-上游多路冗余：模型池、标准与高质量档位设计.md` 第十六节；图像额度上限在权益、兑换码批次与商品里放宽到 3000（按人覆盖仍为 1000）。1.12（issue #298）新增模型调配 `/models`：服务商、模型、生效与备用路由、免费探测与试用、调用与消耗 `/models/usage`，`/ops/status` 的 `providers` 增加 `routing`，见 `docs/design/2026-11-26-模型调配：多服务商、生效模型与自动备用设计.md`。
+    新增只读 `/ops/mail`、`/ops/monitor`，以及整套穿搭样本 `/samples`（与鱼搭内管理页共用存储，见 `docs/design/2026-10-07-管理平台接入与可插拔管理接口设计.md` 末尾 1.11 一节）。1.13（issue #299）新增上游多路冗余：模型池 `/models/pools`、摘除、档位与重发设置、健康事件与时间线、尝试链、探活、余额、告警，`/models` 与 `/models/usage` 增加字段，`/ops/status` 的 `providers` 增加 `pools` 与 `alertsFiring`，见 `docs/design/2026-11-27-上游多路冗余：模型池、标准与高质量档位设计.md` 第十六节；图像额度上限在权益、兑换码批次与商品里放宽到 3000（按人覆盖仍为 1000）。1.14（issue #303）后台出图与存储桶：新增 `/creations/settings`（用户端是否开放创作效果的运行时开关），预设库、来源衣物、试做衣物、试做形象、试做记录与效果示意图增加可空的 `imageUrl`/`thumbnailUrl`/`previewUrl`（图片在存储桶时的直连链接，为空时仍走原图片路由），试做增加 `preview`，`current` 只看影响出图的内容，见 `docs/design/2026-11-28-后台出图与存储桶：创作效果修复与图片直连设计.md`。1.12（issue #298）新增模型调配 `/models`：服务商、模型、生效与备用路由、免费探测与试用、调用与消耗 `/models/usage`，`/ops/status` 的 `providers` 增加 `routing`，见 `docs/design/2026-11-26-模型调配：多服务商、生效模型与自动备用设计.md`。
 
     认证：每个请求都必须携带 HMAC 签名头（见 `components.securitySchemes.closetHmac`）。
     时间字段均为 Unix 毫秒，字段名以 `AtMs` 结尾；日期参数为 `YYYY-MM-DD`，按 Asia/Shanghai 解释，`to` 含当天。
@@ -589,6 +589,31 @@ paths:
                 properties:
                   retired: { type: boolean }
         '409': { $ref: '#/components/responses/Problem' }
+  /creations/settings:
+    get:
+      operationId: getCreationSettings
+      tags: [creations]
+      description: Whether users can pick creation effects in 做张图 now, the runtime override and the deployment default.
+      responses:
+        '200': { description: Settings, content: { application/json: { schema: { $ref: '#/components/schemas/CreationSettings' } } } }
+        '401': { $ref: '#/components/responses/Problem' }
+    put:
+      operationId: updateCreationSettings
+      tags: [creations]
+      description: Turns creation effects on or off for users at once; null restores the deployment default (closet.creation.enabled).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                userEnabled: { type: [boolean, 'null'] }
+      responses:
+        '200': { description: Settings, content: { application/json: { schema: { $ref: '#/components/schemas/CreationSettings' } } } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
   /creations/generation-options:
     get:
       operationId: getCreationGenerationOptions
@@ -2846,7 +2871,7 @@ paths:
               properties:
                 maxReferenceImages: { type: [integer, 'null'], minimum: 1, maximum: 20 }
                 overLimit: { type: [string, 'null'], enum: [STITCH, REJECT, null] }
-                revision: { type: integer, format: int64, description: references.revision，没保存过为 0 }
+                revision: { type: integer, format: int64, description: 'references.revision，没保存过为 0' }
       responses:
         '200':
           description: 模型
@@ -2874,7 +2899,7 @@ paths:
               required: [revision]
               properties:
                 timeoutSeconds: { type: [integer, 'null'], minimum: 5, maximum: 600 }
-                revision: { type: integer, format: int64, description: 与 references 共用的设置版本（timeout.revision）}
+                revision: { type: integer, format: int64, description: '与 references 共用的设置版本（timeout.revision）'}
       responses:
         '200':
           description: 模型
@@ -2904,7 +2929,7 @@ paths:
         '409': { $ref: '#/components/responses/Problem' }
   /models/routing/{capability}:
     parameters:
-      - { name: capability, in: path, required: true, description: PORTRAIT 为形象图槽位，选生图模型；删除后跟随 IMAGE, schema: { type: string, enum: [VISION, IMAGE, CHAT, PORTRAIT] } }
+      - { name: capability, in: path, required: true, description: 'PORTRAIT 为形象图槽位，选生图模型；删除后跟随 IMAGE', schema: { type: string, enum: [VISION, IMAGE, CHAT, PORTRAIT] } }
     put:
       tags: [models]
       operationId: setModelRouting
@@ -3443,7 +3468,8 @@ components:
         importedCount: {"type": "integer", "format": "int64"}
         createdAtMs: {"type": "integer", "format": "int64"}
         updatedAtMs: {"type": "integer", "format": "int64"}
-      required: ["name", "status", "gender", "styles", "seasons", "sort", "id", "group", "category", "color", "sourceOwner", "importedCount", "createdAtMs", "updatedAtMs"]
+        imageUrl: {"type": ["string", "null"], "format": "uri", "description": "direct bucket/CDN link to a list copy; null: use /presets/{id}/image"}
+      required: ["name", "status", "gender", "styles", "seasons", "sort", "id", "group", "category", "color", "sourceOwner", "importedCount", "createdAtMs", "updatedAtMs", "imageUrl"]
     PresetManagementPage:
       type: "object"
       properties:
@@ -3492,7 +3518,8 @@ components:
         garmentId: {"type": "string", "format": "uuid"}
         inLibrary: {"type": ["string", "null"], "enum": ["DRAFT", "LISTED", "UNLISTED", "REMOVED", null]}
         presetId: {"type": ["string", "null"], "format": "uuid"}
-      required: ["name", "group", "category", "color", "gender", "garmentId", "inLibrary", "presetId"]
+        imageUrl: {"type": ["string", "null"], "format": "uri", "description": "direct bucket/CDN link to a list copy; null: use the source image route"}
+      required: ["name", "group", "category", "color", "gender", "garmentId", "inLibrary", "presetId", "imageUrl"]
     PresetSourcePage:
       type: "object"
       properties:
@@ -3897,9 +3924,16 @@ components:
         provider: { type: [string, 'null'] }
         model: { type: [string, 'null'] }
         capabilityVersion: { type: [integer, 'null'], format: int64 }
+    CreationSettings:
+      type: object
+      required: [userEnabled, override, deploymentDefault]
+      properties:
+        userEnabled: { type: boolean, description: 'what users see now' }
+        override: { type: [boolean, 'null'], description: 'runtime switch; null follows deploymentDefault' }
+        deploymentDefault: { type: boolean, description: 'closet.creation.enabled' }
     CreationVersion:
       type: object
-      required: [id, versionId, version, revision, status, name, description, previewAssetId, personRequired, maxGarments, options, prompt, provider, model, capabilityVersion, evidence, publishedAtMs, previewImage]
+      required: [id, versionId, version, revision, status, name, description, previewAssetId, personRequired, maxGarments, options, prompt, provider, model, capabilityVersion, evidence, publishedAtMs, previewImage, previewUrl]
       properties:
         id: { type: string }
         versionId: { type: string, format: uuid }
@@ -3919,23 +3953,26 @@ components:
         evidence: { type: [string, 'null'] }
         publishedAtMs: { type: [integer, 'null'], format: int64 }
         previewImage: { type: boolean, description: 'a chosen trial image replaces the placeholder preview' }
+        previewUrl: { type: [string, 'null'], format: uri, description: 'direct bucket/CDN link to a list copy of the preview; null: use preview-image' }
     CreationTrialGarment:
       type: object
-      required: [id, name, role, gender]
+      required: [id, name, role, gender, imageUrl]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
         role: { type: string, description: 'OutfitRules.Role, e.g. TOP, BOTTOM, SHOES' }
         gender: { type: string }
+        imageUrl: { type: [string, 'null'], format: uri, description: 'direct bucket/CDN link to a list copy; null: use the image route' }
     CreationTrialPerson:
       type: object
-      required: [id, note, width, height, createdAtMs]
+      required: [id, note, width, height, createdAtMs, imageUrl]
       properties:
         id: { type: string, format: uuid }
         note: { type: string }
         width: { type: integer }
         height: { type: integer }
         createdAtMs: { type: integer, format: int64 }
+        imageUrl: { type: [string, 'null'], format: uri, description: 'short presigned bucket link (never a CDN); null: use the image route' }
     CreationTrialStart:
       type: object
       additionalProperties: false
@@ -3955,7 +3992,7 @@ components:
         trialId: { type: string, format: uuid }
     CreationTrial:
       type: object
-      required: [id, templateId, versionId, versionRevision, status, provider, model, garmentCount, withPerson, light, pose, errorMessage, width, height, current, createdAtMs, finishedAtMs]
+      required: [id, templateId, versionId, versionRevision, status, provider, model, garmentCount, withPerson, light, pose, errorMessage, width, height, current, preview, createdAtMs, finishedAtMs, imageUrl, thumbnailUrl]
       properties:
         id: { type: string, format: uuid }
         templateId: { type: string }
@@ -3971,9 +4008,12 @@ components:
         errorMessage: { type: [string, 'null'] }
         width: { type: [integer, 'null'] }
         height: { type: [integer, 'null'] }
-        current: { type: boolean, description: 'draft unchanged since the trial, so it may be used to go live' }
+        current: { type: boolean, description: 'the newest version is a draft whose model, prompt and person setting match the trial, so it may be used to go live' }
+        preview: { type: boolean, description: 'this trial is the current draft preview' }
         createdAtMs: { type: integer, format: int64 }
         finishedAtMs: { type: [integer, 'null'], format: int64 }
+        imageUrl: { type: [string, 'null'], format: uri, description: 'direct link to the full result (presigned when made with a trial person); null: use the image route' }
+        thumbnailUrl: { type: [string, 'null'], format: uri, description: 'direct link to a list copy (none for results with a trial person)' }
     CreationPromptSample:
       type: object
       required: [key, name, description, personRequired, maxGarments, light, prompt]
@@ -4028,6 +4068,7 @@ components:
         revision: { type: integer, format: int64 }
         versions: { type: array, items: { $ref: '#/components/schemas/CreationVersionSummary' } }
         sampleKey: { type: [string, 'null'], description: 'prompt sample the effect started from; null for blank starts' }
+        previewUrl: { type: [string, 'null'], format: uri, description: 'direct link to the preview of the live version, else of the newest draft; null: use preview-image' }
     CreationGenerationSelection:
       type: object
       additionalProperties: false
@@ -4959,7 +5000,7 @@ components:
             seconds: { type: integer }
             custom: { type: [integer, 'null'] }
             providerSeconds: { type: integer }
-            appliesToChat: { type: boolean, description: false 表示对话模型，等待由助手整轮时限控制 }
+            appliesToChat: { type: boolean, description: 'false 表示对话模型，等待由助手整轮时限控制' }
             revision: { type: integer, format: int64 }
         references:
           type: object
@@ -4975,7 +5016,7 @@ components:
       required: [currency, amountMicro]
       properties:
         currency: { type: string }
-        amountMicro: { type: integer, format: int64, description: 百万分之一货币单位 }
+        amountMicro: { type: integer, format: int64, description: '百万分之一货币单位' }
     ModelUsageTotals:
       type: object
       required: [calls, requests, ok, failed, cancelled, successRate, inputTokens, outputTokens, images, costs, unpricedCalls]
@@ -4985,18 +5026,18 @@ components:
         ok: { type: integer, format: int64 }
         failed: { type: integer, format: int64 }
         cancelled: { type: integer, format: int64 }
-        successRate: { type: [number, 'null'], description: ok / (ok + failed)，三位小数；没有调用时为 null }
+        successRate: { type: [number, 'null'], description: 'ok / (ok + failed)，三位小数；没有调用时为 null' }
         inputTokens: { type: integer, format: int64 }
         outputTokens: { type: integer, format: int64 }
         images: { type: integer, format: int64 }
         costs: { type: array, items: { $ref: '#/components/schemas/ModelCost' } }
-        unpricedCalls: { type: integer, format: int64, description: 成功但没有成本价的调用数 }
+        unpricedCalls: { type: integer, format: int64, description: '成功但没有成本价的调用数' }
     ModelUsageProvider:
       type: object
       required: [providerId, providerName, calls, ok, failed, successRate, inputTokens, outputTokens, images, costs, unpricedCalls, lastCallAtMs]
       properties:
         providerId: { type: string }
-        providerName: { type: string, description: 取当前注册表，已删除的服务商回落为 id }
+        providerName: { type: string, description: '取当前注册表，已删除的服务商回落为 id' }
         calls: { type: integer, format: int64 }
         ok: { type: integer, format: int64 }
         failed: { type: integer, format: int64 }
@@ -5022,16 +5063,16 @@ components:
         failed: { type: integer, format: int64 }
         cancelled: { type: integer, format: int64 }
         successRate: { type: [number, 'null'] }
-        avgLatencyMs: { type: [integer, 'null'], format: int64, description: 成功调用的平均耗时 }
-        p95LatencyMs: { type: [integer, 'null'], format: int64, description: 成功调用耗时的第 95 百分位（最近秩） }
+        avgLatencyMs: { type: [integer, 'null'], format: int64, description: '成功调用的平均耗时' }
+        p95LatencyMs: { type: [integer, 'null'], format: int64, description: '成功调用耗时的第 95 百分位（最近秩）' }
         inputTokens: { type: integer, format: int64 }
         outputTokens: { type: integer, format: int64 }
         images: { type: integer, format: int64 }
         costs: { type: array, items: { $ref: '#/components/schemas/ModelCost' } }
         unpricedCalls: { type: integer, format: int64 }
-        reroutedCalls: { type: integer, format: int64, description: 因改道或备用而发往该模型的调用数 }
-        stitchedCalls: { type: integer, format: int64, description: 参考图超出上限、拼了图的调用数 }
-        timeoutSeconds: { type: [integer, 'null'], description: 该模型当前的等待上限（对话为 null） }
+        reroutedCalls: { type: integer, format: int64, description: '因改道或备用而发往该模型的调用数' }
+        stitchedCalls: { type: integer, format: int64, description: '参考图超出上限、拼了图的调用数' }
+        timeoutSeconds: { type: [integer, 'null'], description: '该模型当前的等待上限（对话为 null）' }
         lastCallAtMs: { type: [integer, 'null'], format: int64 }
         notExecutedFailures: { type: integer, format: int64, description: '1.13：确定没执行的失败次数' }
         maybeExecutedFailures: { type: integer, format: int64, description: '1.13：可能已执行的失败次数' }
@@ -5106,8 +5147,8 @@ components:
               outputTokens: { type: [integer, 'null'], format: int64 }
               images: { type: integer }
               rerouted: { type: boolean }
-              stitched: { type: integer, description: 这次被拼进拼图的参考图张数，0 表示没拼图 }
-              timeoutSeconds: { type: [integer, 'null'], description: 调用当时的等待上限；错误码 PROVIDER_TIMEOUT 表示等满了这个时间 }
+              stitched: { type: integer, description: '这次被拼进拼图的参考图张数，0 表示没拼图' }
+              timeoutSeconds: { type: [integer, 'null'], description: '调用当时的等待上限；错误码 PROVIDER_TIMEOUT 表示等满了这个时间' }
               costMicro: { type: [integer, 'null'], format: int64 }
               costCurrency: { type: [string, 'null'] }
               traceId: { type: [string, 'null'], description: '1.13：所属尝试链，可用 GET /models/traces/{traceId} 查看；改版前的调用为 null' }
@@ -5168,7 +5209,7 @@ components:
         alerts:
           type: object
           properties:
-            firing: { type: integer, description: 未恢复的告警数 }
+            firing: { type: integer, description: '未恢复的告警数' }
     ModelProviderInput:
       type: object
       required: [id, kind, baseUrl, apiKey]
@@ -5252,18 +5293,18 @@ components:
         weight: { type: integer, minimum: 1, maximum: 100, default: 100 }
         enabled: { type: boolean, default: true }
         drain: { type: boolean, default: false }
-        maxConcurrency: { type: integer, minimum: 0, maximum: 1000, default: 0, description: 0 表示不限 }
-        dailyCallCap: { type: integer, minimum: 0, maximum: 10000000, default: 0, description: 0 表示不限 }
-        dailySpendCapMicro: { type: [integer, 'null'], format: int64, minimum: 0, description: 每日花费上限（微单位）；给了就必须同时给 spendCurrency }
+        maxConcurrency: { type: integer, minimum: 0, maximum: 1000, default: 0, description: '0 表示不限' }
+        dailyCallCap: { type: integer, minimum: 0, maximum: 10000000, default: 0, description: '0 表示不限' }
+        dailySpendCapMicro: { type: [integer, 'null'], format: int64, minimum: 0, description: '每日花费上限（微单位）；给了就必须同时给 spendCurrency' }
         spendCurrency: { type: [string, 'null'], pattern: '^[A-Z]{3}$' }
-        paidProbeIntervalMinutes: { type: [integer, 'null'], minimum: 30, maximum: 1440, description: 定时付费探活间隔，null 表示不定时探活 }
+        paidProbeIntervalMinutes: { type: [integer, 'null'], minimum: 30, maximum: 1440, description: '定时付费探活间隔，null 表示不定时探活' }
     ModelPoolInput:
       type: object
       additionalProperties: false
       required: [members]
       properties:
         members: { type: array, minItems: 1, maxItems: 20, items: { $ref: '#/components/schemas/ModelPoolMemberInput' } }
-        revision: { type: [integer, 'null'], format: int64, description: 池已存在时必填 }
+        revision: { type: [integer, 'null'], format: int64, description: '池已存在时必填' }
     ModelPoolMember:
       type: object
       required: [entryId, priority, weight, enabled, drain, maxConcurrency, dailyCallCap, inFlight, today, unavailable, health]
@@ -5281,14 +5322,14 @@ components:
         dailySpendCapMicro: { type: [integer, 'null'], format: int64 }
         spendCurrency: { type: [string, 'null'] }
         paidProbeIntervalMinutes: { type: [integer, 'null'] }
-        inFlight: { type: integer, description: 当前在途调用数 }
+        inFlight: { type: integer, description: '当前在途调用数' }
         today:
           type: object
           required: [calls, spend]
           properties:
             calls: { type: integer }
             spend: { type: array, items: { $ref: '#/components/schemas/ModelCost' } }
-        unavailable: { type: [string, 'null'], enum: [DISABLED, DRAINED, MISSING, UNUSABLE, UNREACHABLE, LOW_BALANCE, PAUSED, CONCURRENCY, CALL_CAP, SPEND_CAP, null], description: 现在不能接新任务的原因，null 表示可用 }
+        unavailable: { type: [string, 'null'], enum: [DISABLED, DRAINED, MISSING, UNUSABLE, UNREACHABLE, LOW_BALANCE, PAUSED, CONCURRENCY, CALL_CAP, SPEND_CAP, null], description: '现在不能接新任务的原因，null 表示可用' }
         health:
           type: object
           properties:
@@ -5304,12 +5345,12 @@ components:
         configured: { type: boolean }
         revision: { type: integer, format: int64 }
         updatedAtMs: { type: [integer, 'null'], format: int64 }
-        source: { type: string, enum: [POOL, DEPLOYMENT_DEFAULT, IMAGE_POOL, NONE], description: 没配置时用什么：部署默认、同档生图池或没有 }
-        degradesTo: { type: [string, 'null'], description: 高质量池降级到的池 }
+        source: { type: string, enum: [POOL, DEPLOYMENT_DEFAULT, IMAGE_POOL, NONE], description: '没配置时用什么：部署默认、同档生图池或没有' }
+        degradesTo: { type: [string, 'null'], description: '高质量池降级到的池' }
         members: { type: array, items: { $ref: '#/components/schemas/ModelPoolMember' } }
-        total: { type: integer, description: 参与（开启且未摘除）的成员数 }
-        available: { type: integer, description: 其中现在能接新任务的成员数 }
-        effective: { type: [string, 'null'], description: 现在选择会选中的成员 id（只看不转动轮转） }
+        total: { type: integer, description: '参与（开启且未摘除）的成员数' }
+        available: { type: integer, description: '其中现在能接新任务的成员数' }
+        effective: { type: [string, 'null'], description: '现在选择会选中的成员 id（只看不转动轮转）' }
         exhausted: { type: boolean }
     ModelDrainResult:
       type: object
@@ -5375,7 +5416,7 @@ components:
         maxAttempts: { type: integer }
         fast503Ms: { type: integer }
         notExecutedMarkers: { type: array, items: { type: string } }
-        builtInMarkers: { type: array, items: { type: string }, description: 内置标记，只读 }
+        builtInMarkers: { type: array, items: { type: string }, description: '内置标记，只读' }
         revision: { type: integer, format: int64 }
     ModelHealthEvent:
       type: object
@@ -5482,7 +5523,7 @@ components:
         paidEnabled: { type: boolean }
         paidDailyCalls: { type: integer }
         paidPerEntry: { type: integer }
-        paidSpendCapMicro: { type: object, additionalProperties: { type: integer, format: int64 }, description: 按 VISION、CHAT、IMAGE 的每日花费上限（人民币微元） }
+        paidSpendCapMicro: { type: object, additionalProperties: { type: integer, format: int64 }, description: '按 VISION、CHAT、IMAGE 的每日花费上限（人民币微元）' }
         usdToCny: { type: number }
     ModelPaidUsage:
       type: object
@@ -5505,7 +5546,7 @@ components:
         paidEnabled: { type: boolean, default: false }
         paidDailyCalls: { type: integer, minimum: 0, maximum: 1000, default: 50 }
         paidPerEntry: { type: integer, minimum: 0, maximum: 100, default: 12 }
-        paidSpendCapMicro: { type: object, additionalProperties: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }, description: 键只能是 VISION、CHAT、IMAGE }
+        paidSpendCapMicro: { type: object, additionalProperties: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }, description: '键只能是 VISION、CHAT、IMAGE' }
         usdToCny: { type: number, exclusiveMinimum: 0, maximum: 100, default: 7.2 }
         revision: { type: integer, format: int64 }
     ModelProbeOverview:
@@ -5546,11 +5587,11 @@ components:
       required: [entryId, sent, ok, latencyMs, paidUsage]
       properties:
         entryId: { type: string }
-        sent: { type: boolean, description: false 表示没发出请求，原因在 skipped }
+        sent: { type: boolean, description: 'false 表示没发出请求，原因在 skipped' }
         ok: { type: boolean }
         code: { type: [string, 'null'] }
         latencyMs: { type: integer, format: int64 }
-        costMicro: { type: [integer, 'null'], format: int64, description: 实际费用；没有价格时为 null }
+        costMicro: { type: [integer, 'null'], format: int64, description: '实际费用；没有价格时为 null' }
         costCurrency: { type: [string, 'null'] }
         skipped: { type: [string, 'null'], description: 'NO_KEY、NO_GENERATION 等没发出的原因' }
         paidUsage: { $ref: '#/components/schemas/ModelPaidUsage' }
@@ -5560,12 +5601,12 @@ components:
       properties:
         source: { type: string, enum: [NEWAPI, OPENROUTER, MANUAL, NONE], default: NONE }
         token: { type: [string, 'null'], description: '访问令牌（OpenRouter management key 等），只写不读；省略保持，空串清除' }
-        unit: { type: [string, 'null'], enum: [USD, CNY, QUOTA, null], description: 只给 NEWAPI，默认 USD }
-        quotaPerUnit: { type: [integer, 'null'], format: int64, minimum: 1, maximum: 1000000000, description: 只给 NEWAPI 的 QUOTA 单位，默认 500000 }
+        unit: { type: [string, 'null'], enum: [USD, CNY, QUOTA, null], description: '只给 NEWAPI，默认 USD' }
+        quotaPerUnit: { type: [integer, 'null'], format: int64, minimum: 1, maximum: 1000000000, description: '只给 NEWAPI 的 QUOTA 单位，默认 500000' }
         lowBalanceMicro: { type: [integer, 'null'], format: int64, minimum: 0 }
         currency: { type: [string, 'null'], pattern: '^[A-Z]{3}$' }
-        autoRemove: { type: boolean, default: false, description: 余额低于阈值时把该服务商的成员移出选择 }
-        revision: { type: [integer, 'null'], format: int64, description: 首次保存可省略 }
+        autoRemove: { type: boolean, default: false, description: '余额低于阈值时把该服务商的成员移出选择' }
+        revision: { type: [integer, 'null'], format: int64, description: '首次保存可省略' }
     ModelBalanceSnapshot:
       type: object
       properties:
@@ -5577,7 +5618,7 @@ components:
           description: 上游原始数字，供后台核对单位
           properties:
             unit: { type: [string, 'null'] }
-            json: { description: 原始 JSON（解析失败时为原文字符串）, type: [object, string, 'null'] }
+            json: { description: '原始 JSON（解析失败时为原文字符串）', type: [object, string, 'null'] }
         converted:
           type: object
           properties:
@@ -5602,11 +5643,11 @@ components:
             autoRemove: { type: boolean }
             revision: { type: integer, format: int64 }
         reported: { oneOf: [{ $ref: '#/components/schemas/ModelBalanceSnapshot' }, { type: 'null' }] }
-        estimatedMicro: { type: [integer, 'null'], format: int64, description: 最近读数减去之后账本里的计价花费 }
-        differenceMicro: { type: [integer, 'null'], format: int64, description: 上报余额减估算余额 }
-        differenceWarning: { type: boolean, description: 差额超过上报余额的 10% }
+        estimatedMicro: { type: [integer, 'null'], format: int64, description: '最近读数减去之后账本里的计价花费' }
+        differenceMicro: { type: [integer, 'null'], format: int64, description: '上报余额减估算余额' }
+        differenceWarning: { type: boolean, description: '差额超过上报余额的 10%' }
         low: { type: boolean }
-        removed: { type: boolean, description: 已被自动移出选择 }
+        removed: { type: boolean, description: '已被自动移出选择' }
         lastError: { type: [string, 'null'] }
         lastRefreshMs: { type: [integer, 'null'], format: int64 }
         dailySpend:
@@ -5645,7 +5686,7 @@ components:
         refId: { type: string }
         state: { type: string, enum: [FIRING, RECOVERED] }
         atMs: { type: integer, format: int64 }
-        lastMailMs: { type: integer, format: int64, description: 只在 state=FIRING 的未恢复列表里出现 }
+        lastMailMs: { type: integer, format: int64, description: '只在 state=FIRING 的未恢复列表里出现' }
         mailResult: { type: [string, 'null'], enum: [SENT, THROTTLED, MAIL_OFF, MAIL_DISABLED, NO_RECIPIENT, FAILED, null], description: 'THROTTLED：发送限流，或同一件事在重复提醒间隔内再次触发；MAIL_OFF：后台关闭了“发送告警邮件”；恢复行在触发时没有发出邮件时为 null' }
         reading: { type: [string, 'null'] }
     ModelAlertList:
@@ -5659,7 +5700,7 @@ components:
       additionalProperties: false
       required: [revision]
       properties:
-        rules: { type: object, additionalProperties: { type: boolean }, description: 键为规则名；没写的规则默认开启 }
+        rules: { type: object, additionalProperties: { type: boolean }, description: '键为规则名；没写的规则默认开启' }
         repeatMinutes: { type: integer, minimum: 5, maximum: 1440, default: 60 }
         sendMail: { type: boolean, default: true, description: '发送告警邮件的总开关；false 时只写告警记录、不发邮件（测试邮件照发）' }
         revision: { type: integer, format: int64 }
@@ -5677,7 +5718,7 @@ components:
               trigger: { type: string }
               enabled: { type: boolean }
         repeatMinutes: { type: integer }
-        sendMail: { type: boolean, description: 发送告警邮件的总开关 }
+        sendMail: { type: boolean, description: '发送告警邮件的总开关' }
         mailEnabled: { type: boolean }
         recipientsConfigured: { type: boolean }
         revision: { type: integer, format: int64 }
@@ -5702,7 +5743,7 @@ components:
         calls: { type: integer, format: int64 }
         ok: { type: integer, format: int64 }
         failed: { type: integer, format: int64 }
-        degraded: { type: boolean, description: 实际档位与请求档位不同，即降级 }
+        degraded: { type: boolean, description: '实际档位与请求档位不同，即降级' }
         costs: { type: array, items: { $ref: '#/components/schemas/ModelCost' } }
     ModelUsageGroupDecision:
       type: object

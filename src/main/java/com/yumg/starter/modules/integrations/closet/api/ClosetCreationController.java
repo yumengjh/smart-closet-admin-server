@@ -70,6 +70,13 @@ public class ClosetCreationController {
         return service.write("TEMPLATE_RETIRED", "POST", template(id) + "/retire", body);
     }
 
+    /** Whether users can pick creation effects in 做张图 (runtime switch; null restores the deployment default). */
+    @GetMapping("/settings") @PreAuthorize("hasAuthority('closet:creation:read')")
+    public JsonNode settings() { return service.read("/settings", Map.of()); }
+
+    @PutMapping("/settings") @PreAuthorize("hasAuthority('closet:creation:publish')")
+    public JsonNode updateSettings(@RequestBody JsonNode body) { return service.write("SETTINGS_UPDATED", "PUT", "/settings", body); }
+
     @GetMapping("/generation-options") @PreAuthorize("hasAuthority('closet:creation:read')")
     public JsonNode generationOptions() { return service.read("/generation-options", Map.of()); }
 
@@ -86,7 +93,9 @@ public class ClosetCreationController {
 
     @GetMapping("/trial-garments/{id}/image") @PreAuthorize("hasAuthority('closet:creation:read')")
     public ResponseEntity<byte[]> trialGarmentImage(@PathVariable String id) {
-        return image("/trial-garments/" + uuid(id) + "/image");
+        byte[] image = service.image("/trial-garments/" + uuid(id) + "/image");
+        return ResponseEntity.ok().contentType(ClosetRawImages.sniff(image)).cacheControl(CacheControl.maxAge(java.time.Duration.ofDays(1)).cachePrivate())
+                .header("X-Content-Type-Options", "nosniff").body(image);
     }
 
     @GetMapping("/trial-persons") @PreAuthorize("hasAuthority('closet:creation:read')")
@@ -149,7 +158,7 @@ public class ClosetCreationController {
 
     private ResponseEntity<byte[]> image(String path) {
         byte[] image = service.image(path);
-        return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG).cacheControl(CacheControl.noStore())
+        return ResponseEntity.ok().contentType(ClosetRawImages.sniff(image)).cacheControl(CacheControl.noStore())
                 .header("X-Content-Type-Options", "nosniff").body(image);
     }
     private static String uuid(String value) {

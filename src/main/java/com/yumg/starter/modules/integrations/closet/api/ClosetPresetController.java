@@ -49,7 +49,7 @@ public class ClosetPresetController {
 
     @GetMapping("/presets/{id}/image") @PreAuthorize("hasAuthority('closet:presets:read')")
     public ResponseEntity<byte[]> image(@PathVariable UUID id) {
-        return image(PRESETS + "/" + id + "/image", MediaType.IMAGE_PNG);
+        return card(PRESETS + "/" + id + "/image");
     }
 
     @PatchMapping("/presets/{id}") @PreAuthorize("hasAuthority('closet:presets:write')")
@@ -90,7 +90,7 @@ public class ClosetPresetController {
 
     @GetMapping("/presets/source-sessions/{sessionId}/garments/{garmentId}/image") @PreAuthorize("hasAuthority('closet:presets:write')")
     public ResponseEntity<byte[]> sourceImage(@PathVariable String sessionId, @PathVariable UUID garmentId) {
-        return image(session(sessionId) + "/garments/" + garmentId + "/image", MediaType.IMAGE_PNG);
+        return card(session(sessionId) + "/garments/" + garmentId + "/image");
     }
 
     @PostMapping("/presets/source-sessions/{sessionId}/import") @PreAuthorize("hasAuthority('closet:presets:write')")
@@ -118,6 +118,13 @@ public class ClosetPresetController {
     public ResponseEntity<Void> deleteCover(@PathVariable String key) {
         service.delete(cover(key), "ONBOARDING_COVER_REMOVE", key);
         return ResponseEntity.noContent().build();
+    }
+
+    /** Card thumbnails (PNG or JPEG) of immutable images: labelled by signature, privately cacheable for a day. */
+    private ResponseEntity<byte[]> card(String path) {
+        byte[] bytes = service.image(path);
+        return ResponseEntity.ok().contentType(ClosetRawImages.sniff(bytes)).cacheControl(CacheControl.maxAge(java.time.Duration.ofDays(1)).cachePrivate())
+                .header("X-Content-Type-Options", "nosniff").body(bytes);
     }
 
     private ResponseEntity<byte[]> image(String path, MediaType type) {
