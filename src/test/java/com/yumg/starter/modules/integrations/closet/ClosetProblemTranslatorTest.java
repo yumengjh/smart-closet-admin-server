@@ -21,6 +21,16 @@ class ClosetProblemTranslatorTest {
         assertThat(translator.translate(new ResourceAccessException("Read timed out")).error())
                 .isEqualTo(ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE);
     }
+    @Test void missingDeploymentSettingsNameTheGapButOtherOutagesStayGeneric() {
+        var gap = translator.translate(error(HttpStatus.SERVICE_UNAVAILABLE,
+                "{\"code\":\"REDEEM_NOT_CONFIGURED\",\"detail\":\"兑换码功能尚未配置，请联系管理员。\"}"));
+        assertThat(gap.error()).isEqualTo(ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE);
+        assertThat(gap.getMessage()).isEqualTo("兑换码功能尚未配置，请联系管理员。");
+        var outage = translator.translate(error(HttpStatus.SERVICE_UNAVAILABLE, "{\"code\":\"STORAGE_UNAVAILABLE\",\"detail\":\"bucket reply\"}"));
+        assertThat(outage.getMessage()).isEqualTo(ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE.message());
+        var internal = translator.translate(error(HttpStatus.INTERNAL_SERVER_ERROR, "{\"code\":\"REDEEM_NOT_CONFIGURED\",\"detail\":\"stack\"}"));
+        assertThat(internal.getMessage()).isEqualTo(ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE.message());
+    }
     @Test void presetVerificationFailuresAreIndependentOfTheGatewayLogin() {
         assertThat(translator.translate(error(HttpStatus.UNAUTHORIZED, "{\"code\":\"BAD_CREDENTIALS\"}")).error())
                 .isEqualTo(ApiErrorCode.CLOSET_PRESET_SOURCE_BAD_CREDENTIALS);

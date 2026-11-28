@@ -12,6 +12,8 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
 
 public class ClosetProblemTranslator {
+    /** 鱼搭 reports a missing deployment setting (for example REDEEM_NOT_CONFIGURED) as 503 with a fixed sentence for administrators. */
+    private static final java.util.regex.Pattern CONFIGURATION_GAP = java.util.regex.Pattern.compile("[A-Z][A-Z_]*_NOT_CONFIGURED");
     private final ObjectMapper mapper;
     public ClosetProblemTranslator(ObjectMapper mapper) { this.mapper = mapper; }
 
@@ -29,6 +31,9 @@ public class ClosetProblemTranslator {
             return ApiException.fromUpstream(ApiErrorCode.NOT_FOUND, detail, List.of());
         if (status.value() == 413 && ("PAYLOAD_TOO_LARGE".equals(code) || "COVER_TOO_LARGE".equals(code)))
             return ApiException.fromUpstream(ApiErrorCode.CLOSET_REQUEST_TOO_LARGE, detail, List.of());
+        // Show which setting is missing instead of the generic outage text; other 5xx details stay hidden because they may carry provider replies.
+        if (status.value() == 503 && CONFIGURATION_GAP.matcher(code).matches() && !detail.isBlank())
+            return ApiException.fromUpstream(ApiErrorCode.CLOSET_SERVICE_UNAVAILABLE, detail, List.of());
         if (code.startsWith("FEEDBACK_")) {
             ApiErrorCode mapped = switch (status.value()) {
                 case 404 -> ApiErrorCode.NOT_FOUND;
